@@ -1,7 +1,7 @@
 {
   "name": "tiny-shiny-chatbot",
-  "version": "10.0.0",
-  "description": "Tiny Shiny Gifts chatbot with Shopify OAuth, WhatsApp, image messages, leads and API settings",
+  "version": "11.0.0",
+  "description": "Tiny Shiny Gifts chatbot with Shopify OAuth state fix, WhatsApp, image messages, leads and API settings",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

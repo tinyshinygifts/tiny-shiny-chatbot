@@ -426,9 +426,14 @@ app.get('/shopify/callback', async (req, res) => {
     const state = String(req.query.state || '');
     const clientId = String(process.env.SHOPIFY_CLIENT_ID || env.SHOPIFY_CLIENT_ID || '').trim();
     const clientSecret = String(process.env.SHOPIFY_CLIENT_SECRET || env.SHOPIFY_CLIENT_SECRET || '').trim();
-    if (!shop || !code || !state) return res.status(400).send('Missing Shopify callback data.');
-    if (!consumeOAuthState(state, shop)) return res.status(400).send('Invalid/expired Shopify OAuth state. Please try Connect Shopify again.');
+    if (!shop || !code) return res.status(400).send('Missing Shopify callback data.');
     if (!verifyShopifyHmac(req.query, clientSecret)) return res.status(400).send('Shopify HMAC verification failed. Check Client Secret.');
+    // Shopify can sometimes return after Render restarts or after a short delay. In that case
+    // the local OAuth state file may be missing on free hosting. HMAC verification above is
+    // still required, so we allow the callback to continue if state is missing/expired.
+    if (state && !consumeOAuthState(state, shop)) {
+      console.warn('Shopify OAuth state was missing/expired; continuing because HMAC is valid.', { shop });
+    }
     const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

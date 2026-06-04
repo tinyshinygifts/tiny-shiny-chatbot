@@ -115,3 +115,6 @@ V9 IMAGE MESSAGE UPDATE
 - Uploaded image preview/list me dikhegi.
 - WhatsApp Cloud API connect hone ke baad selected image owner/team ya customer number par send kar sakte ho.
 - WhatsApp par image send karne ke liye chatbot public URL par host hona chahiye, jaise Render URL ya chat.tinyshinygifts.com. Localhost image WhatsApp server fetch nahi kar sakta.
+
+
+V11 Update: Shopify OAuth callback state fix for Render free hosting. Agar 'Invalid/expired Shopify OAuth state' aaye, v11 deploy karein aur Connect Shopify dobara run karein.
