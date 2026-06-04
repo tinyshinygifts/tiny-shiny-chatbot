@@ -34,6 +34,7 @@
     leadPopupDelaySeconds: 12
   };
 
+  function bootChatbot() {
   const css = document.createElement('style');
   css.textContent = `
     #tsg-chat-btn{position:fixed;right:22px;bottom:22px;width:62px;height:62px;border-radius:50%;border:0;background:var(--tsg-color,#d63384);color:#fff;font-size:26px;box-shadow:0 14px 32px rgba(0,0,0,.22);cursor:pointer;z-index:999999}
@@ -112,5 +113,21 @@
   track(product.isProduct ? 'product_view' : 'page_view');
   setTimeout(() => { if (product.isProduct) { openChat(); showProductOffer('product_explore'); track('product_exploring_delay'); } }, Math.max(5, Number(settings.leadPopupDelaySeconds || 12)) * 1000);
 
-  fetch(apiBase + '/api/settings').then(r => r.json()).then(data => { settings = { ...settings, ...(data.settings || {}) }; document.documentElement.style.setProperty('--tsg-color', settings.themeColor || '#d63384'); box.querySelector('#tsg-title').textContent = settings.botName || 'Tiny Shiny Assistant'; addMsg(settings.welcomeMessage || 'Hello!', 'bot'); renderQuickReplies(); }).catch(() => { box.querySelector('#tsg-title').textContent = settings.botName; addMsg(settings.welcomeMessage, 'bot'); renderQuickReplies(); });
+  document.documentElement.style.setProperty('--tsg-color', settings.themeColor || '#d63384');
+  box.querySelector('#tsg-title').textContent = settings.botName || 'Tiny Shiny Assistant';
+  addMsg(settings.welcomeMessage || 'Hello!', 'bot');
+  renderQuickReplies();
+  }
+
+  fetch(apiBase + '/api/settings')
+    .then(r => r.json())
+    .then(data => {
+      settings = { ...settings, ...(data.settings || {}) };
+      if (settings.chatbotEnabled === false) return;
+      bootChatbot();
+    })
+    .catch(() => {
+      if (settings.chatbotEnabled === false) return;
+      bootChatbot();
+    });
 })();

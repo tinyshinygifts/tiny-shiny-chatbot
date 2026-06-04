@@ -47,6 +47,7 @@ async function load() {
   const f = await fetch('/api/faqs', { credentials:'include' }).then(r=>r.json());
   const settings=s.settings||{};
   ['botName','welcomeMessage','fallbackMessage','leadOfferMessage','cartOfferMessage','leadPopupDelaySeconds'].forEach(id=>{ if(window[id]) window[id].value=settings[id]||''; });
+  if(window.chatbotEnabled){ window.chatbotEnabled.checked = settings.chatbotEnabled !== false; if(window.chatbotStatusText) window.chatbotStatusText.textContent = window.chatbotEnabled.checked ? 'ON' : 'OFF'; }
   setThemeColor(settings.themeColor || '#d63384');
   faqs=f.faqs||[];
   renderFaqs(); loadCrm(); loadMedia(); loadLeads(); loadEvents(); loadMessages();
@@ -139,6 +140,7 @@ document.addEventListener('input',e=>{
   if(e.target.id === 'crmSearch' || e.target.id === 'crmStatusFilter') renderCrm();
   if(e.target.id === 'themeColor') setThemeColor(e.target.value);
   if(e.target.id === 'themeHex') setThemeColor(e.target.value);
+  if(e.target.id === 'chatbotEnabled' && window.chatbotStatusText) window.chatbotStatusText.textContent = e.target.checked ? 'ON' : 'OFF';
   const i=e.target.dataset.i, field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value;
 });
 document.addEventListener('change',e=>{ if(e.target.id === 'themeColorPreset' && e.target.value !== 'custom') setThemeColor(e.target.value); });
@@ -148,7 +150,7 @@ document.addEventListener('click',async e=>{
   if(e.target.dataset.remove!==undefined){faqs.splice(Number(e.target.dataset.remove),1);renderFaqs();}
   if(e.target.id==='saveFaqs'){await fetch('/api/faqs',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({faqs})});alert('FAQs saved');}
   if(e.target.id==='saveSettings'){
-    const body={botName:botName.value,welcomeMessage:welcomeMessage.value,fallbackMessage:fallbackMessage.value,leadOfferMessage:leadOfferMessage.value,cartOfferMessage:cartOfferMessage.value,leadPopupDelaySeconds:Number(leadPopupDelaySeconds.value||12),themeColor:themeColor.value};
+    const body={chatbotEnabled: chatbotEnabled ? chatbotEnabled.checked : true, botName:botName.value,welcomeMessage:welcomeMessage.value,fallbackMessage:fallbackMessage.value,leadOfferMessage:leadOfferMessage.value,cartOfferMessage:cartOfferMessage.value,leadPopupDelaySeconds:Number(leadPopupDelaySeconds.value||12),themeColor:themeColor.value};
     const res = await fetch('/api/settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
     if(res.ok){ setThemeColor(body.themeColor); alert('Settings saved'); } else alert(res.error || 'Settings save failed');
   }

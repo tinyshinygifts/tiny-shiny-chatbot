@@ -1,7 +1,7 @@
 {
   "name": "tiny-shiny-chatbot",
-  "version": "12.0.0",
-  "description": "Tiny Shiny Gifts chatbot with Shopify OAuth, WhatsApp, image messages, CRM dashboard and Google Sheets auto-save",
+  "version": "13.0.0",
+  "description": "Tiny Shiny Gifts chatbot with Shopify OAuth, CRM, Google Sheets and website ON/OFF toggle",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

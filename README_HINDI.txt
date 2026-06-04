@@ -146,3 +146,11 @@ Google Sheets setup:
    GOOGLE_SHEETS_SECRET=<same secret>
 9. Save API Settings -> Render service restart.
 10. Test Google Sheets dabao.
+
+
+V13 Update - Chatbot ON/OFF Toggle
+----------------------------------
+Admin Panel > Basic Settings me Website Chatbot Status toggle add hai.
+ON = Shopify website par chatbot bubble dikhega.
+OFF = Shopify website par chatbot bilkul hide ho jayega. Admin panel aur API settings fir bhi access rahenge.
+Toggle change karne ke baad Save Settings zaroor dabayein.
