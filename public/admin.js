@@ -49,7 +49,7 @@ async function load() {
   ['botName','welcomeMessage','fallbackMessage','leadOfferMessage','cartOfferMessage','leadPopupDelaySeconds'].forEach(id=>{ if(window[id]) window[id].value=settings[id]||''; });
   setThemeColor(settings.themeColor || '#d63384');
   faqs=f.faqs||[];
-  renderFaqs(); loadMedia(); loadLeads(); loadEvents(); loadMessages();
+  renderFaqs(); loadCrm(); loadMedia(); loadLeads(); loadEvents(); loadMessages();
 }
 function renderFaqs(){ faqList.innerHTML=''; faqs.forEach((faq,index)=>{ const row=document.createElement('div'); row.className='faq-row'; row.innerHTML=`<label>Keywords <input data-i="${index}" data-field="keywords" value="${esc((faq.keywords||[]).join(', '))}"/></label><label>Answer <textarea data-i="${index}" data-field="answer">${esc(faq.answer||'')}</textarea></label><button data-remove="${index}" class="ghost-btn danger-outline">Remove</button>`; faqList.appendChild(row); }); }
 async function loadLeads(){ const d=await fetch('/api/leads',{credentials:'include'}).then(r=>r.json()).catch(()=>({leads:[]})); if(window.leadCount) leadCount.textContent=(d.leads||[]).length; leadList.innerHTML=(d.leads||[]).slice(0,100).map(l=>`<div class="log-row"><b>${esc(l.type)}</b> <small>${esc(l.createdAt)}</small><br/>Phone: ${esc(l.phone)} | Order: ${esc(l.orderId||l.orderName)}<br/>Product: ${esc(l.productTitle||l.product||l?.product?.title)}<br/>Image: ${esc(l.productImage||l.image||l?.product?.image)}<br/>Page: ${esc(l.pageUrl||l?.product?.url)}<br/>Message: ${esc(l.message||l.note)}</div>`).join('') || 'No leads yet.'; }
@@ -93,7 +93,50 @@ async function sendSelectedMedia(){
   mediaSendResult.textContent = JSON.stringify(res,null,2);
 }
 
+
+let crmCustomers = [];
+function crmValue(c){ return [c.name,c.phone,c.email,c.productTitle,c.pageUrl,c.orderName,c.lastMessage,c.status].join(' ').toLowerCase(); }
+function renderCrm(){
+  const q = ($('crmSearch')?.value || '').toLowerCase().trim();
+  const st = $('crmStatusFilter')?.value || '';
+  const filtered = crmCustomers.filter(c => (!q || crmValue(c).includes(q)) && (!st || (c.status || 'New') === st));
+  if($('crmCount')) crmCount.textContent = crmCustomers.length;
+  if($('crmSummary')) {
+    const counts = crmCustomers.reduce((a,c)=>{ const k=c.status||'New'; a[k]=(a[k]||0)+1; return a; },{});
+    crmSummary.innerHTML = ['New','Hot Lead','Follow Up','Converted','Not Interested'].map(k=>`<span><b>${counts[k]||0}</b>${esc(k)}</span>`).join('');
+  }
+  if(!$('crmList')) return;
+  crmList.innerHTML = filtered.map(c=>`<div class="crm-card" data-crm-id="${esc(c.id)}">
+    <div class="crm-main"><b>${esc(c.name || 'Customer')}</b><span>${esc(c.phone || 'No phone')} ${c.email ? ' • ' + esc(c.email) : ''}</span></div>
+    <div class="crm-meta"><span class="status-chip">${esc(c.status || 'New')}</span><span>${esc(c.updatedAt || c.createdAt)}</span><span>Leads: ${esc(c.leadCount||0)} • Activity: ${esc(c.activityCount||0)}</span></div>
+    <div class="crm-product"><b>${esc(c.productTitle || 'No product yet')}</b><br/><a href="${esc(c.pageUrl || '#')}" target="_blank">${esc(c.pageUrl || '')}</a><br/>${c.productImage ? `<img src="${esc(c.productImage)}" alt=""/>` : ''}</div>
+    <div class="crm-message">${esc(c.lastMessage || '')}</div>
+    <div class="form-grid two"><label>Status <select data-crm-status="${esc(c.id)}"><option ${c.status==='New'?'selected':''}>New</option><option ${c.status==='Hot Lead'?'selected':''}>Hot Lead</option><option ${c.status==='Follow Up'?'selected':''}>Follow Up</option><option ${c.status==='Converted'?'selected':''}>Converted</option><option ${c.status==='Not Interested'?'selected':''}>Not Interested</option></select></label><label>Notes <input data-crm-notes="${esc(c.id)}" value="${esc(c.notes||'')}" placeholder="Follow-up note"/></label></div>
+    <button class="ghost-btn" data-crm-save="${esc(c.id)}">Save CRM</button>
+  </div>`).join('') || '<p>No CRM data yet. Leads will appear here when visitors use chatbot or product tracking runs.</p>';
+}
+async function loadCrm(){
+  const d = await fetch('/api/crm',{credentials:'include'}).then(r=>r.json()).catch(()=>({customers:[]}));
+  crmCustomers = d.customers || [];
+  renderCrm();
+}
+function exportCrmCsv(){
+  const headers = ['Status','Name','Phone','Email','Product','Product Link','Order','Total','Last Message','Notes','Updated At'];
+  const rows = crmCustomers.map(c=>[c.status,c.name,c.phone,c.email,c.productTitle,c.pageUrl,c.orderName,c.total,c.lastMessage,c.notes,c.updatedAt]);
+  const csv = [headers, ...rows].map(row=>row.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob = new Blob([csv], { type:'text/csv;charset=utf-8' });
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'tiny-shiny-crm.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+async function saveCrm(id){
+  const status = document.querySelector(`[data-crm-status="${CSS.escape(id)}"]`)?.value || 'New';
+  const notes = document.querySelector(`[data-crm-notes="${CSS.escape(id)}"]`)?.value || '';
+  const data = await fetch('/api/crm/'+encodeURIComponent(id),{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,notes})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if(!data.ok) return alert(data.error || 'CRM save failed');
+  await loadCrm();
+}
+
 document.addEventListener('input',e=>{
+  if(e.target.id === 'crmSearch' || e.target.id === 'crmStatusFilter') renderCrm();
   if(e.target.id === 'themeColor') setThemeColor(e.target.value);
   if(e.target.id === 'themeHex') setThemeColor(e.target.value);
   const i=e.target.dataset.i, field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value;
@@ -109,6 +152,10 @@ document.addEventListener('click',async e=>{
     const res = await fetch('/api/settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
     if(res.ok){ setThemeColor(body.themeColor); alert('Settings saved'); } else alert(res.error || 'Settings save failed');
   }
+  if(e.target.id==='refreshCrm') loadCrm();
+  if(e.target.id==='exportCrmCsv') exportCrmCsv();
+  if(e.target.id==='syncGoogleSheets'){ const data=await fetch('/api/sync-google-sheets',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if(window.crmSyncResult) crmSyncResult.textContent=JSON.stringify(data,null,2); }
+  if(e.target.dataset.crmSave) saveCrm(e.target.dataset.crmSave);
   if(e.target.id==='uploadMedia') uploadMedia();
   if(e.target.id==='refreshMedia') loadMedia();
   if(e.target.id==='sendSelectedMedia') sendSelectedMedia();

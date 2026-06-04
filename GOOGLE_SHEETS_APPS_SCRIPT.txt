@@ -1,0 +1,54 @@
+// Tiny Shiny Chatbot → Google Sheets CRM Auto-save
+// 1) Google Sheet open karo → Extensions → Apps Script
+// 2) Is code ko paste karo
+// 3) SHEET_SECRET me wahi secret rakho jo chatbot API Settings me dala hai
+// 4) Deploy → New deployment → Web app
+//    Execute as: Me
+//    Who has access: Anyone
+// 5) Web app URL ko chatbot API Settings me GOOGLE_SHEETS_WEBHOOK_URL me paste karo
+
+const SHEET_SECRET = 'change-this-secret';
+
+function doPost(e) {
+  try {
+    const payload = JSON.parse(e.postData.contents || '{}');
+    if (SHEET_SECRET && payload.secret !== SHEET_SECRET) {
+      return ContentService.createTextOutput(JSON.stringify({ ok: false, error: 'Invalid secret' })).setMimeType(ContentService.MimeType.JSON);
+    }
+    const ss = SpreadsheetApp.getActiveSpreadsheet();
+    const type = String(payload.type || 'Data').replace(/[\\/\?\*\[\]:]/g, ' ').slice(0, 80);
+    let sheet = ss.getSheetByName(type);
+    if (!sheet) sheet = ss.insertSheet(type);
+
+    const flat = payload.flat || flatten(payload.record || {});
+    flat._type = payload.type || '';
+    flat._receivedAt = new Date();
+
+    const keys = Object.keys(flat);
+    if (sheet.getLastRow() === 0) sheet.appendRow(keys);
+    const header = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+    const missing = keys.filter(k => !header.includes(k));
+    if (missing.length) {
+      sheet.getRange(1, header.length + 1, 1, missing.length).setValues([missing]);
+      header.push(...missing);
+    }
+    const row = header.map(k => flat[k] || '');
+    sheet.appendRow(row);
+    return ContentService.createTextOutput(JSON.stringify({ ok: true, sheet: type })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ ok: false, error: err.message })).setMimeType(ContentService.MimeType.JSON);
+  }
+}
+
+function flatten(obj, prefix, out) {
+  out = out || {};
+  prefix = prefix || '';
+  if (!obj || typeof obj !== 'object') return out;
+  Object.keys(obj).forEach(function(key) {
+    const value = obj[key];
+    const name = prefix ? prefix + '.' + key : key;
+    if (value && typeof value === 'object' && !Array.isArray(value)) flatten(value, name, out);
+    else out[name] = Array.isArray(value) ? value.map(v => typeof v === 'object' ? JSON.stringify(v) : String(v)).join(' | ') : (value == null ? '' : String(value));
+  });
+  return out;
+}

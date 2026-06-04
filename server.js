@@ -71,6 +71,7 @@ const leadsPath = path.join(dataDir, 'leads.json');
 const eventsPath = path.join(dataDir, 'visitor-events.json');
 const leadMessagesPath = path.join(dataDir, 'lead-messages.json');
 const mediaImagesPath = path.join(dataDir, 'media-images.json');
+const crmPath = path.join(dataDir, 'crm.json');
 const shopifyOAuthStatePath = path.join(dataDir, 'shopify-oauth-state.json');
 
 const envPath = path.join(__dirname, '.env');
@@ -81,9 +82,10 @@ const apiKeys = [
   'SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI',
   'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID',
   'CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG',
-  'SHOPIFY_WEBHOOK_SECRET'
+  'SHOPIFY_WEBHOOK_SECRET',
+  'GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET'
 ];
-const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
+const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
 function readEnvFile() {
   const out = {};
   const text = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
@@ -141,6 +143,11 @@ function writeEnvFile(next) {
     'CUSTOMER_WHATSAPP_TEMPLATE_NAME=' + (merged.CUSTOMER_WHATSAPP_TEMPLATE_NAME || ''),
     'CUSTOMER_WHATSAPP_TEMPLATE_LANG=' + (merged.CUSTOMER_WHATSAPP_TEMPLATE_LANG || 'en'),
     '',
+    '# Google Sheets CRM auto-save. Use Google Apps Script Web App URL.',
+    'GOOGLE_SHEETS_ENABLED=' + (merged.GOOGLE_SHEETS_ENABLED || 'false'),
+    'GOOGLE_SHEETS_WEBHOOK_URL=' + (merged.GOOGLE_SHEETS_WEBHOOK_URL || ''),
+    'GOOGLE_SHEETS_SECRET=' + (merged.GOOGLE_SHEETS_SECRET || ''),
+    '',
     '# Security for Shopify webhook. Add later when hosting.',
     'SHOPIFY_WEBHOOK_SECRET=' + (merged.SHOPIFY_WEBHOOK_SECRET || '')
   ];
@@ -161,10 +168,102 @@ function publicConfig(env) {
 
 function readJson(filePath, fallback) { try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; } }
 function writeJson(filePath, data) { fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8'); }
-function appendJson(filePath, item) { const arr = readJson(filePath, []); arr.unshift(item); writeJson(filePath, arr.slice(0, 2000)); return item; }
+function appendJson(filePath, item) {
+  const arr = readJson(filePath, []);
+  arr.unshift(item);
+  writeJson(filePath, arr.slice(0, 2000));
+  try { afterDataAppend(filePath, item); } catch (err) { console.error('afterDataAppend error:', err.message); }
+  return item;
+}
 function nowIso() { return new Date().toISOString(); }
 function cleanPhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
 function money(v){ return v === undefined || v === null || v === '' ? '' : String(v); }
+
+function cleanText(v){ return String(v || '').trim(); }
+function flattenForSheet(obj, prefix = '', out = {}) {
+  if (obj === null || obj === undefined) return out;
+  if (typeof obj !== 'object') { out[prefix || 'value'] = String(obj); return out; }
+  if (Array.isArray(obj)) { out[prefix || 'items'] = obj.map(x => typeof x === 'object' ? JSON.stringify(x) : String(x)).join(' | '); return out; }
+  for (const [k, v] of Object.entries(obj)) {
+    const key = prefix ? `${prefix}.${k}` : k;
+    if (v && typeof v === 'object' && !Array.isArray(v)) flattenForSheet(v, key, out);
+    else out[key] = Array.isArray(v) ? v.map(x => typeof x === 'object' ? JSON.stringify(x) : String(x)).join(' | ') : String(v ?? '');
+  }
+  return out;
+}
+function crmKey(record = {}) {
+  const phone = cleanPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || record.raw?.phone || record.raw?.customer?.phone);
+  const email = cleanText(record.email || record.customerEmail || record.customer?.email || record.raw?.email || record.raw?.customer?.email).toLowerCase();
+  const visitor = cleanText(record.visitorId);
+  return phone ? `phone:${phone}` : email ? `email:${email}` : visitor ? `visitor:${visitor}` : `lead:${record.id || crypto.randomUUID()}`;
+}
+function upsertCrm(record = {}, source = 'lead') {
+  const key = crmKey(record);
+  const all = readJson(crmPath, []);
+  const idx = all.findIndex(x => x.crmKey === key);
+  const phone = cleanPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || record.raw?.phone || record.raw?.customer?.phone);
+  const name = cleanText(record.name || record.customerName || record.raw?.customer?.first_name || record.raw?.customer?.last_name || record.customer?.name);
+  const email = cleanText(record.email || record.customerEmail || record.customer?.email || record.raw?.email || record.raw?.customer?.email);
+  const productTitle = cleanText(record.productTitle || record.product || record.product?.title || record.raw?.line_items?.[0]?.title);
+  const pageUrl = cleanText(record.pageUrl || record.productUrl || record.product?.url);
+  const eventType = cleanText(record.type || record.eventType || source);
+  const now = nowIso();
+  const base = idx >= 0 ? all[idx] : { id: crypto.randomUUID(), crmKey: key, createdAt: now, status: 'New', notes: '', tags: [] };
+  const next = {
+    ...base,
+    updatedAt: now,
+    lastSource: source,
+    lastEventType: eventType || base.lastEventType || '',
+    name: name || base.name || '',
+    phone: phone || base.phone || '',
+    email: email || base.email || '',
+    productTitle: productTitle || base.productTitle || '',
+    pageUrl: pageUrl || base.pageUrl || '',
+    productImage: cleanText(record.productImage || record.image || record.product?.image) || base.productImage || '',
+    productPrice: cleanText(record.productPrice || record.price || record.product?.price) || base.productPrice || '',
+    discountText: cleanText(record.discountText || record.product?.discountText) || base.discountText || '',
+    orderName: cleanText(record.orderName || record.orderId || record.raw?.name) || base.orderName || '',
+    total: cleanText(record.total || record.raw?.total_price) || base.total || '',
+    lastMessage: cleanText(record.message || record.note || record.caption) || base.lastMessage || '',
+    leadCount: (base.leadCount || 0) + (source === 'lead' ? 1 : 0),
+    activityCount: (base.activityCount || 0) + (source === 'activity' ? 1 : 0),
+    messageCount: (base.messageCount || 0) + (source === 'message' ? 1 : 0)
+  };
+  if (idx >= 0) all[idx] = next; else all.unshift(next);
+  writeJson(crmPath, all.slice(0, 5000));
+  return next;
+}
+function googleSheetsEnabled() {
+  return String(process.env.GOOGLE_SHEETS_ENABLED || '').toLowerCase() === 'true' && String(process.env.GOOGLE_SHEETS_WEBHOOK_URL || '').trim();
+}
+async function sendToGoogleSheets(type, record) {
+  const url = String(process.env.GOOGLE_SHEETS_WEBHOOK_URL || '').trim();
+  if (!googleSheetsEnabled()) return { ok: false, skipped: true, reason: 'Google Sheets auto-save disabled or webhook URL missing.' };
+  const payload = { type, secret: process.env.GOOGLE_SHEETS_SECRET || '', createdAt: nowIso(), record, flat: flattenForSheet(record) };
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+  const text = await response.text().catch(() => '');
+  return { ok: response.ok, status: response.status, text: text.slice(0, 500) };
+}
+function afterDataAppend(filePath, item) {
+  if (filePath === leadsPath) {
+    const crm = upsertCrm(item, 'lead');
+    sendToGoogleSheets('Lead', { ...item, crmId: crm.id }).catch(err => console.error('Google Sheets lead error:', err.message));
+    return;
+  }
+  if (filePath === eventsPath) {
+    upsertCrm(item, 'activity');
+    sendToGoogleSheets('Visitor Activity', item).catch(err => console.error('Google Sheets activity error:', err.message));
+    return;
+  }
+  if (filePath === leadMessagesPath) {
+    upsertCrm(item, 'message');
+    sendToGoogleSheets('Buy Message', item).catch(err => console.error('Google Sheets message error:', err.message));
+    return;
+  }
+  if (filePath === mediaImagesPath) {
+    sendToGoogleSheets('Media Image', item).catch(err => console.error('Google Sheets media error:', err.message));
+  }
+}
 
 function findFaqAnswer(message) {
   const text = String(message || '').toLowerCase();
@@ -366,7 +465,7 @@ app.get('/api/settings', (req, res) => res.json({ ok: true, settings: readJson(s
 
 
 // From here, admin/API settings routes are protected by login.
-app.use(['/api/config','/api/test-whatsapp','/api/test-shopify','/api/leads','/api/visitor-events','/api/lead-messages','/api/media-images','/api/send-image-message','/api/faqs'], requireAdmin);
+app.use(['/api/config','/api/test-whatsapp','/api/test-shopify','/api/leads','/api/visitor-events','/api/lead-messages','/api/media-images','/api/send-image-message','/api/faqs','/api/crm','/api/test-google-sheets','/api/sync-google-sheets'], requireAdmin);
 app.post('/api/settings', requireAdmin);
 
 app.get('/api/config', (req, res) => {
@@ -584,6 +683,36 @@ app.post('/api/send-image-message', async (req, res) => {
   const result = await sendWhatsAppImage({ to, imageUrl, caption }).catch(e => ({ ok: false, error: e.message }));
   appendJson(leadMessagesPath, { id: crypto.randomUUID(), type: 'image_message', createdAt: nowIso(), to: body.to || 'custom', phone: cleanPhone(to), imageUrl, caption, result });
   res.json({ ok: !!result.ok, result, imageUrl, caption });
+});
+
+
+app.get('/api/crm', (req, res) => {
+  const customers = readJson(crmPath, []);
+  const summary = customers.reduce((acc, c) => { acc.total++; acc[c.status || 'New'] = (acc[c.status || 'New'] || 0) + 1; return acc; }, { total: 0 });
+  res.json({ ok: true, customers, summary });
+});
+app.patch('/api/crm/:id', (req, res) => {
+  const all = readJson(crmPath, []);
+  const idx = all.findIndex(x => x.id === req.params.id);
+  if (idx < 0) return res.status(404).json({ ok: false, error: 'CRM record not found' });
+  const allowed = ['status','notes','name','phone','email','tags'];
+  for (const key of allowed) if (Object.prototype.hasOwnProperty.call(req.body || {}, key)) all[idx][key] = req.body[key];
+  all[idx].updatedAt = nowIso();
+  writeJson(crmPath, all);
+  sendToGoogleSheets('CRM Update', all[idx]).catch(() => {});
+  res.json({ ok: true, customer: all[idx] });
+});
+app.post('/api/test-google-sheets', async (req, res) => {
+  const result = await sendToGoogleSheets('Test', { message: 'Tiny Shiny Chatbot Google Sheet test', createdAt: nowIso() }).catch(e => ({ ok: false, error: e.message }));
+  res.json(result);
+});
+app.post('/api/sync-google-sheets', async (req, res) => {
+  const crm = readJson(crmPath, []);
+  const leads = readJson(leadsPath, []);
+  const events = readJson(eventsPath, []);
+  const messages = readJson(leadMessagesPath, []);
+  const result = await sendToGoogleSheets('Full CRM Sync', { crm, leads, events, messages, syncedAt: nowIso() }).catch(e => ({ ok: false, error: e.message }));
+  res.json({ ok: !!result.ok, result, counts: { crm: crm.length, leads: leads.length, events: events.length, messages: messages.length } });
 });
 
 app.get('/api/leads', (req, res) => res.json({ ok: true, leads: readJson(leadsPath, []) }));

@@ -118,3 +118,31 @@ V9 IMAGE MESSAGE UPDATE
 
 
 V11 Update: Shopify OAuth callback state fix for Render free hosting. Agar 'Invalid/expired Shopify OAuth state' aaye, v11 deploy karein aur Connect Shopify dobara run karein.
+
+
+v12 CRM + Google Sheets Auto-save
+---------------------------------
+Admin Panel me naya CRM Dashboard add hai:
+- Leads / order requests
+- Visitor activity
+- Product view leads
+- Add-to-cart leads
+- Status: New, Hot Lead, Follow Up, Converted, Not Interested
+- Notes save
+- CSV export
+- Google Sheets sync
+
+Google Sheets setup:
+1. Google Sheet kholo.
+2. Extensions -> Apps Script kholo.
+3. GOOGLE_SHEETS_APPS_SCRIPT.txt ka code paste karo.
+4. SHEET_SECRET change karo.
+5. Deploy -> New Deployment -> Web App.
+6. Execute as: Me, Access: Anyone.
+7. Web app URL copy karo.
+8. Chatbot API Settings -> Google Sheets CRM Auto-save me:
+   GOOGLE_SHEETS_ENABLED=true
+   GOOGLE_SHEETS_WEBHOOK_URL=<web app url>
+   GOOGLE_SHEETS_SECRET=<same secret>
+9. Save API Settings -> Render service restart.
+10. Test Google Sheets dabao.

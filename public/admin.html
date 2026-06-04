@@ -24,6 +24,34 @@
       <div><b id="leadCount">0</b><span>Leads</span></div>
       <div><b id="eventCount">0</b><span>Activities</span></div>
       <div><b id="messageCount">0</b><span>Buy Messages</span></div>
+      <div><b id="crmCount">0</b><span>CRM Customers</span></div>
+    </section>
+
+    <section class="panel quick-nav">
+      <a href="#crmPanel">CRM Dashboard</a>
+      <a href="#leadPanel">Leads</a>
+      <a href="#activityPanel">Visitor Activity</a>
+      <a href="#messagePanel">Buy Messages</a>
+      <a href="#imagePanel">Image Messages</a>
+    </section>
+
+    <section class="panel crm-panel" id="crmPanel">
+      <div class="section-head">
+        <div><h2>CRM Dashboard</h2><p>All chatbot leads, product views, cart leads and order requests in one place.</p></div>
+        <div class="inline-actions"><button id="refreshCrm" class="ghost-btn">Refresh CRM</button><button id="syncGoogleSheets" class="primary-btn">Sync to Google Sheets</button><button id="exportCrmCsv" class="ghost-btn">Export CSV</button></div>
+      </div>
+      <div class="form-grid three">
+        <label>Search CRM <input id="crmSearch" placeholder="Name, phone, product, order"/></label>
+        <label>Status Filter
+          <select id="crmStatusFilter"><option value="">All Status</option><option>New</option><option>Hot Lead</option><option>Follow Up</option><option>Converted</option><option>Not Interested</option></select>
+        </label>
+        <label>Quick Status
+          <select id="crmBulkStatus"><option value="Follow Up">Follow Up</option><option value="Hot Lead">Hot Lead</option><option value="Converted">Converted</option><option value="Not Interested">Not Interested</option></select>
+        </label>
+      </div>
+      <pre id="crmSyncResult"></pre>
+      <div id="crmSummary" class="crm-summary"></div>
+      <div id="crmList" class="crm-list"></div>
     </section>
 
     <section class="panel">
@@ -64,7 +92,7 @@
     </section>
 
 
-    <section class="panel media-panel">
+    <section class="panel media-panel" id="imagePanel">
       <h2>Image Messages</h2>
       <p>Upload images such as thank you letter, offer/discount image or wishes. You can preview them here and send them through WhatsApp after WhatsApp Cloud API is connected.</p>
       <div class="form-grid two">
@@ -100,9 +128,9 @@
       <div id="mediaList" class="media-grid"></div>
     </section>
 
-    <section class="panel"><h2>Leads / Order Requests</h2><button id="refreshLeads" class="ghost-btn">Refresh Leads</button><div id="leadList"></div></section>
-    <section class="panel"><h2>Visitor / Product Activity</h2><button id="refreshEvents" class="ghost-btn">Refresh Activity</button><div id="eventList"></div></section>
-    <section class="panel"><h2>Generated Buy Messages</h2><button id="refreshMsgs" class="ghost-btn">Refresh Messages</button><div id="messageList"></div></section>
+    <section class="panel" id="leadPanel"><h2>Leads / Order Requests</h2><button id="refreshLeads" class="ghost-btn">Refresh Leads</button><div id="leadList"></div></section>
+    <section class="panel" id="activityPanel"><h2>Visitor / Product Activity</h2><button id="refreshEvents" class="ghost-btn">Refresh Activity</button><div id="eventList"></div></section>
+    <section class="panel" id="messagePanel"><h2>Generated Buy Messages</h2><button id="refreshMsgs" class="ghost-btn">Refresh Messages</button><div id="messageList"></div></section>
   </main>
   <script src="/admin.js"></script>
 </body>

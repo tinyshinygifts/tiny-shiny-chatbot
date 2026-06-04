@@ -34,3 +34,19 @@ button,.primary-btn,.ghost-btn{border:0;border-radius:999px;padding:12px 18px;cu
 .soft-line{border:0;border-top:1px solid var(--line,#efd2e5);margin:22px 0}
 .inline-actions{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-top:14px}
 .panel h3{margin:8px 0 8px;font-size:18px;color:var(--text,#2a1830)}
+
+/* v12 CRM dashboard */
+.quick-nav{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.quick-nav a{padding:10px 14px;border:1px solid var(--line);border-radius:999px;text-decoration:none;color:var(--purple);font-weight:800;background:#fff}
+.section-head{display:flex;justify-content:space-between;gap:16px;align-items:flex-start;flex-wrap:wrap}
+.form-grid.three{grid-template-columns:repeat(3,minmax(0,1fr))}
+.crm-summary{display:flex;gap:12px;flex-wrap:wrap;margin:14px 0}
+.crm-summary span{border:1px solid var(--line);background:#fff;border-radius:18px;padding:10px 14px;display:flex;gap:8px;align-items:center;box-shadow:0 8px 24px rgba(40,12,35,.05)}
+.crm-summary b{color:var(--pink);font-size:18px}
+.crm-list{display:grid;gap:14px}
+.crm-card{background:#fff;border:1px solid var(--line);border-radius:22px;padding:16px;box-shadow:0 12px 34px rgba(40,12,35,.06)}
+.crm-main{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}.crm-main b{font-size:18px}.crm-main span{color:#7a6a78;font-weight:700}
+.crm-meta{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}.crm-meta span{font-size:12px;background:#fbf2f8;border:1px solid var(--line);padding:6px 10px;border-radius:999px;color:#6b5365}.status-chip{background:linear-gradient(135deg,var(--pink),var(--purple))!important;color:#fff!important;border:0!important}
+.crm-product{margin:10px 0;color:#4a3a49}.crm-product a{color:var(--pink);word-break:break-all}.crm-product img{max-width:90px;max-height:90px;border-radius:12px;margin-top:8px;border:1px solid var(--line)}
+.crm-message{white-space:pre-wrap;color:#5f5260;background:#fff8fc;border:1px solid var(--line);border-radius:14px;padding:10px;margin:10px 0}
+@media(max-width:760px){.form-grid.three{grid-template-columns:1fr}.section-head{display:block}}

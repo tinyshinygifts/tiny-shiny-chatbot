@@ -91,6 +91,20 @@
       </div>
     </section>
 
+
+    <section class="panel">
+      <h2>Google Sheets CRM Auto-save</h2>
+      <p>Use this to save every lead, visitor activity, buy message and CRM update into Google Sheets automatically.</p>
+      <label>Enable Google Sheets Auto-save
+        <select id="GOOGLE_SHEETS_ENABLED"><option value="false">false</option><option value="true">true</option></select>
+      </label>
+      <label>Google Apps Script Web App URL <input id="GOOGLE_SHEETS_WEBHOOK_URL" type="password" placeholder="https://script.google.com/macros/s/.../exec"/></label>
+      <label>Google Sheet Secret <input id="GOOGLE_SHEETS_SECRET" type="password" placeholder="Any private secret, same in Apps Script"/></label>
+      <button id="testGoogleSheets" class="ghost-btn" type="button">Test Google Sheets</button>
+      <pre id="googleSheetsResult"></pre>
+      <p class="hint">A ready Apps Script template is included in <b>GOOGLE_SHEETS_APPS_SCRIPT.txt</b>.</p>
+    </section>
+
     <section class="panel save-panel">
       <h2>Save</h2>
       <button id="saveConfig" class="primary-btn">Save API Settings</button>
