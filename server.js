@@ -1,0 +1,496 @@
+const express = require('express');
+const cors = require('cors');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+require('dotenv').config();
+
+const app = express();
+const PORT = process.env.PORT || 5057;
+
+app.use(cors({ origin: true, credentials: true }));
+app.use(express.json({ limit: '20mb' }));
+
+const COOKIE_NAME = 'tsg_chatbot_admin';
+const SESSION_HOURS = Number(process.env.ADMIN_SESSION_HOURS || 12);
+function parseCookies(req) {
+  const header = req.headers.cookie || '';
+  return Object.fromEntries(header.split(';').map(v => v.trim()).filter(Boolean).map(v => {
+    const idx = v.indexOf('=');
+    return [decodeURIComponent(v.slice(0, idx)), decodeURIComponent(v.slice(idx + 1))];
+  }));
+}
+function authSecret() {
+  return process.env.SECURITY_SESSION_SECRET || process.env.ADMIN_PASSWORD || 'change-this-local-secret';
+}
+function sign(payload) { return crypto.createHmac('sha256', authSecret()).update(payload).digest('hex'); }
+function makeToken() {
+  const payload = JSON.stringify({ role: 'admin', exp: Date.now() + SESSION_HOURS * 60 * 60 * 1000 });
+  const body = Buffer.from(payload).toString('base64url');
+  return body + '.' + sign(body);
+}
+function verifyToken(token) {
+  if (!token || !token.includes('.')) return false;
+  const [body, sig] = token.split('.');
+  if (sign(body) !== sig) return false;
+  try {
+    const payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+    return payload.role === 'admin' && Number(payload.exp) > Date.now();
+  } catch { return false; }
+}
+function isSecureReq(req) { return req.secure || req.headers['x-forwarded-proto'] === 'https'; }
+function setAdminCookie(req, res) {
+  const parts = [`${COOKIE_NAME}=${encodeURIComponent(makeToken())}`, 'Path=/', 'HttpOnly', 'SameSite=Lax', `Max-Age=${SESSION_HOURS * 60 * 60}`];
+  if (isSecureReq(req)) parts.push('Secure');
+  res.setHeader('Set-Cookie', parts.join('; '));
+}
+function clearAdminCookie(req, res) {
+  const base = `${COOKIE_NAME}=; Path=/; HttpOnly; SameSite=Lax; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT`;
+  const cookies = [base];
+  if (isSecureReq(req)) cookies.push(base + '; Secure');
+  res.setHeader('Set-Cookie', cookies);
+}
+function isAuthed(req) { return verifyToken(parseCookies(req)[COOKIE_NAME]); }
+function requireAdmin(req, res, next) {
+  if (isAuthed(req)) return next();
+  if (req.path.startsWith('/api/')) return res.status(401).json({ ok: false, error: 'Admin login required' });
+  return res.redirect('/login.html');
+}
+
+// Protect admin pages and admin JavaScript files. Public chatbot widget remains open.
+app.use((req, res, next) => {
+  const protectedFiles = ['/admin.html', '/api-settings.html', '/admin.js', '/api-settings.js'];
+  if (protectedFiles.includes(req.path)) return requireAdmin(req, res, next);
+  return next();
+});
+
+const dataDir = path.join(__dirname, 'data');
+const faqPath = path.join(dataDir, 'faq.json');
+const settingsPath = path.join(dataDir, 'settings.json');
+const leadsPath = path.join(dataDir, 'leads.json');
+const eventsPath = path.join(dataDir, 'visitor-events.json');
+const leadMessagesPath = path.join(dataDir, 'lead-messages.json');
+const mediaImagesPath = path.join(dataDir, 'media-images.json');
+
+const envPath = path.join(__dirname, '.env');
+const apiKeys = [
+  'PORT','BUSINESS_NAME','WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER',
+  'ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS',
+  'SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER',
+  'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID',
+  'CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG',
+  'SHOPIFY_WEBHOOK_SECRET'
+];
+const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
+function readEnvFile() {
+  const out = {};
+  const text = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || !trimmed.includes('=')) continue;
+    const idx = trimmed.indexOf('=');
+    const key = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim();
+    out[key] = value;
+  }
+  for (const key of apiKeys) if (process.env[key] && !out[key]) out[key] = process.env[key];
+  return out;
+}
+function writeEnvFile(next) {
+  const current = readEnvFile();
+  const merged = { ...current };
+  for (const key of apiKeys) {
+    if (Object.prototype.hasOwnProperty.call(next, key)) merged[key] = String(next[key] ?? '').trim();
+  }
+  const lines = [
+    'PORT=' + (merged.PORT || '5057'),
+    'BUSINESS_NAME=' + (merged.BUSINESS_NAME || 'Tiny Shiny Gifts'),
+    'WEBSITE_URL=' + (merged.WEBSITE_URL || 'https://tinyshinygifts.com'),
+    'WHATSAPP_NUMBER=' + (merged.WHATSAPP_NUMBER || ''),
+    'OWNER_WHATSAPP_NUMBER=' + (merged.OWNER_WHATSAPP_NUMBER || ''),
+    '',
+    '# Admin login security',
+    'ADMIN_USERNAME=' + (merged.ADMIN_USERNAME || process.env.ADMIN_USERNAME || 'admin'),
+    'ADMIN_PASSWORD=' + (merged.ADMIN_PASSWORD || process.env.ADMIN_PASSWORD || 'admin'),
+    '# Forgot password DOB format: DD/MM/YYYY',
+    'ADMIN_DOB=' + (merged.ADMIN_DOB || process.env.ADMIN_DOB || '26/04/1986'),
+    'SECURITY_SESSION_SECRET=' + (merged.SECURITY_SESSION_SECRET || process.env.SECURITY_SESSION_SECRET || crypto.randomBytes(24).toString('hex')),
+    'ADMIN_SESSION_HOURS=' + (merged.ADMIN_SESSION_HOURS || process.env.ADMIN_SESSION_HOURS || '12'),
+    '',
+    '# Shopify Admin API - required for live order tracking and optional draft order creation',
+    'SHOPIFY_STORE_DOMAIN=' + (merged.SHOPIFY_STORE_DOMAIN || ''),
+    'SHOPIFY_ADMIN_ACCESS_TOKEN=' + (merged.SHOPIFY_ADMIN_ACCESS_TOKEN || ''),
+    'SHOPIFY_API_VERSION=' + (merged.SHOPIFY_API_VERSION || '2025-10'),
+    'CREATE_SHOPIFY_DRAFT_ORDER=' + (merged.CREATE_SHOPIFY_DRAFT_ORDER || 'false'),
+    '',
+    '# WhatsApp Cloud API - required for owner/team notification from chatbot',
+    'WHATSAPP_CLOUD_TOKEN=' + (merged.WHATSAPP_CLOUD_TOKEN || ''),
+    'WHATSAPP_PHONE_NUMBER_ID=' + (merged.WHATSAPP_PHONE_NUMBER_ID || ''),
+    '',
+    '# Customer WhatsApp follow-up. Keep false until you have customer opt-in and approved WhatsApp template/session rules.',
+    'CUSTOMER_WHATSAPP_MESSAGES_ENABLED=' + (merged.CUSTOMER_WHATSAPP_MESSAGES_ENABLED || 'false'),
+    'CUSTOMER_WHATSAPP_TEMPLATE_NAME=' + (merged.CUSTOMER_WHATSAPP_TEMPLATE_NAME || ''),
+    'CUSTOMER_WHATSAPP_TEMPLATE_LANG=' + (merged.CUSTOMER_WHATSAPP_TEMPLATE_LANG || 'en'),
+    '',
+    '# Security for Shopify webhook. Add later when hosting.',
+    'SHOPIFY_WEBHOOK_SECRET=' + (merged.SHOPIFY_WEBHOOK_SECRET || '')
+  ];
+  fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
+  for (const key of apiKeys) process.env[key] = merged[key] || '';
+  return merged;
+}
+function publicConfig(env) {
+  const out = {};
+  for (const key of apiKeys) {
+    const value = env[key] || '';
+    out[key] = secretKeys.has(key) && value ? '********' : value;
+    out[key + '_SET'] = Boolean(value);
+  }
+  return out;
+}
+
+
+function readJson(filePath, fallback) { try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; } }
+function writeJson(filePath, data) { fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8'); }
+function appendJson(filePath, item) { const arr = readJson(filePath, []); arr.unshift(item); writeJson(filePath, arr.slice(0, 2000)); return item; }
+function nowIso() { return new Date().toISOString(); }
+function cleanPhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
+function money(v){ return v === undefined || v === null || v === '' ? '' : String(v); }
+
+function findFaqAnswer(message) {
+  const text = String(message || '').toLowerCase();
+  const faqs = readJson(faqPath, []);
+  let best = null, bestScore = 0;
+  for (const faq of faqs) {
+    const score = (faq.keywords || []).reduce((total, keyword) => total + (text.includes(String(keyword).toLowerCase()) ? 1 : 0), 0);
+    if (score > bestScore) { bestScore = score; best = faq; }
+  }
+  return best ? best.answer : null;
+}
+function extractPhone(text) { const m = String(text || '').match(/(?:\+?91[-\s]?)?[6-9]\d{9}/); return m ? cleanPhone(m[0]) : ''; }
+function extractOrderId(text) {
+  const m = String(text || '').match(/(?:order\s*#?|order\s*id|id)[:\s-]*([A-Za-z0-9-]{4,})/i) || String(text || '').match(/\b(?:TSG|TS)?[0-9]{4,}\b/i);
+  return m ? String(m[1] || m[0]).replace('#','').trim() : '';
+}
+function productSummary(p = {}) {
+  return [p.title || p.productTitle || 'Product', p.price ? `Price: ${p.price}` : '', p.discountText ? `Discount: ${p.discountText}` : '', p.url || p.pageUrl || ''].filter(Boolean).join('\n');
+}
+function buildLeadMessage({ type, product = {}, cart = {}, customer = {}, pageUrl = '' }) {
+  const settings = readJson(settingsPath, {});
+  const title = product.title || product.productTitle || (cart.items && cart.items[0]?.title) || 'this product';
+  const link = product.url || product.pageUrl || pageUrl || process.env.WEBSITE_URL || 'https://tinyshinygifts.com';
+  const image = product.image || product.imageUrl || (cart.items && cart.items[0]?.image) || '';
+  const discount = product.discountText || cart.discountText || 'Any active discount shown on the website will apply at checkout.';
+  const intro = type === 'cart' ? (settings.cartOfferMessage || '') : (settings.leadOfferMessage || '');
+  return `${intro}\n\nProduct: ${title}\n${product.price ? `Price: ${product.price}\n` : ''}Discount: ${discount}\nBuy here: ${link}${image ? `\nImage: ${image}` : ''}`;
+}
+
+async function sendOwnerWhatsApp(message) {
+  const token = process.env.WHATSAPP_CLOUD_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const owner = cleanPhone(process.env.OWNER_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER);
+  if (!token || !phoneNumberId || !owner) { console.log('[WhatsApp skipped] Missing WhatsApp Cloud API env values.'); return { ok: false, skipped: true }; }
+  const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
+  const body = { messaging_product: 'whatsapp', to: owner, type: 'text', text: { preview_url: true, body: message } };
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+  const json = await response.json().catch(() => ({}));
+  return { ok: response.ok, status: response.status, json };
+}
+
+async function sendCustomerWhatsApp(phone, message) {
+  const enabled = String(process.env.CUSTOMER_WHATSAPP_MESSAGES_ENABLED || 'false').toLowerCase() === 'true';
+  if (!enabled) return { ok: false, skipped: true, reason: 'Customer WhatsApp follow-up is disabled in API Settings.' };
+  const token = process.env.WHATSAPP_CLOUD_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const to = cleanPhone(phone);
+  if (!token || !phoneNumberId || !to) return { ok: false, skipped: true, reason: 'WhatsApp Cloud API or customer phone missing.' };
+  const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
+  // Note: WhatsApp may require an approved template for business-initiated messages.
+  const body = { messaging_product: 'whatsapp', to, type: 'text', text: { preview_url: true, body: message } };
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+  const json = await response.json().catch(() => ({}));
+  return { ok: response.ok, status: response.status, json };
+}
+
+async function sendWhatsAppImage({ to, imageUrl, caption = '' }) {
+  const token = process.env.WHATSAPP_CLOUD_TOKEN;
+  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
+  const receiver = cleanPhone(to);
+  if (!token || !phoneNumberId || !receiver || !imageUrl) return { ok: false, skipped: true, reason: 'WhatsApp API, receiver phone, or image URL missing.' };
+  const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
+  const body = { messaging_product: 'whatsapp', to: receiver, type: 'image', image: { link: imageUrl, caption: caption || '' } };
+  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
+  const json = await response.json().catch(() => ({}));
+  return { ok: response.ok, status: response.status, json };
+}
+function absoluteUrl(req, urlPath) {
+  if (/^https?:\/\//i.test(String(urlPath || ''))) return urlPath;
+  const site = String(process.env.WEBSITE_URL || '').replace(/\/$/, '');
+  if (site && !site.includes('localhost')) return site + urlPath;
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
+  return `${proto}://${req.get('host')}${urlPath}`;
+}
+function saveImageFromDataUrl({ dataUrl, filename }) {
+  const match = String(dataUrl || '').match(/^data:(image\/(png|jpe?g|webp|gif));base64,(.+)$/i);
+  if (!match) throw new Error('Only PNG, JPG, WEBP or GIF image data is supported.');
+  const ext = match[2].toLowerCase().replace('jpeg','jpg');
+  const safeName = String(filename || 'image').replace(/[^a-z0-9._-]/gi, '-').replace(/-+/g, '-').slice(0, 60);
+  const id = crypto.randomUUID();
+  const outDir = path.join(__dirname, 'public', 'uploads');
+  fs.mkdirSync(outDir, { recursive: true });
+  const outName = `${Date.now()}-${id}-${safeName.replace(/\.(png|jpg|jpeg|webp|gif)$/i,'')}.${ext}`;
+  const outPath = path.join(outDir, outName);
+  fs.writeFileSync(outPath, Buffer.from(match[3], 'base64'));
+  return { id, url: `/uploads/${outName}`, mime: match[1], filename: outName };
+}
+async function getShopifyOrderStatus({ orderId, phone }) {
+  const store = process.env.SHOPIFY_STORE_DOMAIN;
+  const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+  const version = process.env.SHOPIFY_API_VERSION || '2025-10';
+  if (!store || !token) return { ok: false, skipped: true, message: 'Shopify API is not connected yet.' };
+  let query = '';
+  if (orderId) query = `name:${orderId.startsWith('#') ? orderId : '#' + orderId}`;
+  else if (phone) query = `phone:${phone}`;
+  else return { ok: false, message: 'Order number or phone number is required.' };
+  const url = `https://${store}/admin/api/${version}/orders.json?status=any&limit=5&query=${encodeURIComponent(query)}`;
+  const response = await fetch(url, { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } });
+  const json = await response.json().catch(() => ({}));
+  if (!response.ok) return { ok: false, message: 'Shopify order lookup failed.', detail: json };
+  const order = (json.orders || [])[0];
+  if (!order) return { ok: false, message: 'No matching order found.' };
+  return { ok: true, order: { name: order.name, financial_status: order.financial_status, fulfillment_status: order.fulfillment_status || 'not fulfilled yet', total_price: order.total_price, currency: order.currency || 'INR', tracking: (order.fulfillments || []).flatMap(f => (f.tracking_numbers || []).map((n, i) => ({ number: n, url: (f.tracking_urls || [])[i] || '' }))) } };
+}
+async function createShopifyDraftOrder(lead) {
+  const store = process.env.SHOPIFY_STORE_DOMAIN;
+  const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+  const version = process.env.SHOPIFY_API_VERSION || '2025-10';
+  if (!store || !token || process.env.CREATE_SHOPIFY_DRAFT_ORDER !== 'true') return { ok: false, skipped: true };
+  const url = `https://${store}/admin/api/${version}/draft_orders.json`;
+  const title = lead.productTitle || lead.product || 'Chatbot product request';
+  const body = { draft_order: { note: `Chatbot order confirmation request\nProduct/link: ${lead.pageUrl || lead.productUrl || ''}\nMessage: ${lead.message || lead.note || ''}`, customer: lead.phone ? { phone: '+' + cleanPhone(lead.phone), first_name: lead.name || 'Chatbot Customer' } : undefined, line_items: [{ title, price: money(lead.price) || '0.00', quantity: Number(lead.quantity || 1) }], tags: 'chatbot,order-confirmation-request' } };
+  const response = await fetch(url, { method: 'POST', headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+  const json = await response.json().catch(() => ({}));
+  return { ok: response.ok, status: response.status, json };
+}
+
+
+function normalizeDob(value) { return String(value || '').replace(/[^0-9]/g, ''); }
+function getAdminCreds() {
+  const env = readEnvFile();
+  return {
+    username: String(process.env.ADMIN_USERNAME || env.ADMIN_USERNAME || 'admin').trim(),
+    password: String(process.env.ADMIN_PASSWORD || env.ADMIN_PASSWORD || 'admin'),
+    dob: String(process.env.ADMIN_DOB || env.ADMIN_DOB || '26/04/1986').trim()
+  };
+}
+app.post('/api/admin/login', (req, res) => {
+  const username = String((req.body || {}).username || '').trim();
+  const password = String((req.body || {}).password || '');
+  const expected = getAdminCreds();
+  if (!username || username !== expected.username) return res.status(401).json({ ok: false, error: 'Wrong user ID' });
+  if (!password || password !== expected.password) return res.status(401).json({ ok: false, error: 'Wrong password' });
+  setAdminCookie(req, res);
+  res.json({ ok: true, message: 'Login successful' });
+});
+app.post('/api/admin/forgot-login', (req, res) => {
+  const username = String((req.body || {}).username || '').trim();
+  const dob = String((req.body || {}).dob || '').trim();
+  const expected = getAdminCreds();
+  if (username && username !== expected.username) return res.status(401).json({ ok: false, error: 'Wrong user ID' });
+  if (!dob || normalizeDob(dob) !== normalizeDob(expected.dob)) return res.status(401).json({ ok: false, error: 'Date of birth does not match' });
+  setAdminCookie(req, res);
+  res.json({ ok: true, message: 'DOB verified. Login successful.' });
+});
+app.post('/api/admin/logout', (req, res) => { clearAdminCookie(req, res); res.json({ ok: true, message: 'Logged out' }); });
+app.get('/api/admin/logout', (req, res) => { clearAdminCookie(req, res); res.redirect('/login.html'); });
+app.get('/api/admin/me', (req, res) => res.json({ ok: true, loggedIn: isAuthed(req), sessionHours: SESSION_HOURS, username: getAdminCreds().username }));
+
+app.use(express.static(path.join(__dirname, 'public')));
+
+app.get('/health', (req, res) => res.json({ ok: true, service: 'Tiny Shiny Chatbot', time: nowIso() }));
+app.get('/api/settings', (req, res) => res.json({ ok: true, settings: readJson(settingsPath, {}), business: { name: process.env.BUSINESS_NAME || 'Tiny Shiny Gifts', website: process.env.WEBSITE_URL || 'https://tinyshinygifts.com', whatsapp: process.env.WHATSAPP_NUMBER || '' } }));
+
+
+// From here, admin/API settings routes are protected by login.
+app.use(['/api/config','/api/test-whatsapp','/api/test-shopify','/api/leads','/api/visitor-events','/api/lead-messages','/api/media-images','/api/send-image-message','/api/faqs'], requireAdmin);
+app.post('/api/settings', requireAdmin);
+
+app.get('/api/config', (req, res) => {
+  res.json({ ok: true, config: publicConfig(readEnvFile()) });
+});
+app.post('/api/config', (req, res) => {
+  const body = req.body || {};
+  const current = readEnvFile();
+  const next = {};
+  for (const key of apiKeys) {
+    if (Object.prototype.hasOwnProperty.call(body, key)) {
+      const val = String(body[key] ?? '').trim();
+      // If secret field is left as ********, keep old value.
+      next[key] = (secretKeys.has(key) && val === '********') ? (current[key] || '') : val;
+    }
+  }
+  const saved = writeEnvFile(next);
+  res.json({ ok: true, config: publicConfig(saved), message: 'API settings saved. Restart chatbot once to reload all integrations.' });
+});
+app.post('/api/test-whatsapp', async (req, res) => {
+  try {
+    const result = await sendOwnerWhatsApp('Tiny Shiny Chatbot test message. WhatsApp API is connected successfully.');
+    res.json({ ok: !!result.ok, result });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/test-shopify', async (req, res) => {
+  try {
+    const store = process.env.SHOPIFY_STORE_DOMAIN;
+    const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+    const version = process.env.SHOPIFY_API_VERSION || '2025-10';
+    if (!store || !token) return res.json({ ok: false, message: 'Shopify store domain/token is missing.' });
+    const response = await fetch(`https://${store}/admin/api/${version}/shop.json`, { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } });
+    const json = await response.json().catch(() => ({}));
+    res.json({ ok: response.ok, status: response.status, shop: json.shop ? { name: json.shop.name, domain: json.shop.domain, email: json.shop.email } : undefined, detail: response.ok ? undefined : json });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+
+app.post('/api/chat', async (req, res) => {
+  const { message, pageUrl, productTitle, productHandle, productImage, productPrice, discountText, visitorId } = req.body || {};
+  const settings = readJson(settingsPath, {});
+  const raw = String(message || '').trim();
+  const text = raw.toLowerCase();
+  if (!raw) return res.json({ ok: true, reply: settings.welcomeMessage || 'Hello! How can I help you?' });
+  const phone = extractPhone(raw);
+  const wantsConfirm = /confirm|confirmation|place order|book order|buy this|order now|i want this/i.test(raw);
+  const wantsTrack = /track|tracking|order status|where is my order|dispatch|shipped|shipment/i.test(raw);
+  const product = { title: productTitle, handle: productHandle, image: productImage, price: productPrice, discountText, url: pageUrl };
+  if (wantsConfirm) {
+    const lead = appendJson(leadsPath, { id: crypto.randomUUID(), type: 'order_confirmation', createdAt: nowIso(), phone, pageUrl, productTitle, productHandle, productImage, productPrice, discountText, message: raw, visitorId });
+    const waMsg = `New chatbot order confirmation request\nWebsite: Tiny Shiny Gifts\nPhone: ${phone || 'Not shared'}\n${productSummary(product)}\nCustomer message: ${raw}`;
+    sendOwnerWhatsApp(waMsg).catch(err => console.error('WhatsApp notify error:', err.message));
+    createShopifyDraftOrder({ phone, productTitle, pageUrl, price: productPrice, message: raw }).catch(err => console.error('Shopify draft error:', err.message));
+    return res.json({ ok: true, action: 'order_confirmation_saved', reply: phone ? 'Thank you. Your order confirmation request has been sent to our team. We will confirm it on WhatsApp shortly.' : 'Sure. Please share your mobile number, product name/link and quantity so our team can confirm your order on WhatsApp.' });
+  }
+  if (wantsTrack) {
+    const orderId = extractOrderId(raw);
+    if (!orderId && !phone) return res.json({ ok: true, action: 'ask_order_number', reply: 'Please share your order number or registered mobile number to check your order tracking.' });
+    const status = await getShopifyOrderStatus({ orderId, phone });
+    if (status.ok) {
+      const o = status.order;
+      const trackingLine = o.tracking.length ? ` Tracking: ${o.tracking.map(t => t.url ? `${t.number} - ${t.url}` : t.number).join(', ')}` : ' Tracking details are not added yet.';
+      return res.json({ ok: true, action: 'order_status', reply: `Order ${o.name}: payment status is ${o.financial_status}, fulfillment status is ${o.fulfillment_status}, total is ${o.currency} ${o.total_price}.${trackingLine}` });
+    }
+    appendJson(leadsPath, { id: crypto.randomUUID(), type: 'tracking_request', createdAt: nowIso(), phone, orderId, pageUrl, message: raw, visitorId });
+    sendOwnerWhatsApp(`New chatbot tracking request\nOrder/Mobile: ${orderId || phone}\nPage: ${pageUrl || ''}\nMessage: ${raw}`).catch(() => {});
+    return res.json({ ok: true, action: 'tracking_forwarded', reply: `${status.message || 'I could not check the tracking automatically yet.'} I have forwarded your tracking request to our team.` });
+  }
+  if (text.includes('whatsapp') || text.includes('support') || text.includes('agent')) {
+    const wa = cleanPhone(process.env.WHATSAPP_NUMBER || '');
+    return res.json({ ok: true, reply: wa ? `You can talk to our support team on WhatsApp: https://wa.me/${wa}` : 'WhatsApp number is not added yet. Please add WHATSAPP_NUMBER in the .env file.' });
+  }
+  const faqAnswer = findFaqAnswer(raw);
+  if (faqAnswer) return res.json({ ok: true, reply: faqAnswer });
+  return res.json({ ok: true, reply: settings.fallbackMessage || 'I need a little more detail to help you.' });
+});
+
+app.post('/api/order-confirmation', async (req, res) => {
+  const lead = appendJson(leadsPath, { id: crypto.randomUUID(), type: 'order_confirmation_form', createdAt: nowIso(), ...(req.body || {}) });
+  const msg = `New order confirmation form\nName: ${lead.name || ''}\nPhone: ${lead.phone || ''}\nProduct: ${lead.product || lead.productTitle || ''}\nQuantity: ${lead.quantity || '1'}\nPage: ${lead.pageUrl || ''}\nImage: ${lead.productImage || lead.image || ''}\nAddress: ${lead.address || ''}\nNote: ${lead.note || ''}`;
+  const wa = await sendOwnerWhatsApp(msg).catch(err => ({ ok: false, error: err.message }));
+  const draft = await createShopifyDraftOrder(lead).catch(err => ({ ok: false, error: err.message }));
+  res.json({ ok: true, lead, whatsapp: wa, shopifyDraft: draft });
+});
+
+app.post('/api/customer-lead-message', async (req, res) => {
+  const body = req.body || {};
+  const phone = cleanPhone(body.phone || body.customer?.phone);
+  const consent = body.consent === true || body.optIn === true || body.customer?.consent === true;
+  const type = body.type || 'product_close';
+  const message = buildLeadMessage({ type, product: body.product || body, cart: body.cart || {}, customer: body.customer || {}, pageUrl: body.pageUrl });
+  const saved = appendJson(leadsPath, { id: crypto.randomUUID(), type: 'customer_whatsapp_followup', createdAt: nowIso(), phone, consent, message, ...body });
+  sendOwnerWhatsApp(`Customer follow-up lead captured\nPhone: ${phone || 'Not shared'}\nConsent: ${consent ? 'Yes' : 'No'}\n${message}`).catch(() => {});
+  let customerWhatsApp = { ok: false, skipped: true, reason: 'Phone or consent missing.' };
+  if (phone && consent) {
+    customerWhatsApp = await sendCustomerWhatsApp(phone, message).catch(err => ({ ok: false, error: err.message }));
+  }
+  res.json({ ok: true, lead: saved, customerWhatsApp, message });
+});
+
+app.post('/api/lead-message', async (req, res) => {
+  const body = req.body || {};
+  const type = body.type || 'product';
+  const message = buildLeadMessage({ type, product: body.product || body, cart: body.cart || {}, customer: body.customer || {}, pageUrl: body.pageUrl });
+  const saved = appendJson(leadMessagesPath, { id: crypto.randomUUID(), type, createdAt: nowIso(), message, ...body });
+  appendJson(leadsPath, { id: crypto.randomUUID(), type: type === 'cart' ? 'cart_lead' : 'product_view_lead', createdAt: nowIso(), message, ...body });
+  if (body.customer?.phone || body.phone) {
+    // Customer outbound WhatsApp template support is not auto-enabled here. Owner is notified so team can follow up manually.
+  }
+  sendOwnerWhatsApp(`New ${type} buy lead\n${message}\nVisitor: ${body.visitorId || ''}`).catch(() => {});
+  res.json({ ok: true, lead: saved, message });
+});
+
+app.post('/api/visitor-event', (req, res) => {
+  const event = appendJson(eventsPath, { id: crypto.randomUUID(), createdAt: nowIso(), ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress, ...(req.body || {}) });
+  res.json({ ok: true, event });
+});
+
+app.get('/api/media-images', (req, res) => {
+  res.json({ ok: true, images: readJson(mediaImagesPath, []) });
+});
+app.post('/api/media-images', (req, res) => {
+  try {
+    const body = req.body || {};
+    const savedFile = saveImageFromDataUrl({ dataUrl: body.dataUrl, filename: body.filename });
+    const item = {
+      id: savedFile.id,
+      createdAt: nowIso(),
+      title: String(body.title || '').trim() || 'Untitled Image',
+      category: String(body.category || 'offer').trim(),
+      caption: String(body.caption || '').trim(),
+      url: savedFile.url,
+      absoluteUrl: absoluteUrl(req, savedFile.url),
+      mime: savedFile.mime,
+      filename: savedFile.filename
+    };
+    const images = readJson(mediaImagesPath, []);
+    images.unshift(item);
+    writeJson(mediaImagesPath, images.slice(0, 300));
+    res.json({ ok: true, image: item });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message });
+  }
+});
+app.delete('/api/media-images/:id', (req, res) => {
+  const images = readJson(mediaImagesPath, []);
+  const found = images.find(x => x.id === req.params.id);
+  const next = images.filter(x => x.id !== req.params.id);
+  writeJson(mediaImagesPath, next);
+  if (found && found.url && found.url.startsWith('/uploads/')) {
+    try { fs.unlinkSync(path.join(__dirname, 'public', found.url)); } catch {}
+  }
+  res.json({ ok: true });
+});
+app.post('/api/send-image-message', async (req, res) => {
+  const body = req.body || {};
+  const images = readJson(mediaImagesPath, []);
+  const image = body.imageId ? images.find(x => x.id === body.imageId) : null;
+  const imageUrl = absoluteUrl(req, body.imageUrl || image?.url || '');
+  const caption = String(body.caption || image?.caption || '').trim();
+  const to = body.to === 'owner' ? (process.env.OWNER_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER) : body.phone;
+  const result = await sendWhatsAppImage({ to, imageUrl, caption }).catch(e => ({ ok: false, error: e.message }));
+  appendJson(leadMessagesPath, { id: crypto.randomUUID(), type: 'image_message', createdAt: nowIso(), to: body.to || 'custom', phone: cleanPhone(to), imageUrl, caption, result });
+  res.json({ ok: !!result.ok, result, imageUrl, caption });
+});
+
+app.get('/api/leads', (req, res) => res.json({ ok: true, leads: readJson(leadsPath, []) }));
+app.get('/api/visitor-events', (req, res) => res.json({ ok: true, events: readJson(eventsPath, []) }));
+app.get('/api/lead-messages', (req, res) => res.json({ ok: true, messages: readJson(leadMessagesPath, []) }));
+app.get('/api/faqs', (req, res) => res.json({ ok: true, faqs: readJson(faqPath, []) }));
+app.post('/api/faqs', (req, res) => { const { faqs } = req.body || {}; if (!Array.isArray(faqs)) return res.status(400).json({ ok: false, error: 'faqs array required' }); writeJson(faqPath, faqs); res.json({ ok: true, faqs }); });
+app.post('/api/settings', (req, res) => { const current = readJson(settingsPath, {}); const next = { ...current, ...(req.body || {}) }; writeJson(settingsPath, next); res.json({ ok: true, settings: next }); });
+
+app.post('/webhooks/shopify/orders/create', async (req, res) => {
+  const order = req.body || {};
+  appendJson(leadsPath, { id: crypto.randomUUID(), type: 'shopify_order_webhook', createdAt: nowIso(), orderName: order.name, phone: order.phone || order.customer?.phone, total: order.total_price, raw: order });
+  sendOwnerWhatsApp(`New Shopify order received\nOrder: ${order.name || ''}\nCustomer: ${order.customer?.first_name || ''} ${order.customer?.last_name || ''}\nPhone: ${order.phone || order.customer?.phone || ''}\nTotal: ${order.currency || 'INR'} ${order.total_price || ''}`).catch(() => {});
+  res.json({ ok: true });
+});
+
+app.listen(PORT, () => console.log(`Tiny Shiny Chatbot running on http://localhost:${PORT}`));

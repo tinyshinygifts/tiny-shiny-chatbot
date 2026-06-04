@@ -1,0 +1,17 @@
+{
+  "botName": "Tiny Shiny Assistant",
+  "welcomeMessage": "Hello! Welcome to Tiny Shiny Gifts. I can help with product details, order confirmation, order tracking, COD, delivery, returns, and WhatsApp support.",
+  "fallbackMessage": "I need a little more detail to help you. You can share your phone number and our team will contact you on WhatsApp.",
+  "quickReplies": [
+    "Confirm my order",
+    "Track my order",
+    "COD available?",
+    "Shipping charges",
+    "Return policy",
+    "WhatsApp support"
+  ],
+  "themeColor": "#d63384",
+  "leadOfferMessage": "You were viewing this product. If you would like to buy it, click the link below. Any live discount shown on the product page will apply at checkout.",
+  "cartOfferMessage": "You added this item to cart. Complete your order now before the offer changes. If you need help, share your phone number and our team will assist you on WhatsApp.",
+  "leadPopupDelaySeconds": 12
+}

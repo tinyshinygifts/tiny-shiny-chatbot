@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Chatbot Admin - Tiny Shiny Gifts</title>
+  <link rel="stylesheet" href="/style.css"/>
+</head>
+<body>
+  <main class="admin-wrap">
+    <header class="topbar glass-card">
+      <div>
+        <div class="badge">Tiny Shiny Gifts</div>
+        <h1>Chatbot Admin</h1>
+        <p>Manage English replies, FAQs, leads, order requests and product activity.</p>
+      </div>
+      <div class="top-actions">
+        <a class="pill-link" href="/api-settings.html">API Settings</a>
+        <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
+      </div>
+    </header>
+
+    <section class="panel stat-panel">
+      <div><b id="leadCount">0</b><span>Leads</span></div>
+      <div><b id="eventCount">0</b><span>Activities</span></div>
+      <div><b id="messageCount">0</b><span>Buy Messages</span></div>
+    </section>
+
+    <section class="panel">
+      <h2>Basic Settings</h2>
+      <div class="form-grid two">
+        <label>Bot Name <input id="botName"/></label>
+        <label>Theme Color
+          <div class="color-picker-row">
+            <select id="themeColorPreset">
+              <option value="#d63384">Tiny Shiny Pink</option>
+              <option value="#9b35ff">Premium Purple</option>
+              <option value="#0ea5e9">Sky Blue</option>
+              <option value="#16a34a">Fresh Green</option>
+              <option value="#f97316">Festive Orange</option>
+              <option value="#111827">Luxury Black</option>
+              <option value="custom">Custom Color</option>
+            </select>
+            <input id="themeColor" type="color" aria-label="Custom theme color"/>
+            <input id="themeHex" class="theme-hex" maxlength="7" placeholder="#D63384"/>
+            <span id="themeColorPreview" class="color-preview">Preview</span>
+          </div>
+        </label>
+      </div>
+      <label>Welcome Message <textarea id="welcomeMessage"></textarea></label>
+      <label>Fallback Message <textarea id="fallbackMessage"></textarea></label>
+      <label>Product Offer Message <textarea id="leadOfferMessage"></textarea></label>
+      <label>Add-to-cart Message <textarea id="cartOfferMessage"></textarea></label>
+      <label>Product popup delay seconds <input id="leadPopupDelaySeconds" type="number" min="5"/></label>
+      <button id="saveSettings" class="primary-btn">Save Settings</button>
+    </section>
+
+    <section class="panel">
+      <h2>FAQ Rules</h2>
+      <p>Format: separate keywords with commas.</p>
+      <div id="faqList"></div>
+      <button id="addFaq" class="ghost-btn">+ Add FAQ</button>
+      <button id="saveFaqs" class="primary-btn">Save FAQs</button>
+    </section>
+
+
+    <section class="panel media-panel">
+      <h2>Image Messages</h2>
+      <p>Upload images such as thank you letter, offer/discount image or wishes. You can preview them here and send them through WhatsApp after WhatsApp Cloud API is connected.</p>
+      <div class="form-grid two">
+        <label>Image Type
+          <select id="mediaCategory">
+            <option value="thanks_letter">Thanks Letter</option>
+            <option value="offer_discount">Offer / Discount Image</option>
+            <option value="wishes">Wishes</option>
+            <option value="product_offer">Product Offer</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label>Image Title <input id="mediaTitle" placeholder="Example: Rakhi Offer Banner"/></label>
+      </div>
+      <label>Caption / WhatsApp Message <textarea id="mediaCaption" placeholder="Write English message to send with this image"></textarea></label>
+      <label>Upload Image <input id="mediaFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"/></label>
+      <div class="media-actions">
+        <button id="uploadMedia" class="primary-btn">Upload Image</button>
+        <button id="refreshMedia" class="ghost-btn">Refresh Images</button>
+      </div>
+      <p class="hint">Local test me image admin panel me dikhegi. WhatsApp image send ke liye chatbot public URL par host hona chahiye, jaise Render URL ya chat.tinyshinygifts.com.</p>
+      <div class="send-box">
+        <h3>Send selected image on WhatsApp</h3>
+        <div class="form-grid two">
+          <label>Send To
+            <select id="mediaSendTo"><option value="owner">Owner / Team WhatsApp</option><option value="custom">Customer Number</option></select>
+          </label>
+          <label>Customer WhatsApp Number <input id="mediaPhone" placeholder="91XXXXXXXXXX"/></label>
+        </div>
+        <button id="sendSelectedMedia" class="ghost-btn">Send Selected Image</button>
+        <pre id="mediaSendResult"></pre>
+      </div>
+      <div id="mediaList" class="media-grid"></div>
+    </section>
+
+    <section class="panel"><h2>Leads / Order Requests</h2><button id="refreshLeads" class="ghost-btn">Refresh Leads</button><div id="leadList"></div></section>
+    <section class="panel"><h2>Visitor / Product Activity</h2><button id="refreshEvents" class="ghost-btn">Refresh Activity</button><div id="eventList"></div></section>
+    <section class="panel"><h2>Generated Buy Messages</h2><button id="refreshMsgs" class="ghost-btn">Refresh Messages</button><div id="messageList"></div></section>
+  </main>
+  <script src="/admin.js"></script>
+</body>
+</html>

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Admin Login - Tiny Shiny Chatbot</title>
+  <link rel="stylesheet" href="/style.css"/>
+</head>
+<body>
+  <main class="login-shell">
+    <section class="login-card glass-card">
+      <div class="brand-mark">TSG</div>
+      <div class="badge">Tiny Shiny Gifts</div>
+      <h1>Chatbot Admin</h1>
+      <p>Secure login for leads, API settings, WhatsApp and Shopify tools.</p>
+
+      <div id="loginBox">
+        <label>User ID
+          <input id="username" autocomplete="off" placeholder="Enter user ID" value="" autofocus/>
+        </label>
+        <label>Password
+          <input id="password" type="password" autocomplete="new-password" placeholder="Enter password" value=""/>
+        </label>
+        <button id="loginBtn" class="primary-btn">Login</button>
+        <button id="showForgot" type="button" class="ghost-btn">Forgot password?</button>
+      </div>
+
+      <div id="forgotBox" class="hidden">
+        <h2>Forgot Password</h2>
+        <p>Enter your user ID and date of birth to login. You can change DOB later in API Settings.</p>
+        <label>User ID
+          <input id="forgotUsername" autocomplete="off" placeholder="Enter user ID" value=""/>
+        </label>
+        <label>Date of Birth
+          <input id="dob" autocomplete="off" placeholder="DD/MM/YYYY" inputmode="numeric" value=""/>
+        </label>
+        <button id="forgotLoginBtn" class="primary-btn">Login with DOB</button>
+        <button id="backLogin" type="button" class="ghost-btn">Back to password login</button>
+      </div>
+
+      <p id="loginStatus" class="hint"></p>
+      <p class="hint default-login">Enter your login details. Current default is admin / admin, but fields are kept blank for security.</p>
+    </section>
+  </main>
+  <script src="/login.js"></script>
+</body>
+</html>

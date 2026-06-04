@@ -1,0 +1,117 @@
+Tiny Shiny Chatbot v8 - Theme + Logout Fix
+
+Changes:
+- Logout button fixed on Admin and API Settings pages.
+- Theme Color UI fixed and improved.
+- Theme color now changes buttons, links, badges, focus rings and panels live.
+- Theme color is saved in Settings and shown consistently.
+- Login fields remain blank.
+
+Run:
+1. Extract ZIP
+2. Double click start_chatbot.bat
+3. Open http://localhost:5057/admin.html
+
+Default Login:
+User ID: admin
+Password: admin
+DOB recovery: 26/04/1986
+
+Tiny Shiny Chatbot v6 - Login User ID + Forgot DOB + Fixed Logout + Modern UI
+
+RUN OFFLINE / LOCAL PC
+1. ZIP extract karo.
+2. Folder open karo.
+3. start_chatbot.bat par double click karo.
+4. Browser me login/admin page khulega:
+   http://localhost:5057/admin.html
+
+DEFAULT LOGIN
+User ID: admin
+Password: admin
+Forgot password DOB: 26/04/1986
+
+LOGIN SECURITY NEW
+- Login page ab User ID + Password puchega.
+- Default user ID admin aur password admin hai.
+- Forgot password option add hai: DOB 26/04/1986 dalne par login ho jayega.
+- API Settings → Login Security me jaakar ye sab change kar sakte ho:
+  - Admin User ID
+  - Admin Password
+  - Forgot Password DOB
+  - Session Secret
+  - Session Hours
+- Logout button fix kiya gaya hai. Logout ke baad login page par redirect hoga.
+
+UI UPDATE
+- Login page ka premium modern UI bana diya hai.
+- Admin dashboard ka top header, buttons, cards aur stats modern kiye gaye hain.
+- API Settings UI clean aur premium banaya gaya hai.
+
+Agar page open nahi hota:
+- Black command window band mat karo. Server isi window me chalta hai.
+- Browser me manually open karo: http://localhost:5057/admin.html
+- Node.js LTS install hona chahiye: https://nodejs.org/
+- Agar port busy ho to .env me PORT=5058 kar sakte ho.
+
+API SETTINGS
+Admin panel me Open API Settings par click karo. Waha se ye set kar sakte ho:
+- Website URL
+- Customer WhatsApp number
+- Owner/team WhatsApp number
+- Login user ID/password/DOB
+- Shopify store domain
+- Shopify Admin Access Token
+- Shopify API version
+- WhatsApp Cloud Token
+- WhatsApp Phone Number ID
+
+Save ke baad local PC par command window close karke start_chatbot.bat dobara run karo.
+
+SHOPIFY ME WIDGET TESTING
+Shopify theme.liquid me </body> se pehle local testing ke liye add karo:
+<script>
+window.TINY_SHINY_CHATBOT_URL = "http://localhost:5057";
+</script>
+<script src="http://localhost:5057/widget.js"></script>
+
+Note: Localhost script sirf aapke PC par test hoga. Live website par customers ke liye Render URL use karna hoga.
+
+RENDER HOSTING
+- GitHub par folder upload karo.
+- Render New Web Service me repo connect karo.
+- Build command: npm install
+- Start command: npm start
+- Environment me same API values add karo jo local API Settings me dali thi.
+- Render Environment me ADMIN_USERNAME, ADMIN_PASSWORD, ADMIN_DOB aur SECURITY_SESSION_SECRET strong value ke saath add karo.
+- Live script:
+<script src="https://YOUR-RENDER-URL.onrender.com/widget.js"></script>
+
+GODADDY SUBDOMAIN
+Render custom domain me chat.tinyshinygifts.com add karo.
+GoDaddy DNS me CNAME:
+Name: chat
+Value: Render ka CNAME target
+
+FEATURES
+- English chatbot replies
+- FAQ editor
+- Product view lead capture
+- Add-to-cart lead capture
+- Order confirmation form
+- Shopify order tracking
+- Owner WhatsApp notification via WhatsApp Cloud API
+- Customer follow-up with opt-in
+- API Settings UI
+- Admin login with User ID + Password
+- Forgot password via DOB
+- Fixed logout button
+- Modern premium UI
+
+
+V9 IMAGE MESSAGE UPDATE
+- Admin panel me Image Messages section add hai.
+- Thanks letter, offer/discount image, wishes, product offer images upload kar sakte ho.
+- Uploaded image preview/list me dikhegi.
+- WhatsApp Cloud API connect hone ke baad selected image owner/team ya customer number par send kar sakte ho.
+- WhatsApp par image send karne ke liye chatbot public URL par host hona chahiye, jaise Render URL ya chat.tinyshinygifts.com. Localhost image WhatsApp server fetch nahi kar sakta.

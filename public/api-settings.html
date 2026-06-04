@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>API Settings - Tiny Shiny Chatbot</title>
+  <link rel="stylesheet" href="/style.css"/>
+</head>
+<body>
+  <main class="admin-wrap">
+    <header class="topbar glass-card">
+      <div>
+        <div class="badge">Secure Settings</div>
+        <h1>API Settings</h1>
+        <p>Manage login, Shopify, WhatsApp and customer follow-up settings.</p>
+      </div>
+      <div class="top-actions">
+        <a class="pill-link" href="/admin.html">← Back to Admin</a>
+        <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
+      </div>
+    </header>
+
+    <section class="panel">
+      <h2>Business</h2>
+      <div class="form-grid two">
+        <label>Website URL <input id="WEBSITE_URL" placeholder="https://tinyshinygifts.com"/></label>
+        <label>Customer WhatsApp Number <input id="WHATSAPP_NUMBER" placeholder="91XXXXXXXXXX"/></label>
+        <label>Owner / Team WhatsApp Number <input id="OWNER_WHATSAPP_NUMBER" placeholder="91XXXXXXXXXX"/></label>
+      </div>
+    </section>
+
+    <section class="panel security-panel">
+      <h2>Login Security</h2>
+      <p>Fields are editable here. Defaults are admin / admin until you change them.</p>
+      <div class="form-grid two">
+        <label>Admin User ID <input id="ADMIN_USERNAME" placeholder="Enter admin user ID"/></label>
+        <label>Admin Password <input id="ADMIN_PASSWORD" type="password" placeholder="Enter new password"/></label>
+        <label>Forgot Password DOB <input id="ADMIN_DOB" type="password" placeholder="DD/MM/YYYY"/></label>
+        <label>Session Hours <input id="ADMIN_SESSION_HOURS" type="number" min="1" max="168" placeholder="12"/></label>
+      </div>
+      <label>Session Secret <input id="SECURITY_SESSION_SECRET" type="password" placeholder="Auto generated / keep secret"/></label>
+      <p class="hint">DOB login is only a recovery option. Use a strong password and change DOB after first login.</p>
+    </section>
+
+    <section class="panel">
+      <h2>Shopify API</h2>
+      <p>Use this for order tracking and draft order creation.</p>
+      <div class="form-grid two">
+        <label>Shopify Store Domain <input id="SHOPIFY_STORE_DOMAIN" placeholder="tinyshinygifts.myshopify.com"/></label>
+        <label>Shopify API Version <input id="SHOPIFY_API_VERSION" placeholder="2025-10"/></label>
+      </div>
+      <label>Shopify Admin Access Token <input id="SHOPIFY_ADMIN_ACCESS_TOKEN" type="password" placeholder="shpat_..."/></label>
+      <label>Create Shopify Draft Order
+        <select id="CREATE_SHOPIFY_DRAFT_ORDER"><option value="false">false</option><option value="true">true</option></select>
+      </label>
+      <button id="testShopify" class="ghost-btn">Test Shopify Connection</button>
+      <pre id="shopifyResult"></pre>
+    </section>
+
+    <section class="panel">
+      <h2>WhatsApp Cloud API</h2>
+      <p>Use this to send new lead/order notifications to your WhatsApp.</p>
+      <label>WhatsApp Cloud Token <input id="WHATSAPP_CLOUD_TOKEN" type="password" placeholder="EAAG..."/></label>
+      <label>Phone Number ID <input id="WHATSAPP_PHONE_NUMBER_ID" placeholder="1234567890"/></label>
+      <button id="testWhatsApp" class="ghost-btn">Send Test WhatsApp</button>
+      <pre id="whatsappResult"></pre>
+    </section>
+
+    <section class="panel">
+      <h2>Customer WhatsApp Follow-up</h2>
+      <p>This sends product/cart follow-up to customers only after they share their phone number and consent.</p>
+      <label>Enable Customer WhatsApp Messages
+        <select id="CUSTOMER_WHATSAPP_MESSAGES_ENABLED"><option value="false">false</option><option value="true">true</option></select>
+      </label>
+      <div class="form-grid two">
+        <label>Approved Template Name <input id="CUSTOMER_WHATSAPP_TEMPLATE_NAME" placeholder="product_followup"/></label>
+        <label>Template Language <input id="CUSTOMER_WHATSAPP_TEMPLATE_LANG" placeholder="en"/></label>
+      </div>
+    </section>
+
+    <section class="panel save-panel">
+      <h2>Save</h2>
+      <button id="saveConfig" class="primary-btn">Save API Settings</button>
+      <p id="saveStatus" class="success"></p>
+      <p><b>Note:</b> After saving API settings locally, close the black command window and start <code>start_chatbot.bat</code> again.</p>
+      <p>On Render hosting, add the same values in Render → Service → Environment.</p>
+    </section>
+  </main>
+  <script src="/api-settings.js"></script>
+</body>
+</html>
