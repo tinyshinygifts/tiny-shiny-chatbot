@@ -1,4 +1,4 @@
-const keys = ['WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER','ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS','SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER','WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG'];
+const keys = ['WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER','ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS','SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER','SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI','WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG'];
 function $(id){ return document.getElementById(id); }
 function show(el, data){ el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); }
 function normalizeColor(value){ const v=String(value||'').trim().toLowerCase(); return /^#[0-9a-f]{6}$/.test(v)?v:'#d63384'; }
@@ -23,6 +23,13 @@ async function saveConfig(){
 document.addEventListener('click', async (e)=>{
   if(e.target.closest('#logoutBtn')) { e.preventDefault(); return logout(); }
   if(e.target.id === 'saveConfig') saveConfig();
+  if(e.target.id === 'connectShopify') {
+    const saved = await saveConfig();
+    if(!saved.ok) return show($('shopifyResult'), saved);
+    const shop = $('SHOPIFY_STORE_DOMAIN')?.value.trim() || 'tinyshinygifts.myshopify.com';
+    window.location.href = '/shopify/install?shop=' + encodeURIComponent(shop);
+    return;
+  }
   if(e.target.id === 'testShopify') {
     await saveConfig();
     const data = await fetch('/api/test-shopify',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(err=>({ok:false,error:err.message}));

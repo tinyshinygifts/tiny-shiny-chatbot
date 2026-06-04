@@ -71,17 +71,19 @@ const leadsPath = path.join(dataDir, 'leads.json');
 const eventsPath = path.join(dataDir, 'visitor-events.json');
 const leadMessagesPath = path.join(dataDir, 'lead-messages.json');
 const mediaImagesPath = path.join(dataDir, 'media-images.json');
+const shopifyOAuthStatePath = path.join(dataDir, 'shopify-oauth-state.json');
 
 const envPath = path.join(__dirname, '.env');
 const apiKeys = [
   'PORT','BUSINESS_NAME','WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER',
   'ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS',
   'SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER',
+  'SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI',
   'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID',
   'CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG',
   'SHOPIFY_WEBHOOK_SECRET'
 ];
-const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
+const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
 function readEnvFile() {
   const out = {};
   const text = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
@@ -122,6 +124,13 @@ function writeEnvFile(next) {
     'SHOPIFY_ADMIN_ACCESS_TOKEN=' + (merged.SHOPIFY_ADMIN_ACCESS_TOKEN || ''),
     'SHOPIFY_API_VERSION=' + (merged.SHOPIFY_API_VERSION || '2025-10'),
     'CREATE_SHOPIFY_DRAFT_ORDER=' + (merged.CREATE_SHOPIFY_DRAFT_ORDER || 'false'),
+    '',
+    '# Shopify OAuth app credentials - use Client ID/Secret from Shopify Dev Dashboard',
+    'SHOPIFY_CLIENT_ID=' + (merged.SHOPIFY_CLIENT_ID || ''),
+    'SHOPIFY_CLIENT_SECRET=' + (merged.SHOPIFY_CLIENT_SECRET || ''),
+    'SHOPIFY_APP_URL=' + (merged.SHOPIFY_APP_URL || merged.WEBSITE_URL || 'https://chat.tinyshinygifts.com'),
+    'SHOPIFY_OAUTH_SCOPES=' + (merged.SHOPIFY_OAUTH_SCOPES || 'read_orders,read_products,read_customers,read_draft_orders,write_draft_orders'),
+    'SHOPIFY_OAUTH_REDIRECT_URI=' + (merged.SHOPIFY_OAUTH_REDIRECT_URI || ''),
     '',
     '# WhatsApp Cloud API - required for owner/team notification from chatbot',
     'WHATSAPP_CLOUD_TOKEN=' + (merged.WHATSAPP_CLOUD_TOKEN || ''),
@@ -243,6 +252,51 @@ function saveImageFromDataUrl({ dataUrl, filename }) {
   fs.writeFileSync(outPath, Buffer.from(match[3], 'base64'));
   return { id, url: `/uploads/${outName}`, mime: match[1], filename: outName };
 }
+
+function normalizeShopDomain(shop) {
+  let value = String(shop || '').trim().toLowerCase();
+  value = value.replace(/^https?:\/\//, '').replace(/\/.*$/, '');
+  if (!value) return '';
+  if (!value.endsWith('.myshopify.com')) value = value.replace(/\.myshopify\.com$/, '') + '.myshopify.com';
+  return /^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(value) ? value : '';
+}
+function getAppBaseUrl(req) {
+  const env = readEnvFile();
+  const url = String(process.env.SHOPIFY_APP_URL || env.SHOPIFY_APP_URL || process.env.WEBSITE_URL || env.WEBSITE_URL || '').replace(/\/$/, '');
+  if (url && /^https:\/\//i.test(url)) return url;
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  return `${proto}://${req.get('host')}`;
+}
+function getShopifyRedirectUri(req) {
+  const env = readEnvFile();
+  const custom = String(process.env.SHOPIFY_OAUTH_REDIRECT_URI || env.SHOPIFY_OAUTH_REDIRECT_URI || '').trim();
+  return custom || `${getAppBaseUrl(req)}/shopify/callback`;
+}
+function verifyShopifyHmac(query, secret) {
+  const hmac = String(query.hmac || '');
+  if (!hmac || !secret) return false;
+  const pairs = Object.keys(query)
+    .filter(k => k !== 'hmac' && k !== 'signature')
+    .sort()
+    .map(k => `${k}=${Array.isArray(query[k]) ? query[k].join(',') : query[k]}`)
+    .join('&');
+  const digest = crypto.createHmac('sha256', secret).update(pairs).digest('hex');
+  try { return crypto.timingSafeEqual(Buffer.from(digest, 'hex'), Buffer.from(hmac, 'hex')); } catch { return false; }
+}
+function saveOAuthState(state, shop) {
+  const states = readJson(shopifyOAuthStatePath, {});
+  states[state] = { shop, exp: Date.now() + 10 * 60 * 1000 };
+  for (const [k, v] of Object.entries(states)) if (!v || Number(v.exp) < Date.now()) delete states[k];
+  writeJson(shopifyOAuthStatePath, states);
+}
+function consumeOAuthState(state, shop) {
+  const states = readJson(shopifyOAuthStatePath, {});
+  const item = states[state];
+  delete states[state];
+  writeJson(shopifyOAuthStatePath, states);
+  return !!item && item.shop === shop && Number(item.exp) > Date.now();
+}
+
 async function getShopifyOrderStatus({ orderId, phone }) {
   const store = process.env.SHOPIFY_STORE_DOMAIN;
   const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
@@ -348,6 +402,54 @@ app.post('/api/test-shopify', async (req, res) => {
     const json = await response.json().catch(() => ({}));
     res.json({ ok: response.ok, status: response.status, shop: json.shop ? { name: json.shop.name, domain: json.shop.domain, email: json.shop.email } : undefined, detail: response.ok ? undefined : json });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+
+app.get('/shopify/install', requireAdmin, (req, res) => {
+  const env = readEnvFile();
+  const shop = normalizeShopDomain(req.query.shop || env.SHOPIFY_STORE_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN);
+  const clientId = String(process.env.SHOPIFY_CLIENT_ID || env.SHOPIFY_CLIENT_ID || '').trim();
+  const scopes = String(process.env.SHOPIFY_OAUTH_SCOPES || env.SHOPIFY_OAUTH_SCOPES || 'read_orders,read_products,read_customers,read_draft_orders,write_draft_orders').replace(/\s+/g, '');
+  if (!shop) return res.status(400).send('Shopify store domain missing. Use tinyshinygifts.myshopify.com.');
+  if (!clientId) return res.status(400).send('SHOPIFY_CLIENT_ID missing. Add Client ID in API Settings or Render Environment.');
+  const redirectUri = getShopifyRedirectUri(req);
+  const state = crypto.randomBytes(16).toString('hex');
+  saveOAuthState(state, shop);
+  const url = `https://${shop}/admin/oauth/authorize?client_id=${encodeURIComponent(clientId)}&scope=${encodeURIComponent(scopes)}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
+  res.redirect(url);
+});
+
+app.get('/shopify/callback', async (req, res) => {
+  try {
+    const env = readEnvFile();
+    const shop = normalizeShopDomain(req.query.shop);
+    const code = String(req.query.code || '');
+    const state = String(req.query.state || '');
+    const clientId = String(process.env.SHOPIFY_CLIENT_ID || env.SHOPIFY_CLIENT_ID || '').trim();
+    const clientSecret = String(process.env.SHOPIFY_CLIENT_SECRET || env.SHOPIFY_CLIENT_SECRET || '').trim();
+    if (!shop || !code || !state) return res.status(400).send('Missing Shopify callback data.');
+    if (!consumeOAuthState(state, shop)) return res.status(400).send('Invalid/expired Shopify OAuth state. Please try Connect Shopify again.');
+    if (!verifyShopifyHmac(req.query, clientSecret)) return res.status(400).send('Shopify HMAC verification failed. Check Client Secret.');
+    const tokenResponse = await fetch(`https://${shop}/admin/oauth/access_token`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code })
+    });
+    const tokenJson = await tokenResponse.json().catch(() => ({}));
+    if (!tokenResponse.ok || !tokenJson.access_token) {
+      return res.status(400).send(`<h2>Shopify token failed</h2><pre>${JSON.stringify(tokenJson, null, 2)}</pre>`);
+    }
+    const saved = writeEnvFile({
+      ...env,
+      SHOPIFY_STORE_DOMAIN: shop,
+      SHOPIFY_ADMIN_ACCESS_TOKEN: tokenJson.access_token,
+      SHOPIFY_API_VERSION: env.SHOPIFY_API_VERSION || process.env.SHOPIFY_API_VERSION || '2025-10'
+    });
+    process.env.SHOPIFY_STORE_DOMAIN = shop;
+    process.env.SHOPIFY_ADMIN_ACCESS_TOKEN = tokenJson.access_token;
+    res.send(`<!doctype html><html><head><meta charset="utf-8"><title>Shopify Connected</title><link rel="stylesheet" href="/style.css"></head><body><main class="admin-wrap"><section class="panel"><h1>Shopify Connected ✅</h1><p>Store connected: <b>${shop}</b></p><p>The Admin API token has been saved in this chatbot runtime. For permanent hosting, also add this token in Render → Environment as <b>SHOPIFY_ADMIN_ACCESS_TOKEN</b>.</p><p><a class="primary-btn" href="/api-settings.html?shopify=connected">Back to API Settings</a></p></section></main></body></html>`);
+  } catch (e) {
+    res.status(500).send('Shopify callback error: ' + e.message);
+  }
 });
 
 
