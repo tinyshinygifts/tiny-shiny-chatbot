@@ -56,6 +56,7 @@
 
     <section class="panel">
       <h2>Basic Settings</h2>
+      <p class="hint">Chatbot visibility is controlled here. Bot name and theme color are now in API Settings → Chatbot Appearance.</p>
       <div class="status-toggle-card">
         <div>
           <b>Website Chatbot Status</b>
@@ -65,25 +66,6 @@
           <input id="chatbotEnabled" type="checkbox"/>
           <span class="switch-slider"></span>
           <em id="chatbotStatusText">OFF</em>
-        </label>
-      </div>
-      <div class="form-grid two">
-        <label>Bot Name <input id="botName"/></label>
-        <label>Theme Color
-          <div class="color-picker-row">
-            <select id="themeColorPreset">
-              <option value="#d63384">Tiny Shiny Pink</option>
-              <option value="#9b35ff">Premium Purple</option>
-              <option value="#0ea5e9">Sky Blue</option>
-              <option value="#16a34a">Fresh Green</option>
-              <option value="#f97316">Festive Orange</option>
-              <option value="#111827">Luxury Black</option>
-              <option value="custom">Custom Color</option>
-            </select>
-            <input id="themeColor" type="color" aria-label="Custom theme color"/>
-            <input id="themeHex" class="theme-hex" maxlength="7" placeholder="#D63384"/>
-            <span id="themeColorPreview" class="color-preview">Preview</span>
-          </div>
         </label>
       </div>
       <label>Welcome Message <textarea id="welcomeMessage"></textarea></label>

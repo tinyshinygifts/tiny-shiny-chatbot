@@ -27,6 +27,7 @@
 
   let product = detectProduct();
   let settings = {
+    chatbotEnabled: true,
     botName: 'Tiny Shiny Assistant',
     welcomeMessage: 'Hello! Welcome to Tiny Shiny Gifts. How can I help you today?',
     quickReplies: ['Confirm my order', 'Track my order', 'COD available?', 'Shipping charges', 'Return policy', 'WhatsApp support'],
@@ -36,6 +37,7 @@
 
   function bootChatbot() {
   const css = document.createElement('style');
+  css.setAttribute('data-tsg-widget','1');
   css.textContent = `
     #tsg-chat-btn{position:fixed;right:22px;bottom:22px;width:62px;height:62px;border-radius:50%;border:0;background:var(--tsg-color,#d63384);color:#fff;font-size:26px;box-shadow:0 14px 32px rgba(0,0,0,.22);cursor:pointer;z-index:999999}
     #tsg-chat-box{position:fixed;right:22px;bottom:96px;width:380px;max-width:calc(100vw - 28px);height:590px;max-height:calc(100vh - 120px);background:#fff;border-radius:24px;box-shadow:0 22px 70px rgba(0,0,0,.22);display:none;overflow:hidden;z-index:999999;font-family:Arial,sans-serif;border:1px solid #eee}
@@ -119,15 +121,17 @@
   renderQuickReplies();
   }
 
-  fetch(apiBase + '/api/settings')
+  function isDisabled(value){ return value === false || String(value).toLowerCase() === 'false' || String(value).toLowerCase() === 'off'; }
+  function removeChatbot(){ document.getElementById('tsg-chat-btn')?.remove(); document.getElementById('tsg-chat-box')?.remove(); document.querySelectorAll('style[data-tsg-widget="1"]').forEach(x=>x.remove()); }
+  fetch(apiBase + '/api/settings?t=' + Date.now(), { cache:'no-store' })
     .then(r => r.json())
     .then(data => {
       settings = { ...settings, ...(data.settings || {}) };
-      if (settings.chatbotEnabled === false) return;
+      if (isDisabled(settings.chatbotEnabled)) { removeChatbot(); return; }
       bootChatbot();
     })
     .catch(() => {
-      if (settings.chatbotEnabled === false) return;
+      if (isDisabled(settings.chatbotEnabled)) { removeChatbot(); return; }
       bootChatbot();
     });
 })();

@@ -29,6 +29,44 @@
       </div>
     </section>
 
+
+    <section class="panel">
+      <h2>Chatbot Appearance</h2>
+      <p>These settings control the website chatbot UI. OFF hides the chatbot completely on your Shopify website.</p>
+      <div class="status-toggle-card">
+        <div>
+          <b>Website Chatbot Status</b>
+          <p>Turn OFF to hide the chatbot from your website. Admin and API Settings will still work.</p>
+        </div>
+        <label class="switch-toggle">
+          <input id="chatbotEnabled" type="checkbox"/>
+          <span class="switch-slider"></span>
+          <em id="chatbotStatusText">OFF</em>
+        </label>
+      </div>
+      <div class="form-grid two">
+        <label>Bot Name <input id="botName" placeholder="Tiny Shiny Assistant"/></label>
+        <label>Theme Color
+          <div class="color-picker-row">
+            <select id="themeColorPreset">
+              <option value="#d63384">Tiny Shiny Pink</option>
+              <option value="#9b35ff">Premium Purple</option>
+              <option value="#0ea5e9">Sky Blue</option>
+              <option value="#16a34a">Fresh Green</option>
+              <option value="#f97316">Festive Orange</option>
+              <option value="#111827">Luxury Black</option>
+              <option value="custom">Custom Color</option>
+            </select>
+            <input id="themeColor" type="color" aria-label="Custom theme color"/>
+            <input id="themeHex" class="theme-hex" maxlength="7" placeholder="#D63384"/>
+            <span id="themeColorPreview" class="color-preview">Preview</span>
+          </div>
+        </label>
+      </div>
+      <button id="saveAppearance" class="primary-btn" type="button">Save Chatbot Appearance</button>
+      <pre id="appearanceResult"></pre>
+    </section>
+
     <section class="panel security-panel">
       <h2>Login Security</h2>
       <p>Fields are editable here. Defaults are admin / admin until you change them.</p>

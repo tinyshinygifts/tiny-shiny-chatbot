@@ -154,3 +154,9 @@ Admin Panel > Basic Settings me Website Chatbot Status toggle add hai.
 ON = Shopify website par chatbot bubble dikhega.
 OFF = Shopify website par chatbot bilkul hide ho jayega. Admin panel aur API settings fir bhi access rahenge.
 Toggle change karne ke baad Save Settings zaroor dabayein.
+
+
+V14 Update:
+- Website Chatbot Status OFF now hides the widget fully with no-cache widget loading.
+- Bot Name and Theme Color moved to API Settings -> Chatbot Appearance.
+- If Shopify browser cache still shows old widget, update script to /widget.js?v=14.

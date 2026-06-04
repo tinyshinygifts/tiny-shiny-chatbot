@@ -458,10 +458,19 @@ app.post('/api/admin/logout', (req, res) => { clearAdminCookie(req, res); res.js
 app.get('/api/admin/logout', (req, res) => { clearAdminCookie(req, res); res.redirect('/login.html'); });
 app.get('/api/admin/me', (req, res) => res.json({ ok: true, loggedIn: isAuthed(req), sessionHours: SESSION_HOURS, username: getAdminCreds().username }));
 
+
+// Always serve latest widget so ON/OFF status is respected on Shopify storefront.
+app.get('/widget.js', (req, res) => {
+  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.set('Pragma', 'no-cache');
+  res.set('Expires', '0');
+  res.sendFile(path.join(__dirname, 'public', 'widget.js'));
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/health', (req, res) => res.json({ ok: true, service: 'Tiny Shiny Chatbot', time: nowIso() }));
-app.get('/api/settings', (req, res) => res.json({ ok: true, settings: readJson(settingsPath, {}), business: { name: process.env.BUSINESS_NAME || 'Tiny Shiny Gifts', website: process.env.WEBSITE_URL || 'https://tinyshinygifts.com', whatsapp: process.env.WHATSAPP_NUMBER || '' } }));
+app.get('/api/settings', (req, res) => { res.set('Cache-Control','no-store'); res.json({ ok: true, settings: readJson(settingsPath, {}), business: { name: process.env.BUSINESS_NAME || 'Tiny Shiny Gifts', website: process.env.WEBSITE_URL || 'https://tinyshinygifts.com', whatsapp: process.env.WHATSAPP_NUMBER || '' } }); });
 
 
 // From here, admin/API settings routes are protected by login.
