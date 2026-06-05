@@ -41,7 +41,7 @@
   css.textContent = `
     #tsg-chat-btn{position:fixed;right:22px;bottom:22px;width:62px;height:62px;border-radius:50%;border:0;background:var(--tsg-color,#d63384);color:#fff;font-size:26px;box-shadow:0 14px 32px rgba(0,0,0,.22);cursor:pointer;z-index:999999}
     #tsg-chat-box{position:fixed;right:22px;bottom:96px;width:380px;max-width:calc(100vw - 28px);height:590px;max-height:calc(100vh - 120px);background:#fff;border-radius:24px;box-shadow:0 22px 70px rgba(0,0,0,.22);display:none;overflow:hidden;z-index:999999;font-family:Arial,sans-serif;border:1px solid #eee}
-    #tsg-chat-box.open{display:flex;flex-direction:column}.tsg-head{background:var(--tsg-color,#d63384);color:white;padding:18px}.tsg-head b{display:block;font-size:17px}.tsg-head span{font-size:12px;opacity:.92}
+    #tsg-chat-box.open{display:flex;flex-direction:column}.tsg-head{background:var(--tsg-color,#d63384);color:white;padding:18px 48px 18px 18px;position:relative}.tsg-head b{display:block;font-size:17px}.tsg-head span{font-size:12px;opacity:.92}.tsg-close{position:absolute;right:14px;top:14px;width:32px;height:32px;border-radius:50%;border:1px solid rgba(255,255,255,.55);background:rgba(255,255,255,.12);color:#fff;font-size:18px;cursor:pointer;line-height:1}
     .tsg-msgs{flex:1;padding:16px;overflow:auto;background:#faf7fb}.tsg-msg{max-width:86%;padding:11px 13px;margin:8px 0;border-radius:16px;font-size:14px;line-height:1.35;white-space:pre-wrap}.tsg-bot{background:#fff;border:1px solid #eee}.tsg-user{background:var(--tsg-color,#d63384);color:#fff;margin-left:auto}
     .tsg-product-card{background:#fff;border:1px solid #eadce6;border-radius:16px;padding:10px;margin:8px 0;font-size:13px}.tsg-product-card img{width:100%;max-height:150px;object-fit:contain;border-radius:12px;background:#f7f7f7}.tsg-product-card b{display:block;margin:7px 0 4px}.tsg-product-card a{color:var(--tsg-color,#d63384);word-break:break-all}.tsg-product-card button{margin-top:8px;border:0;background:var(--tsg-color,#d63384);color:#fff;border-radius:999px;padding:8px 12px;cursor:pointer}
     .tsg-lead-form{background:#fff;border:1px solid #eee;border-radius:16px;padding:10px;margin:8px 0}.tsg-lead-form input{box-sizing:border-box;width:100%;border:1px solid #ddd;border-radius:10px;padding:10px;margin:5px 0}.tsg-lead-form button{border:0;background:var(--tsg-color,#d63384);color:#fff;border-radius:999px;padding:9px 13px;cursor:pointer}
@@ -52,11 +52,12 @@
   document.head.appendChild(css);
 
   const btn = document.createElement('button'); btn.id = 'tsg-chat-btn'; btn.innerHTML = '💬'; document.body.appendChild(btn);
-  const box = document.createElement('div'); box.id = 'tsg-chat-box'; box.innerHTML = `<div class="tsg-head"><b id="tsg-title"></b><span>Usually replies instantly</span></div><div class="tsg-msgs" id="tsg-msgs"></div><div class="tsg-quick" id="tsg-quick"></div><form class="tsg-input" id="tsg-form"><input id="tsg-text" placeholder="Type your message..." autocomplete="off"/><button>Send</button></form>`; document.body.appendChild(box);
+  const box = document.createElement('div'); box.id = 'tsg-chat-box'; box.innerHTML = `<div class="tsg-head"><b id="tsg-title"></b><span>Usually replies instantly</span><button class="tsg-close" type="button" aria-label="Close chat">×</button></div><div class="tsg-msgs" id="tsg-msgs"></div><div class="tsg-quick" id="tsg-quick"></div><form class="tsg-input" id="tsg-form"><input id="tsg-text" placeholder="Type your message..." autocomplete="off"/><button>Send</button></form>`; document.body.appendChild(box);
   const msgs = box.querySelector('#tsg-msgs'), form = box.querySelector('#tsg-form'), input = box.querySelector('#tsg-text'), quick = box.querySelector('#tsg-quick');
 
   function addMsg(text, who) { const div = document.createElement('div'); div.className = `tsg-msg ${who === 'user' ? 'tsg-user' : 'tsg-bot'}`; div.textContent = text; msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight; }
   function openChat(){ box.classList.add('open'); }
+  function closeChat(){ box.classList.remove('open'); }
   function addLeadForm(source) {
     const div = document.createElement('div'); div.className = 'tsg-lead-form';
     const savedPhone = localStorage.getItem(phoneKey) || '';
@@ -81,9 +82,10 @@
     msgs.appendChild(div); msgs.scrollTop = msgs.scrollHeight;
     if (source === 'product_explore') addLeadForm('product_explore');
   }
-  function renderQuickReplies() { quick.innerHTML = ''; (settings.quickReplies || []).forEach(q => { const b = document.createElement('button'); b.textContent = q; b.onclick = () => send(q); quick.appendChild(b); }); }
+  let lastIntent = '';
+  function renderQuickReplies() { quick.innerHTML = ''; (settings.quickReplies || []).forEach(q => { const b = document.createElement('button'); b.textContent = q; b.onclick = () => { if(/track/i.test(q)) lastIntent='track'; if(/confirm/i.test(q)) lastIntent='confirm'; send(q); }; quick.appendChild(b); }); }
   async function send(text) {
-    if (!text) return; addMsg(text, 'user'); input.value = ''; product = detectProduct();
+    if (!text) return; if(lastIntent==='track' && /^(?:\+?91[-\s]?)?[6-9]\d{9}$|^#?[a-z0-9-]{4,}$/i.test(text.trim())) text = 'Track my order ' + text; addMsg(text, 'user'); input.value = ''; product = detectProduct();
     try { const res = await fetch(apiBase + '/api/chat', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ message:text, pageUrl: location.href, productTitle: product.title, productHandle: product.handle, productImage: product.image, productPrice: product.price, discountText: product.discountText, visitorId }) }).then(r => r.json()); addMsg(res.reply || 'Sorry, I did not receive a reply.', 'bot'); }
     catch { addMsg('Chat server is not connected. Please check whether the local app is running.', 'bot'); }
   }
@@ -93,13 +95,13 @@
     try { cart = await fetch('/cart.js').then(r=>r.json()); } catch {}
     product = detectProduct();
     await fetch(apiBase + '/api/lead-message', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({ type:'cart', visitorId, product, cart, pageUrl: location.href }) }).catch(()=>{});
-    openChat(); addMsg('Great choice! This item has been added to your cart. Complete your order now, or share your phone number and our team will help you on WhatsApp.', 'bot');
-    showProductOffer('cart');
-    addLeadForm('add_to_cart');
+    // Add-to-cart should save lead silently. Do not auto-open the chat window.
+    track('add_to_cart_lead_saved', { cart });
     track('add_to_cart_detected', { cart });
   }
 
   btn.onclick = () => { box.classList.toggle('open'); if (box.classList.contains('open')) track('chat_open'); };
+  box.querySelector('.tsg-close').onclick = closeChat;
   form.onsubmit = (e) => { e.preventDefault(); send(input.value.trim()); };
   document.addEventListener('submit', e => { const form = e.target; if (form && String(form.action || '').includes('/cart/add')) setTimeout(cartLead, 900); }, true);
   document.addEventListener('click', e => { const el = e.target.closest('button, input[type="submit"], a'); if (!el) return; const txt = (el.innerText || el.value || '').toLowerCase(); const href = el.getAttribute('href') || ''; if (txt.includes('add to cart') || txt.includes('add') && href.includes('/cart/add') || href.includes('/cart/add')) setTimeout(cartLead, 900); }, true);
@@ -113,7 +115,7 @@
   });
 
   track(product.isProduct ? 'product_view' : 'page_view');
-  setTimeout(() => { if (product.isProduct) { openChat(); showProductOffer('product_explore'); track('product_exploring_delay'); } }, Math.max(5, Number(settings.leadPopupDelaySeconds || 12)) * 1000);
+  setTimeout(() => { if (product.isProduct) { showProductOffer('product_explore'); track('product_exploring_delay'); } }, Math.max(5, Number(settings.leadPopupDelaySeconds || 12)) * 1000);
 
   document.documentElement.style.setProperty('--tsg-color', settings.themeColor || '#d63384');
   box.querySelector('#tsg-title').textContent = settings.botName || 'Tiny Shiny Assistant';

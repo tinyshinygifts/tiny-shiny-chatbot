@@ -117,6 +117,17 @@
       <pre id="whatsappResult"></pre>
     </section>
 
+
+    <section class="panel">
+      <h2>Shiprocket API</h2>
+      <p>Optional: add Shiprocket token for shipment/tracking status when Shopify order has limited tracking details.</p>
+      <label>Shiprocket API Token <input id="SHIPROCKET_TOKEN" type="password" placeholder="Bearer token / API token"/></label>
+      <div class="form-grid two">
+        <label>Shiprocket Email <input id="SHIPROCKET_EMAIL" placeholder="seller@example.com"/></label>
+        <label>Shiprocket Password <input id="SHIPROCKET_PASSWORD" type="password" placeholder="Password if token generation is used later"/></label>
+      </div>
+    </section>
+
     <section class="panel">
       <h2>Customer WhatsApp Follow-up</h2>
       <p>This sends product/cart follow-up to customers only after they share their phone number and consent.</p>
@@ -137,6 +148,7 @@
         <select id="GOOGLE_SHEETS_ENABLED"><option value="false">false</option><option value="true">true</option></select>
       </label>
       <label>Google Apps Script Web App URL <input id="GOOGLE_SHEETS_WEBHOOK_URL" type="password" placeholder="https://script.google.com/macros/s/.../exec"/></label>
+      <label>Google Sheet Open Link <input id="GOOGLE_SHEET_URL" placeholder="https://docs.google.com/spreadsheets/d/..."/></label>
       <label>Google Sheet Secret <input id="GOOGLE_SHEETS_SECRET" type="password" placeholder="Any private secret, same in Apps Script"/></label>
       <button id="testGoogleSheets" class="ghost-btn" type="button">Test Google Sheets</button>
       <pre id="googleSheetsResult"></pre>

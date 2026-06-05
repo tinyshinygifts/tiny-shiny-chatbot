@@ -83,9 +83,10 @@ const apiKeys = [
   'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID',
   'CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG',
   'SHOPIFY_WEBHOOK_SECRET',
-  'GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET'
+  'GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET',
+  'SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD'
 ];
-const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
+const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
 function readEnvFile() {
   const out = {};
   const text = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
@@ -146,7 +147,13 @@ function writeEnvFile(next) {
     '# Google Sheets CRM auto-save. Use Google Apps Script Web App URL.',
     'GOOGLE_SHEETS_ENABLED=' + (merged.GOOGLE_SHEETS_ENABLED || 'false'),
     'GOOGLE_SHEETS_WEBHOOK_URL=' + (merged.GOOGLE_SHEETS_WEBHOOK_URL || ''),
+    'GOOGLE_SHEET_URL=' + (merged.GOOGLE_SHEET_URL || ''),
     'GOOGLE_SHEETS_SECRET=' + (merged.GOOGLE_SHEETS_SECRET || ''),
+    '',
+    '# Shiprocket API - optional for tracking link/status.',
+    'SHIPROCKET_TOKEN=' + (merged.SHIPROCKET_TOKEN || ''),
+    'SHIPROCKET_EMAIL=' + (merged.SHIPROCKET_EMAIL || ''),
+    'SHIPROCKET_PASSWORD=' + (merged.SHIPROCKET_PASSWORD || ''),
     '',
     '# Security for Shopify webhook. Add later when hosting.',
     'SHOPIFY_WEBHOOK_SECRET=' + (merged.SHOPIFY_WEBHOOK_SECRET || '')
@@ -396,23 +403,123 @@ function consumeOAuthState(state, shop) {
   return !!item && item.shop === shop && Number(item.exp) > Date.now();
 }
 
-async function getShopifyOrderStatus({ orderId, phone }) {
+function phoneVariants(phone) {
+  const digits = cleanPhone(phone);
+  if (!digits) return [];
+  const last10 = digits.length >= 10 ? digits.slice(-10) : digits;
+  return Array.from(new Set([digits, last10, '91' + last10, '+91' + last10])).filter(Boolean);
+}
+function orderPhoneValues(order = {}) {
+  const vals = [
+    order.phone, order.contact_email, order.email,
+    order.customer?.phone, order.customer?.default_address?.phone,
+    order.billing_address?.phone, order.shipping_address?.phone,
+    order.customer?.email
+  ].filter(Boolean).map(String);
+  return vals;
+}
+function orderMatchesInput(order, { orderId, phone }) {
+  const oid = String(orderId || '').replace(/^#/, '').trim().toLowerCase();
+  if (oid) {
+    const names = [order.name, order.order_number, order.id].map(v => String(v || '').replace(/^#/, '').toLowerCase());
+    if (names.some(v => v === oid || v.includes(oid))) return true;
+  }
+  const variants = phoneVariants(phone).map(cleanPhone);
+  if (variants.length) {
+    const values = orderPhoneValues(order).map(cleanPhone);
+    if (values.some(v => variants.some(p => v.endsWith(p) || p.endsWith(v)))) return true;
+  }
+  return false;
+}
+async function shopifyFetch(pathAndQuery) {
   const store = process.env.SHOPIFY_STORE_DOMAIN;
   const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
-  const version = process.env.SHOPIFY_API_VERSION || '2025-10';
+  const version = process.env.SHOPIFY_API_VERSION || '2026-04';
   if (!store || !token) return { ok: false, skipped: true, message: 'Shopify API is not connected yet.' };
-  let query = '';
-  if (orderId) query = `name:${orderId.startsWith('#') ? orderId : '#' + orderId}`;
-  else if (phone) query = `phone:${phone}`;
-  else return { ok: false, message: 'Order number or phone number is required.' };
-  const url = `https://${store}/admin/api/${version}/orders.json?status=any&limit=5&query=${encodeURIComponent(query)}`;
-  const response = await fetch(url, { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } });
+  const response = await fetch(`https://${store}/admin/api/${version}/${pathAndQuery}`, { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } });
   const json = await response.json().catch(() => ({}));
-  if (!response.ok) return { ok: false, message: 'Shopify order lookup failed.', detail: json };
-  const order = (json.orders || [])[0];
-  if (!order) return { ok: false, message: 'No matching order found.' };
-  return { ok: true, order: { name: order.name, financial_status: order.financial_status, fulfillment_status: order.fulfillment_status || 'not fulfilled yet', total_price: order.total_price, currency: order.currency || 'INR', tracking: (order.fulfillments || []).flatMap(f => (f.tracking_numbers || []).map((n, i) => ({ number: n, url: (f.tracking_urls || [])[i] || '' }))) } };
+  return { ok: response.ok, status: response.status, json };
 }
+function simplifyOrder(order = {}) {
+  const fulfillments = order.fulfillments || [];
+  const tracking = fulfillments.flatMap(f => (f.tracking_numbers || []).map((n, i) => ({
+    number: n,
+    url: (f.tracking_urls || [])[i] || '',
+    company: f.tracking_company || '',
+    status: f.shipment_status || f.status || ''
+  })));
+  return {
+    id: order.id,
+    name: order.name,
+    order_number: order.order_number,
+    created_at: order.created_at,
+    customer_name: [order.customer?.first_name, order.customer?.last_name].filter(Boolean).join(' ') || order.billing_address?.name || order.shipping_address?.name || '',
+    phone: cleanPhone(order.phone || order.customer?.phone || order.billing_address?.phone || order.shipping_address?.phone || order.customer?.default_address?.phone),
+    email: order.email || order.customer?.email || '',
+    financial_status: order.financial_status || '',
+    fulfillment_status: order.fulfillment_status || 'not fulfilled yet',
+    cancelled_at: order.cancelled_at || '',
+    cancel_reason: order.cancel_reason || '',
+    total_price: order.total_price,
+    currency: order.currency || 'INR',
+    tracking,
+    line_items: (order.line_items || []).map(i => ({ title: i.title, quantity: i.quantity, sku: i.sku }))
+  };
+}
+async function getShiprocketTracking(order) {
+  const token = process.env.SHIPROCKET_TOKEN;
+  if (!token || !order) return { ok: false, skipped: true, reason: 'Shiprocket token not configured.' };
+  const orderId = String(order.name || order.order_number || order.id || '').replace('#','');
+  try {
+    const urls = [
+      `https://apiv2.shiprocket.in/v1/external/orders/show/${encodeURIComponent(orderId)}`,
+      `https://apiv2.shiprocket.in/v1/external/courier/track?order_id=${encodeURIComponent(orderId)}`
+    ];
+    for (const u of urls) {
+      const r = await fetch(u, { headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+      const j = await r.json().catch(() => ({}));
+      if (r.ok) return { ok: true, status: r.status, data: j };
+    }
+  } catch (e) { return { ok: false, error: e.message }; }
+  return { ok: false, reason: 'No Shiprocket tracking data found.' };
+}
+function buildOrderReply(simple, shiprocket) {
+  const items = (simple.line_items || []).map(i => `${i.title} x ${i.quantity}`).join(', ');
+  const tracking = (simple.tracking || []).length
+    ? simple.tracking.map(t => `${t.company ? t.company + ' ' : ''}${t.number || ''}${t.status ? ' ('+t.status+')' : ''}${t.url ? ' - ' + t.url : ''}`).join('\n')
+    : 'Tracking details are not added in Shopify yet.';
+  let shipLine = '';
+  if (shiprocket?.ok) shipLine = `\nShiprocket: ${JSON.stringify(shiprocket.data).slice(0, 700)}`;
+  return `Order ${simple.name || simple.order_number}\nCustomer: ${simple.customer_name || '-'}\nPayment status: ${simple.financial_status || '-'}\nOrder/Fulfillment status: ${simple.cancelled_at ? 'cancelled' : simple.fulfillment_status}\nTotal: ${simple.currency} ${simple.total_price || '-'}\nItems: ${items || '-'}\nTracking: ${tracking}${shipLine}`;
+}
+async function getShopifyOrderStatus({ orderId, phone }) {
+  if (!process.env.SHOPIFY_STORE_DOMAIN || !process.env.SHOPIFY_ADMIN_ACCESS_TOKEN) return { ok: false, skipped: true, message: 'Shopify API is not connected yet.' };
+  const queries = [];
+  if (orderId) {
+    const clean = String(orderId).replace(/^#/, '').trim();
+    queries.push(`name:#${clean}`);
+    queries.push(`#${clean}`);
+  }
+  if (phone) {
+    for (const p of phoneVariants(phone)) queries.push(`phone:${p}`);
+  }
+  queries.push('');
+  let orders = [];
+  for (const q of queries) {
+    const query = q ? `&query=${encodeURIComponent(q)}` : '';
+    const r = await shopifyFetch(`orders.json?status=any&limit=50&fields=id,name,order_number,created_at,email,phone,customer,billing_address,shipping_address,financial_status,fulfillment_status,total_price,currency,fulfillments,line_items,cancelled_at,cancel_reason${query}`);
+    if (!r.ok) return { ok: false, message: 'Shopify order lookup failed.', detail: r.json || r };
+    orders = (r.json.orders || []);
+    const matched = orders.find(o => orderMatchesInput(o, { orderId, phone })) || orders[0];
+    if (matched) {
+      const simple = simplifyOrder(matched);
+      const shiprocket = await getShiprocketTracking(simple).catch(e => ({ ok: false, error: e.message }));
+      return { ok: true, order: simple, shiprocket, reply: buildOrderReply(simple, shiprocket) };
+    }
+  }
+  return { ok: false, message: 'No matching order found for this mobile/order number.' };
+}
+
 async function createShopifyDraftOrder(lead) {
   const store = process.env.SHOPIFY_STORE_DOMAIN;
   const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
@@ -474,7 +581,7 @@ app.get('/api/settings', (req, res) => { res.set('Cache-Control','no-store'); re
 
 
 // From here, admin/API settings routes are protected by login.
-app.use(['/api/config','/api/test-whatsapp','/api/test-shopify','/api/leads','/api/visitor-events','/api/lead-messages','/api/media-images','/api/send-image-message','/api/faqs','/api/crm','/api/test-google-sheets','/api/sync-google-sheets'], requireAdmin);
+app.use(['/api/config','/api/test-whatsapp','/api/test-shopify','/api/leads','/api/visitor-events','/api/lead-messages','/api/media-images','/api/send-image-message','/api/faqs','/api/crm','/api/test-google-sheets','/api/sync-google-sheets','/api/shopify/customers'], requireAdmin);
 app.post('/api/settings', requireAdmin);
 
 app.get('/api/config', (req, res) => {
@@ -574,7 +681,9 @@ app.post('/api/chat', async (req, res) => {
   if (!raw) return res.json({ ok: true, reply: settings.welcomeMessage || 'Hello! How can I help you?' });
   const phone = extractPhone(raw);
   const wantsConfirm = /confirm|confirmation|place order|book order|buy this|order now|i want this/i.test(raw);
-  const wantsTrack = /track|tracking|order status|where is my order|dispatch|shipped|shipment/i.test(raw);
+  const orderIdFromText = extractOrderId(raw);
+  const looksLikeTrackingInput = Boolean(phone || orderIdFromText) && !wantsConfirm;
+  const wantsTrack = /track|tracking|order status|where is my order|dispatch|shipped|shipment/i.test(raw) || looksLikeTrackingInput;
   const product = { title: productTitle, handle: productHandle, image: productImage, price: productPrice, discountText, url: pageUrl };
   if (wantsConfirm) {
     const lead = appendJson(leadsPath, { id: crypto.randomUUID(), type: 'order_confirmation', createdAt: nowIso(), phone, pageUrl, productTitle, productHandle, productImage, productPrice, discountText, message: raw, visitorId });
@@ -584,13 +693,11 @@ app.post('/api/chat', async (req, res) => {
     return res.json({ ok: true, action: 'order_confirmation_saved', reply: phone ? 'Thank you. Your order confirmation request has been sent to our team. We will confirm it on WhatsApp shortly.' : 'Sure. Please share your mobile number, product name/link and quantity so our team can confirm your order on WhatsApp.' });
   }
   if (wantsTrack) {
-    const orderId = extractOrderId(raw);
+    const orderId = orderIdFromText || extractOrderId(raw);
     if (!orderId && !phone) return res.json({ ok: true, action: 'ask_order_number', reply: 'Please share your order number or registered mobile number to check your order tracking.' });
     const status = await getShopifyOrderStatus({ orderId, phone });
     if (status.ok) {
-      const o = status.order;
-      const trackingLine = o.tracking.length ? ` Tracking: ${o.tracking.map(t => t.url ? `${t.number} - ${t.url}` : t.number).join(', ')}` : ' Tracking details are not added yet.';
-      return res.json({ ok: true, action: 'order_status', reply: `Order ${o.name}: payment status is ${o.financial_status}, fulfillment status is ${o.fulfillment_status}, total is ${o.currency} ${o.total_price}.${trackingLine}` });
+      return res.json({ ok: true, action: 'order_status', order: status.order, shiprocket: status.shiprocket, reply: status.reply || 'Order details found.' });
     }
     appendJson(leadsPath, { id: crypto.randomUUID(), type: 'tracking_request', createdAt: nowIso(), phone, orderId, pageUrl, message: raw, visitorId });
     sendOwnerWhatsApp(`New chatbot tracking request\nOrder/Mobile: ${orderId || phone}\nPage: ${pageUrl || ''}\nMessage: ${raw}`).catch(() => {});
@@ -728,6 +835,49 @@ app.get('/api/leads', (req, res) => res.json({ ok: true, leads: readJson(leadsPa
 app.get('/api/visitor-events', (req, res) => res.json({ ok: true, events: readJson(eventsPath, []) }));
 app.get('/api/lead-messages', (req, res) => res.json({ ok: true, messages: readJson(leadMessagesPath, []) }));
 app.get('/api/faqs', (req, res) => res.json({ ok: true, faqs: readJson(faqPath, []) }));
+
+function simplifyShopifyCustomer(c = {}) {
+  const addr = c.default_address || (c.addresses || [])[0] || {};
+  return {
+    id: c.id,
+    name: [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || c.phone || 'Customer',
+    email: c.email || '',
+    phone: cleanPhone(c.phone || addr.phone),
+    city: addr.city || '',
+    ordersCount: c.orders_count || 0,
+    totalSpent: c.total_spent ? `₹${c.total_spent}` : '₹0',
+    lastOrderId: c.last_order_id || '',
+    lastOrderName: c.last_order_name || '',
+    lastOrderDate: c.updated_at ? String(c.updated_at).slice(0,10) : '',
+    orderStatus: c.state || '-',
+    raw: c
+  };
+}
+app.get('/api/shopify/customers', async (req, res) => {
+  try {
+    const r = await shopifyFetch('customers.json?limit=250&fields=id,first_name,last_name,email,phone,default_address,addresses,orders_count,total_spent,last_order_id,last_order_name,updated_at,state');
+    if (!r.ok) return res.status(400).json({ ok: false, error: r.message || 'Shopify customers fetch failed', detail: r.json || r });
+    const customers = (r.json.customers || []).map(simplifyShopifyCustomer);
+    res.json({ ok: true, customers });
+  } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
+});
+app.post('/api/shopify/customers/bulk-message', async (req, res) => {
+  try {
+    const { customers = [], message = '', saveOnly = false, sendVia = 'whatsapp' } = req.body || {};
+    if (!Array.isArray(customers) || !customers.length) return res.status(400).json({ ok: false, error: 'customers array required' });
+    if (!message.trim()) return res.status(400).json({ ok: false, error: 'message required' });
+    const results = [];
+    for (const c of customers.slice(0, 500)) {
+      const crm = upsertCrm({ name: c.name, phone: c.phone, email: c.email, note: message, message, customer: c }, 'message');
+      let wa = { ok: false, skipped: true, reason: 'Saved as CRM follow-up only.' };
+      if (!saveOnly && sendVia === 'whatsapp' && c.phone) wa = await sendCustomerWhatsApp(c.phone, message).catch(err => ({ ok:false, error:err.message }));
+      results.push({ customer: c.name || c.phone || c.email, phone: c.phone || '', crmId: crm.id, whatsapp: wa });
+    }
+    sendToGoogleSheets('Bulk Customer Message', { count: results.length, message, results }).catch(()=>{});
+    res.json({ ok: true, count: results.length, results });
+  } catch (e) { res.status(500).json({ ok:false, error:e.message }); }
+});
+
 app.post('/api/faqs', (req, res) => { const { faqs } = req.body || {}; if (!Array.isArray(faqs)) return res.status(400).json({ ok: false, error: 'faqs array required' }); writeJson(faqPath, faqs); res.json({ ok: true, faqs }); });
 app.post('/api/settings', (req, res) => { const current = readJson(settingsPath, {}); const next = { ...current, ...(req.body || {}) }; writeJson(settingsPath, next); res.json({ ok: true, settings: next }); });
 

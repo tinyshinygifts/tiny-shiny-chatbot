@@ -160,3 +160,23 @@ V14 Update:
 - Website Chatbot Status OFF now hides the widget fully with no-cache widget loading.
 - Bot Name and Theme Color moved to API Settings -> Chatbot Appearance.
 - If Shopify browser cache still shows old widget, update script to /widget.js?v=14.
+
+V15 UPDATE
+- Admin header fixed/sticky: top header scroll me move nahi hoga.
+- Admin tabs improved: Basic Settings, CRM Dashboard, Shopify Customers, Leads, Visitor Activity, Buy Messages, Image Messages, FAQ Rules, Google Sheet.
+- Active tab me sirf usi section ka data show hoga.
+- Basic Settings se Website ON/OFF switch remove; ON/OFF ab API Settings → Chatbot Appearance me rahega.
+- CRM Dashboard alignment fixed: long Shopify product URLs wrap honge, horizontal scroll avoid hoga.
+- Chatbot popup me top-right close X button add.
+- Add-to-cart par chatbot auto-open nahi hoga; lead background me save hogi.
+- Tracking logic improved: mobile number/order ID dalne par Shopify se matching order search hoga; tracking number/link/status show hoga. Shiprocket token configured ho to Shiprocket data bhi try hoga.
+- Shopify Customers tab add: customers fetch, search, select all, selected customers ko bulk message/CRM follow-up.
+- Google Sheet tab add: API Settings me GOOGLE_SHEET_URL set karne par tab se sheet open hogi.
+
+Update steps:
+1. ZIP extract karein.
+2. GitHub repo me server.js, package.json, package-lock.json, README_HINDI.txt, public, data replace karein.
+3. .env aur node_modules upload na karein.
+4. GitHub Desktop → Commit to main → Push origin.
+5. Render → Manual Deploy → Clear build cache & deploy.
+6. Shopify theme me widget cache avoid karne ke liye script use karein: widget.js?v=15

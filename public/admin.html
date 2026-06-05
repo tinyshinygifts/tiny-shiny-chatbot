@@ -7,8 +7,8 @@
   <link rel="stylesheet" href="/style.css"/>
 </head>
 <body>
-  <main class="admin-wrap">
-    <header class="topbar glass-card">
+  <main class="admin-wrap admin-fixed-layout">
+    <header class="topbar glass-card admin-sticky-header">
       <div>
         <div class="badge">Tiny Shiny Gifts</div>
         <h1>Chatbot Admin</h1>
@@ -27,20 +27,35 @@
       <div><b id="crmCount">0</b><span>CRM Customers</span></div>
     </section>
 
-    <section class="panel quick-nav">
-      <a href="#crmPanel">CRM Dashboard</a>
-      <a href="#leadPanel">Leads</a>
-      <a href="#activityPanel">Visitor Activity</a>
-      <a href="#messagePanel">Buy Messages</a>
-      <a href="#imagePanel">Image Messages</a>
+    <section class="panel quick-nav admin-tabs" id="adminTabs">
+      <button class="tab-btn active" data-tab="basicPanel">Basic Settings</button>
+      <button class="tab-btn" data-tab="crmPanel">CRM Dashboard</button>
+      <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
+      <button class="tab-btn" data-tab="leadPanel">Leads</button>
+      <button class="tab-btn" data-tab="activityPanel">Visitor Activity</button>
+      <button class="tab-btn" data-tab="messagePanel">Buy Messages</button>
+      <button class="tab-btn" data-tab="imagePanel">Image Messages</button>
+      <button class="tab-btn" data-tab="faqPanel">FAQ Rules</button>
+      <button class="tab-btn" id="openGoogleSheetTab" data-tab="googleSheetPanel">Google Sheet</button>
     </section>
 
-    <section class="panel crm-panel" id="crmPanel">
+    <section class="panel tab-panel active" id="basicPanel">
+      <h2>Basic Settings</h2>
+      <p class="hint">Chatbot ON/OFF, bot name and theme color are in API Settings → Chatbot Appearance.</p>
+      <label>Welcome Message <textarea id="welcomeMessage"></textarea></label>
+      <label>Fallback Message <textarea id="fallbackMessage"></textarea></label>
+      <label>Product Offer Message <textarea id="leadOfferMessage"></textarea></label>
+      <label>Add-to-cart Message <textarea id="cartOfferMessage"></textarea></label>
+      <label>Product popup delay seconds <input id="leadPopupDelaySeconds" type="number" min="5"/></label>
+      <button id="saveSettings" class="primary-btn">Save Settings</button>
+    </section>
+
+    <section class="panel tab-panel crm-panel" id="crmPanel">
       <div class="section-head">
         <div><h2>CRM Dashboard</h2><p>All chatbot leads, product views, cart leads and order requests in one place.</p></div>
         <div class="inline-actions"><button id="refreshCrm" class="ghost-btn">Refresh CRM</button><button id="syncGoogleSheets" class="primary-btn">Sync to Google Sheets</button><button id="exportCrmCsv" class="ghost-btn">Export CSV</button></div>
       </div>
-      <div class="form-grid three">
+      <div class="form-grid three crm-toolbar">
         <label>Search CRM <input id="crmSearch" placeholder="Name, phone, product, order"/></label>
         <label>Status Filter
           <select id="crmStatusFilter"><option value="">All Status</option><option>New</option><option>Hot Lead</option><option>Follow Up</option><option>Converted</option><option>Not Interested</option></select>
@@ -54,38 +69,28 @@
       <div id="crmList" class="crm-list"></div>
     </section>
 
-    <section class="panel">
-      <h2>Basic Settings</h2>
-      <p class="hint">Chatbot visibility is controlled here. Bot name and theme color are now in API Settings → Chatbot Appearance.</p>
-      <div class="status-toggle-card">
-        <div>
-          <b>Website Chatbot Status</b>
-          <p>Turn OFF to completely hide the chatbot from your Shopify website. Admin panel will still work.</p>
-        </div>
-        <label class="switch-toggle">
-          <input id="chatbotEnabled" type="checkbox"/>
-          <span class="switch-slider"></span>
-          <em id="chatbotStatusText">OFF</em>
+    <section class="panel tab-panel" id="shopifyCustomersPanel">
+      <div class="section-head">
+        <div><h2>Shopify Customers</h2><p>Shopify customer list, follow-up notes, and bulk WhatsApp/customer messages.</p></div>
+        <div class="inline-actions"><button id="refreshShopifyCustomers" class="ghost-btn">Refresh Customers</button></div>
+      </div>
+      <div class="form-grid three">
+        <label>Search Customer <input id="shopifyCustomerSearch" placeholder="Name, phone, email, city"/></label>
+        <label>Message Text <textarea id="bulkCustomerMessage" placeholder="Write offer, wishes, thanks or follow-up message"></textarea></label>
+        <label>Send Via
+          <select id="bulkSendVia"><option value="whatsapp">WhatsApp</option><option value="crm">Save CRM Follow-up Only</option></select>
         </label>
       </div>
-      <label>Welcome Message <textarea id="welcomeMessage"></textarea></label>
-      <label>Fallback Message <textarea id="fallbackMessage"></textarea></label>
-      <label>Product Offer Message <textarea id="leadOfferMessage"></textarea></label>
-      <label>Add-to-cart Message <textarea id="cartOfferMessage"></textarea></label>
-      <label>Product popup delay seconds <input id="leadPopupDelaySeconds" type="number" min="5"/></label>
-      <button id="saveSettings" class="primary-btn">Save Settings</button>
+      <div class="inline-actions">
+        <label class="select-all-line"><input id="selectAllShopifyCustomers" type="checkbox"/> Select All Customers</label>
+        <button id="sendBulkCustomerMessage" class="primary-btn">Send Message to Selected</button>
+        <button id="saveBulkCustomerFollowup" class="ghost-btn">Save Follow-up for Selected</button>
+      </div>
+      <pre id="shopifyCustomersResult"></pre>
+      <div id="shopifyCustomersList" class="customer-table-wrap"></div>
     </section>
 
-    <section class="panel">
-      <h2>FAQ Rules</h2>
-      <p>Format: separate keywords with commas.</p>
-      <div id="faqList"></div>
-      <button id="addFaq" class="ghost-btn">+ Add FAQ</button>
-      <button id="saveFaqs" class="primary-btn">Save FAQs</button>
-    </section>
-
-
-    <section class="panel media-panel" id="imagePanel">
+    <section class="panel tab-panel media-panel" id="imagePanel">
       <h2>Image Messages</h2>
       <p>Upload images such as thank you letter, offer/discount image or wishes. You can preview them here and send them through WhatsApp after WhatsApp Cloud API is connected.</p>
       <div class="form-grid two">
@@ -121,9 +126,18 @@
       <div id="mediaList" class="media-grid"></div>
     </section>
 
-    <section class="panel" id="leadPanel"><h2>Leads / Order Requests</h2><button id="refreshLeads" class="ghost-btn">Refresh Leads</button><div id="leadList"></div></section>
-    <section class="panel" id="activityPanel"><h2>Visitor / Product Activity</h2><button id="refreshEvents" class="ghost-btn">Refresh Activity</button><div id="eventList"></div></section>
-    <section class="panel" id="messagePanel"><h2>Generated Buy Messages</h2><button id="refreshMsgs" class="ghost-btn">Refresh Messages</button><div id="messageList"></div></section>
+    <section class="panel tab-panel" id="faqPanel">
+      <h2>FAQ Rules</h2>
+      <p>Format: separate keywords with commas.</p>
+      <div id="faqList"></div>
+      <button id="addFaq" class="ghost-btn">+ Add FAQ</button>
+      <button id="saveFaqs" class="primary-btn">Save FAQs</button>
+    </section>
+
+    <section class="panel tab-panel" id="leadPanel"><h2>Leads / Order Requests</h2><button id="refreshLeads" class="ghost-btn">Refresh Leads</button><div id="leadList"></div></section>
+    <section class="panel tab-panel" id="activityPanel"><h2>Visitor / Product Activity</h2><button id="refreshEvents" class="ghost-btn">Refresh Activity</button><div id="eventList"></div></section>
+    <section class="panel tab-panel" id="messagePanel"><h2>Generated Buy Messages</h2><button id="refreshMsgs" class="ghost-btn">Refresh Messages</button><div id="messageList"></div></section>
+    <section class="panel tab-panel" id="googleSheetPanel"><h2>Google Sheet</h2><p id="googleSheetHelp">Google Sheet link not configured. Please add it in API Settings.</p><a id="googleSheetOpenLink" class="primary-btn" target="_blank" rel="noopener" href="#">Open Google Sheet</a></section>
   </main>
   <script src="/admin.js"></script>
 </body>
