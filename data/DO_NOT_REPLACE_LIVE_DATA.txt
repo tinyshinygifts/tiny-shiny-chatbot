@@ -1,0 +1,3 @@
+Do not upload/replace live data JSON files during updates.
+Keep existing Render/GitHub data/settings.json, crm.json, leads.json, visitor-events.json, media-images.json if they contain your saved API settings/CRM data.
+For update, replace only server.js, package files, README and public folder.
