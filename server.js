@@ -514,7 +514,8 @@ async function getShopifyOrderStatus({ orderId, phone }) {
     if (matched) {
       const simple = simplifyOrder(matched);
       const shiprocket = await getShiprocketTracking(simple).catch(e => ({ ok: false, error: e.message }));
-      return { ok: true, order: simple, shiprocket, reply: buildOrderReply(simple, shiprocket) };
+      const trackingLinks = (simple.tracking || []).filter(t => t.url).map(t => ({ label: t.number ? `Track ${t.number}` : 'Track Shipment', url: t.url }));
+      return { ok: true, order: simple, shiprocket, trackingLinks, reply: buildOrderReply(simple, shiprocket) };
     }
   }
   return { ok: false, message: 'No matching order found for this mobile/order number.' };
@@ -857,7 +858,38 @@ app.get('/api/shopify/customers', async (req, res) => {
   try {
     const r = await shopifyFetch('customers.json?limit=250&fields=id,first_name,last_name,email,phone,default_address,addresses,orders_count,total_spent,last_order_id,last_order_name,updated_at,state');
     if (!r.ok) return res.status(400).json({ ok: false, error: r.message || 'Shopify customers fetch failed', detail: r.json || r });
+
     const customers = (r.json.customers || []).map(simplifyShopifyCustomer);
+
+    // Enrich customer list with actual latest Shopify order status.
+    // Do not use customer.state because it can be "disabled" and is not an order status.
+    const orderResp = await shopifyFetch('orders.json?status=any&limit=250&fields=id,name,order_number,created_at,customer,financial_status,fulfillment_status,total_price,currency,cancelled_at,fulfillments');
+    if (orderResp.ok) {
+      const latestByCustomer = new Map();
+      for (const o of (orderResp.json.orders || [])) {
+        const cid = o.customer && o.customer.id ? String(o.customer.id) : '';
+        if (!cid) continue;
+        const prev = latestByCustomer.get(cid);
+        if (!prev || new Date(o.created_at || 0) > new Date(prev.created_at || 0)) latestByCustomer.set(cid, o);
+      }
+      for (const c of customers) {
+        const o = latestByCustomer.get(String(c.id));
+        if (!o) continue;
+        const payment = o.financial_status ? String(o.financial_status).replace(/_/g, ' ') : '-';
+        const fulfill = o.cancelled_at ? 'cancelled' : (o.fulfillment_status ? String(o.fulfillment_status).replace(/_/g, ' ') : 'unfulfilled');
+        c.lastOrderName = o.name || c.lastOrderName;
+        c.lastOrderDate = o.created_at ? String(o.created_at).slice(0,10) : c.lastOrderDate;
+        c.orderStatus = `${payment} / ${fulfill}`;
+        c.lastOrderAmount = `${o.currency || 'INR'} ${o.total_price || ''}`.trim();
+        const tracking = (o.fulfillments || []).flatMap(f => (f.tracking_numbers || []).map((n, i) => ({ number: n, url: (f.tracking_urls || [])[i] || '', company: f.tracking_company || '', status: f.shipment_status || f.status || '' })));
+        if (tracking.length) {
+          c.trackingNumber = tracking[0].number || '';
+          c.trackingUrl = tracking[0].url || '';
+          c.orderStatus += ` / ${tracking[0].status || 'tracking added'}`;
+        }
+      }
+    }
+
     res.json({ ok: true, customers });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });

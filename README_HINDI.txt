@@ -180,3 +180,10 @@ Update steps:
 4. GitHub Desktop → Commit to main → Push origin.
 5. Render → Manual Deploy → Clear build cache & deploy.
 6. Shopify theme me widget cache avoid karne ke liye script use karein: widget.js?v=15
+
+
+V16 updates:
+- Tracking link now appears as clickable Track Shipment button.
+- Image Messages section can load Shopify customers and bulk send selected image.
+- Shopify Customers order status uses latest actual Shopify order status instead of customer state.
+- Mobile chatbot popup made more compact.
