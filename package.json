@@ -1,7 +1,7 @@
 {
   "name": "tiny-shiny-chatbot",
-  "version": "17.0.0",
-  "description": "Tiny Shiny Gifts chatbot with persistent API update guidance, new product WhatsApp promotions and order confirmation automation",
+  "version": "19.0.0",
+  "description": "Tiny Shiny Gifts chatbot v19 with safe API settings, WhatsApp template support, iCarry tracking, Google Sheet button fix and logo branding",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

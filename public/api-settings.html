@@ -4,12 +4,14 @@
   <meta charset="utf-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>API Settings - Tiny Shiny Chatbot</title>
+  <link rel="icon" href="/tiny-shiny-logo.jpg"/>
   <link rel="stylesheet" href="/style.css"/>
 </head>
 <body>
   <main class="admin-wrap">
     <header class="topbar glass-card">
-      <div>
+      <div class="brand-head">
+        <img class="brand-logo small" src="/tiny-shiny-logo.jpg" alt="Tiny Shiny Gifts"/>
         <div class="badge">Secure Settings</div>
         <h1>API Settings</h1>
         <p>Manage login, Shopify, WhatsApp and customer follow-up settings.</p>
@@ -113,6 +115,11 @@
       <p>Use this to send new lead/order notifications to your WhatsApp.</p>
       <label>WhatsApp Cloud Token <input id="WHATSAPP_CLOUD_TOKEN" type="password" placeholder="EAAG..."/></label>
       <label>Phone Number ID <input id="WHATSAPP_PHONE_NUMBER_ID" placeholder="1234567890"/></label>
+      <div class="form-grid two">
+        <label>Test Template Name <input id="WHATSAPP_TEST_TEMPLATE_NAME" placeholder="approved_template_name"/></label>
+        <label>Test Template Language <input id="WHATSAPP_TEST_TEMPLATE_LANG" placeholder="en_US"/></label>
+      </div>
+      <p class="hint">Your own WhatsApp number cannot use Meta hello_world. Add an approved template here for test/business-initiated messages.</p>
       <button id="testWhatsApp" class="ghost-btn">Send Test WhatsApp</button>
       <pre id="whatsappResult"></pre>
     </section>
@@ -126,6 +133,24 @@
         <label>Shiprocket Email <input id="SHIPROCKET_EMAIL" placeholder="seller@example.com"/></label>
         <label>Shiprocket Password <input id="SHIPROCKET_PASSWORD" type="password" placeholder="Password if token generation is used later"/></label>
       </div>
+    </section>
+
+    <section class="panel">
+      <h2>iCarry API</h2>
+      <p>Optional: add iCarry credentials for shipment/tracking status along with Shopify and Shiprocket.</p>
+      <label>Enable iCarry Tracking
+        <select id="ICARRY_ENABLED"><option value="false">false</option><option value="true">true</option></select>
+      </label>
+      <label>iCarry Tracking API URL <input id="ICARRY_TRACKING_URL" placeholder="https://www.icarry.in/api/tracking or your iCarry tracking endpoint"/></label>
+      <div class="form-grid two">
+        <label>iCarry API Token <input id="ICARRY_API_TOKEN" type="password" placeholder="Bearer token"/></label>
+        <label>iCarry API Key <input id="ICARRY_API_KEY" type="password" placeholder="API key"/></label>
+        <label>iCarry Client ID <input id="ICARRY_CLIENT_ID" placeholder="Client ID"/></label>
+        <label>iCarry Client Secret <input id="ICARRY_CLIENT_SECRET" type="password" placeholder="Client Secret"/></label>
+        <label>iCarry Username <input id="ICARRY_USERNAME" placeholder="Username / email"/></label>
+        <label>iCarry Password <input id="ICARRY_PASSWORD" type="password" placeholder="Password"/></label>
+      </div>
+      <p class="hint">Fill only the fields iCarry provides. Existing API settings stay safe when updating.</p>
     </section>
 
     <section class="panel">

@@ -207,3 +207,11 @@ V17 UPDATE
 
 Update karte time replace karo: server.js, package.json, package-lock.json, README_HINDI.txt, public/
 Replace mat karo: .env, node_modules, data/settings.json, data/crm.json, data/leads.json, data/visitor-events.json, data/media-images.json
+
+
+V19 UPDATE NOTES
+- API settings safe: data/settings.json replace/upload mat karein. Render Environment values continue rahengi.
+- WhatsApp test send: apne sender number ke liye approved template ka naam API Settings me WHATSAPP_TEST_TEMPLATE_NAME me daalein. hello_world public test number ke alawa kaam nahi karta.
+- iCarry API fields API Settings me add kiye gaye hain. Fill only the credentials provided by iCarry.
+- Google Sheet button fixed: Google Sheet tab click karne par saved Google Sheet Open Link new tab me khulega.
+- Tiny Shiny logo added on landing, login, admin/API header and browser favicon.

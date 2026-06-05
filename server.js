@@ -81,13 +81,15 @@ const apiKeys = [
   'ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS',
   'SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER',
   'SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI',
-  'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID',
+  'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_LANG',
   'CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG',
   'SHOPIFY_WEBHOOK_SECRET',
-  'GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET',
-  'SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG'
+  'GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET',
+  'SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD',
+  'ICARRY_ENABLED','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_ID','ICARRY_CLIENT_SECRET','ICARRY_USERNAME','ICARRY_PASSWORD','ICARRY_TRACKING_URL',
+  'ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_LANG'
 ];
-const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ORDER_CONFIRMATION_TEMPLATE_NAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
+const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_SECRET','ICARRY_PASSWORD']);
 function readEnvFile() {
   const out = {};
   const text = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
@@ -139,6 +141,9 @@ function writeEnvFile(next) {
     '# WhatsApp Cloud API - required for owner/team notification from chatbot',
     'WHATSAPP_CLOUD_TOKEN=' + (merged.WHATSAPP_CLOUD_TOKEN || ''),
     'WHATSAPP_PHONE_NUMBER_ID=' + (merged.WHATSAPP_PHONE_NUMBER_ID || ''),
+    '# For test/business-initiated messages from your own number, use an approved template, not hello_world.',
+    'WHATSAPP_TEST_TEMPLATE_NAME=' + (merged.WHATSAPP_TEST_TEMPLATE_NAME || ''),
+    'WHATSAPP_TEST_TEMPLATE_LANG=' + (merged.WHATSAPP_TEST_TEMPLATE_LANG || 'en_US'),
     '',
     '# Customer WhatsApp follow-up. Keep false until you have customer opt-in and approved WhatsApp template/session rules.',
     'CUSTOMER_WHATSAPP_MESSAGES_ENABLED=' + (merged.CUSTOMER_WHATSAPP_MESSAGES_ENABLED || 'false'),
@@ -155,6 +160,16 @@ function writeEnvFile(next) {
     'SHIPROCKET_TOKEN=' + (merged.SHIPROCKET_TOKEN || ''),
     'SHIPROCKET_EMAIL=' + (merged.SHIPROCKET_EMAIL || ''),
     'SHIPROCKET_PASSWORD=' + (merged.SHIPROCKET_PASSWORD || ''),
+    '',
+    '# iCarry API - optional for tracking link/status.',
+    'ICARRY_ENABLED=' + (merged.ICARRY_ENABLED || 'false'),
+    'ICARRY_API_TOKEN=' + (merged.ICARRY_API_TOKEN || ''),
+    'ICARRY_API_KEY=' + (merged.ICARRY_API_KEY || ''),
+    'ICARRY_CLIENT_ID=' + (merged.ICARRY_CLIENT_ID || ''),
+    'ICARRY_CLIENT_SECRET=' + (merged.ICARRY_CLIENT_SECRET || ''),
+    'ICARRY_USERNAME=' + (merged.ICARRY_USERNAME || ''),
+    'ICARRY_PASSWORD=' + (merged.ICARRY_PASSWORD || ''),
+    'ICARRY_TRACKING_URL=' + (merged.ICARRY_TRACKING_URL || 'https://www.icarry.in/'),
     '',
     '# Security for Shopify webhook. Add later when hosting.',
     'SHOPIFY_WEBHOOK_SECRET=' + (merged.SHOPIFY_WEBHOOK_SECRET || ''),
@@ -306,31 +321,46 @@ function buildLeadMessage({ type, product = {}, cart = {}, customer = {}, pageUr
   return `${intro}\n\nProduct: ${title}\n${product.price ? `Price: ${product.price}\n` : ''}Discount: ${discount}\nBuy here: ${link}${image ? `\nImage: ${image}` : ''}`;
 }
 
-async function sendOwnerWhatsApp(message) {
+function whatsappEndpoint() {
+  const phoneNumberId = String(process.env.WHATSAPP_PHONE_NUMBER_ID || '').replace(/\D/g, '');
+  return { phoneNumberId, url: `https://graph.facebook.com/v20.0/${phoneNumberId}/messages` };
+}
+function whatsappTemplateBody(to, templateName, lang) {
+  return {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: cleanPhone(to),
+    type: 'template',
+    template: { name: templateName, language: { code: lang || 'en_US' } }
+  };
+}
+async function postWhatsApp(body) {
   const token = process.env.WHATSAPP_CLOUD_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
-  const owner = cleanPhone(process.env.OWNER_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER);
-  if (!token || !phoneNumberId || !owner) { console.log('[WhatsApp skipped] Missing WhatsApp Cloud API env values.'); return { ok: false, skipped: true }; }
-  const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
-  const body = { messaging_product: 'whatsapp', to: owner, type: 'text', text: { preview_url: true, body: message } };
+  const { phoneNumberId, url } = whatsappEndpoint();
+  if (!token || !phoneNumberId) return { ok: false, skipped: true, reason: 'WhatsApp Cloud token or Phone Number ID missing.' };
   const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
   const json = await response.json().catch(() => ({}));
-  return { ok: response.ok, status: response.status, json };
+  return { ok: response.ok, status: response.status, json, request: { to: body.to, type: body.type, template: body.template?.name || '' } };
+}
+async function sendOwnerWhatsApp(message, options = {}) {
+  const owner = cleanPhone(process.env.OWNER_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER);
+  if (!owner) return { ok: false, skipped: true, reason: 'Owner WhatsApp number missing.' };
+  const template = options.template || process.env.WHATSAPP_TEST_TEMPLATE_NAME || '';
+  if (options.forceTemplate || template) {
+    if (!template) return { ok:false, skipped:true, reason:'Approved WhatsApp template name missing. Add WHATSAPP_TEST_TEMPLATE_NAME in API Settings.' };
+    return postWhatsApp(whatsappTemplateBody(owner, template, process.env.WHATSAPP_TEST_TEMPLATE_LANG || 'en_US'));
+  }
+  return postWhatsApp({ messaging_product: 'whatsapp', recipient_type: 'individual', to: owner, type: 'text', text: { preview_url: true, body: message } });
 }
 
 async function sendCustomerWhatsApp(phone, message) {
   const enabled = String(process.env.CUSTOMER_WHATSAPP_MESSAGES_ENABLED || 'false').toLowerCase() === 'true';
   if (!enabled) return { ok: false, skipped: true, reason: 'Customer WhatsApp follow-up is disabled in API Settings.' };
-  const token = process.env.WHATSAPP_CLOUD_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const to = cleanPhone(phone);
-  if (!token || !phoneNumberId || !to) return { ok: false, skipped: true, reason: 'WhatsApp Cloud API or customer phone missing.' };
-  const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
-  // Note: WhatsApp may require an approved template for business-initiated messages.
-  const body = { messaging_product: 'whatsapp', to, type: 'text', text: { preview_url: true, body: message } };
-  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
-  const json = await response.json().catch(() => ({}));
-  return { ok: response.ok, status: response.status, json };
+  if (!to) return { ok: false, skipped: true, reason: 'Customer phone missing.' };
+  const template = process.env.CUSTOMER_WHATSAPP_TEMPLATE_NAME || '';
+  if (template) return postWhatsApp(whatsappTemplateBody(to, template, process.env.CUSTOMER_WHATSAPP_TEMPLATE_LANG || 'en'));
+  return postWhatsApp({ messaging_product: 'whatsapp', recipient_type: 'individual', to, type: 'text', text: { preview_url: true, body: message } });
 }
 
 async function sendWhatsAppImage({ to, imageUrl, caption = '' }) {
@@ -493,13 +523,40 @@ async function getShiprocketTracking(order) {
   } catch (e) { return { ok: false, error: e.message }; }
   return { ok: false, reason: 'No Shiprocket tracking data found.' };
 }
-function buildOrderReply(simple, shiprocket) {
+
+async function getICarryTracking(order) {
+  const enabled = String(process.env.ICARRY_ENABLED || 'false').toLowerCase() === 'true';
+  const trackingUrl = String(process.env.ICARRY_TRACKING_URL || '').trim();
+  if (!enabled || !trackingUrl || !order) return { ok: false, skipped: true, reason: 'iCarry tracking is disabled or URL missing.' };
+  const ids = [];
+  (order.tracking || []).forEach(t => { if (t.number) ids.push(t.number); });
+  ids.push(String(order.name || order.order_number || order.id || '').replace('#',''));
+  const headers = { 'Content-Type': 'application/json' };
+  if (process.env.ICARRY_API_TOKEN) headers.Authorization = `Bearer ${process.env.ICARRY_API_TOKEN}`;
+  if (process.env.ICARRY_API_KEY) headers['X-API-Key'] = process.env.ICARRY_API_KEY;
+  if (process.env.ICARRY_CLIENT_ID) headers['X-Client-ID'] = process.env.ICARRY_CLIENT_ID;
+  if (process.env.ICARRY_CLIENT_SECRET) headers['X-Client-Secret'] = process.env.ICARRY_CLIENT_SECRET;
+  for (const id of ids.filter(Boolean)) {
+    const sep = trackingUrl.includes('?') ? '&' : '?';
+    const url = `${trackingUrl}${sep}awb=${encodeURIComponent(id)}&order_id=${encodeURIComponent(id)}`;
+    try {
+      const r = await fetch(url, { headers });
+      const text = await r.text().catch(() => '');
+      let data; try { data = JSON.parse(text); } catch { data = text.slice(0, 1000); }
+      if (r.ok) return { ok: true, status: r.status, data, query: id };
+    } catch (e) { /* try next id */ }
+  }
+  return { ok: false, reason: 'No iCarry tracking data found.' };
+}
+
+function buildOrderReply(simple, shiprocket, icarry) {
   const items = (simple.line_items || []).map(i => `${i.title} x ${i.quantity}`).join(', ');
   const tracking = (simple.tracking || []).length
     ? simple.tracking.map(t => `${t.company ? t.company + ' ' : ''}${t.number || ''}${t.status ? ' ('+t.status+')' : ''}${t.url ? ' - ' + t.url : ''}`).join('\n')
     : 'Tracking details are not added in Shopify yet.';
   let shipLine = '';
   if (shiprocket?.ok) shipLine = `\nShiprocket: ${JSON.stringify(shiprocket.data).slice(0, 700)}`;
+  if (icarry?.ok) shipLine += `\niCarry: ${JSON.stringify(icarry.data).slice(0, 700)}`;
   return `Order ${simple.name || simple.order_number}\nCustomer: ${simple.customer_name || '-'}\nPayment status: ${simple.financial_status || '-'}\nOrder/Fulfillment status: ${simple.cancelled_at ? 'cancelled' : simple.fulfillment_status}\nTotal: ${simple.currency} ${simple.total_price || '-'}\nItems: ${items || '-'}\nTracking: ${tracking}${shipLine}`;
 }
 async function getShopifyOrderStatus({ orderId, phone }) {
@@ -524,8 +581,9 @@ async function getShopifyOrderStatus({ orderId, phone }) {
     if (matched) {
       const simple = simplifyOrder(matched);
       const shiprocket = await getShiprocketTracking(simple).catch(e => ({ ok: false, error: e.message }));
+      const icarry = await getICarryTracking(simple).catch(e => ({ ok: false, error: e.message }));
       const trackingLinks = (simple.tracking || []).filter(t => t.url).map(t => ({ label: t.number ? `Track ${t.number}` : 'Track Shipment', url: t.url }));
-      return { ok: true, order: simple, shiprocket, trackingLinks, reply: buildOrderReply(simple, shiprocket) };
+      return { ok: true, order: simple, shiprocket, icarry, trackingLinks, reply: buildOrderReply(simple, shiprocket, icarry) };
     }
   }
   return { ok: false, message: 'No matching order found for this mobile/order number.' };
@@ -614,7 +672,7 @@ app.post('/api/config', (req, res) => {
 });
 app.post('/api/test-whatsapp', async (req, res) => {
   try {
-    const result = await sendOwnerWhatsApp('Tiny Shiny Chatbot test message. WhatsApp API is connected successfully.');
+    const result = await sendOwnerWhatsApp('Tiny Shiny Chatbot test message. WhatsApp API is connected successfully.', { forceTemplate: true });
     res.json({ ok: !!result.ok, result });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
