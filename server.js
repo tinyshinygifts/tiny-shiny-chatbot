@@ -65,6 +65,7 @@ app.use((req, res, next) => {
 });
 
 const dataDir = path.join(__dirname, 'data');
+fs.mkdirSync(dataDir, { recursive: true });
 const faqPath = path.join(dataDir, 'faq.json');
 const settingsPath = path.join(dataDir, 'settings.json');
 const leadsPath = path.join(dataDir, 'leads.json');
@@ -84,9 +85,9 @@ const apiKeys = [
   'CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG',
   'SHOPIFY_WEBHOOK_SECRET',
   'GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET',
-  'SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD'
+  'SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG'
 ];
-const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
+const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ORDER_CONFIRMATION_TEMPLATE_NAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
 function readEnvFile() {
   const out = {};
   const text = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
@@ -156,7 +157,12 @@ function writeEnvFile(next) {
     'SHIPROCKET_PASSWORD=' + (merged.SHIPROCKET_PASSWORD || ''),
     '',
     '# Security for Shopify webhook. Add later when hosting.',
-    'SHOPIFY_WEBHOOK_SECRET=' + (merged.SHOPIFY_WEBHOOK_SECRET || '')
+    'SHOPIFY_WEBHOOK_SECRET=' + (merged.SHOPIFY_WEBHOOK_SECRET || ''),
+    '',
+    '# Order confirmation automation',
+    'ORDER_CONFIRMATION_WHATSAPP_ENABLED=' + (merged.ORDER_CONFIRMATION_WHATSAPP_ENABLED || 'false'),
+    'ORDER_CONFIRMATION_TEMPLATE_NAME=' + (merged.ORDER_CONFIRMATION_TEMPLATE_NAME || ''),
+    'ORDER_CONFIRMATION_TEMPLATE_LANG=' + (merged.ORDER_CONFIRMATION_TEMPLATE_LANG || 'en')
   ];
   fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
   for (const key of apiKeys) process.env[key] = merged[key] || '';
@@ -431,12 +437,16 @@ function orderMatchesInput(order, { orderId, phone }) {
   }
   return false;
 }
-async function shopifyFetch(pathAndQuery) {
+async function shopifyFetch(pathAndQuery, options = {}) {
   const store = process.env.SHOPIFY_STORE_DOMAIN;
   const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
   const version = process.env.SHOPIFY_API_VERSION || '2026-04';
   if (!store || !token) return { ok: false, skipped: true, message: 'Shopify API is not connected yet.' };
-  const response = await fetch(`https://${store}/admin/api/${version}/${pathAndQuery}`, { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } });
+  const response = await fetch(`https://${store}/admin/api/${version}/${pathAndQuery}`, {
+    method: options.method || 'GET',
+    headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
+    body: options.body ? JSON.stringify(options.body) : undefined
+  });
   const json = await response.json().catch(() => ({}));
   return { ok: response.ok, status: response.status, json };
 }
@@ -582,7 +592,7 @@ app.get('/api/settings', (req, res) => { res.set('Cache-Control','no-store'); re
 
 
 // From here, admin/API settings routes are protected by login.
-app.use(['/api/config','/api/test-whatsapp','/api/test-shopify','/api/leads','/api/visitor-events','/api/lead-messages','/api/media-images','/api/send-image-message','/api/faqs','/api/crm','/api/test-google-sheets','/api/sync-google-sheets','/api/shopify/customers'], requireAdmin);
+app.use(['/api/config','/api/test-whatsapp','/api/test-shopify','/api/leads','/api/visitor-events','/api/lead-messages','/api/media-images','/api/send-image-message','/api/faqs','/api/crm','/api/test-google-sheets','/api/sync-google-sheets','/api/shopify/customers','/api/shopify/products'], requireAdmin);
 app.post('/api/settings', requireAdmin);
 
 app.get('/api/config', (req, res) => {
@@ -854,6 +864,52 @@ function simplifyShopifyCustomer(c = {}) {
     raw: c
   };
 }
+
+function simplifyShopifyProduct(p = {}) {
+  const variant = (p.variants || [])[0] || {};
+  const image = p.image?.src || (p.images || [])[0]?.src || '';
+  return {
+    id: p.id,
+    title: p.title || 'Product',
+    handle: p.handle || '',
+    status: p.status || '',
+    productType: p.product_type || '',
+    vendor: p.vendor || '',
+    createdAt: p.created_at ? String(p.created_at).slice(0,10) : '',
+    updatedAt: p.updated_at ? String(p.updated_at).slice(0,10) : '',
+    price: variant.price ? `₹${variant.price}` : '',
+    compareAtPrice: variant.compare_at_price ? `₹${variant.compare_at_price}` : '',
+    image,
+    url: `${String(process.env.WEBSITE_URL || 'https://tinyshinygifts.com').replace(/\/$/,'')}/products/${p.handle || ''}`,
+    raw: p
+  };
+}
+app.get('/api/shopify/products', async (req, res) => {
+  try {
+    const r = await shopifyFetch('products.json?limit=250&fields=id,title,handle,status,product_type,vendor,created_at,updated_at,image,images,variants');
+    if (!r.ok) return res.status(400).json({ ok:false, error:r.message || 'Shopify products fetch failed', detail:r.json || r });
+    const products = (r.json.products || []).map(simplifyShopifyProduct).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+    res.json({ ok:true, products });
+  } catch(e) { res.status(500).json({ ok:false, error:e.message }); }
+});
+app.post('/api/shopify/products/bulk-promo', async (req, res) => {
+  try {
+    const { product = {}, customers = [], message = '', saveOnly = false } = req.body || {};
+    if (!product || !product.title) return res.status(400).json({ ok:false, error:'Product required' });
+    if (!Array.isArray(customers) || !customers.length) return res.status(400).json({ ok:false, error:'Select customers first' });
+    const promo = (message || `New product launched at Tiny Shiny Gifts!\n${product.title}\nPrice: ${product.price || ''}\nBuy here: ${product.url || ''}`).trim();
+    const results = [];
+    for (const c of customers.slice(0,500)) {
+      const crm = upsertCrm({ name:c.name, phone:c.phone, email:c.email, productTitle:product.title, pageUrl:product.url, productImage:product.image, message:promo }, 'message');
+      let wa = { ok:false, skipped:true, reason:'Saved as CRM follow-up only.' };
+      if (!saveOnly && c.phone) wa = await sendCustomerWhatsApp(c.phone, promo).catch(err => ({ ok:false, error:err.message }));
+      results.push({ customer:c.name || c.phone || c.email, phone:c.phone || '', crmId:crm.id, whatsapp:wa });
+    }
+    sendToGoogleSheets('New Product Promotion', { product, count:results.length, message:promo, results }).catch(()=>{});
+    res.json({ ok:true, count:results.length, results });
+  } catch(e) { res.status(500).json({ ok:false, error:e.message }); }
+});
+
 app.get('/api/shopify/customers', async (req, res) => {
   try {
     const r = await shopifyFetch('customers.json?limit=250&fields=id,first_name,last_name,email,phone,default_address,addresses,orders_count,total_spent,last_order_id,last_order_name,updated_at,state');
@@ -913,11 +969,38 @@ app.post('/api/shopify/customers/bulk-message', async (req, res) => {
 app.post('/api/faqs', (req, res) => { const { faqs } = req.body || {}; if (!Array.isArray(faqs)) return res.status(400).json({ ok: false, error: 'faqs array required' }); writeJson(faqPath, faqs); res.json({ ok: true, faqs }); });
 app.post('/api/settings', (req, res) => { const current = readJson(settingsPath, {}); const next = { ...current, ...(req.body || {}) }; writeJson(settingsPath, next); res.json({ ok: true, settings: next }); });
 
+
+function orderCustomerPhone(order = {}) {
+  return cleanPhone(order.phone || order.customer?.phone || order.billing_address?.phone || order.shipping_address?.phone || order.customer?.default_address?.phone);
+}
+function orderConfirmMessage(order = {}) {
+  const items = (order.line_items || []).slice(0, 6).map(i => `${i.title} x ${i.quantity}`).join(', ');
+  const confirmUrl = `${String(process.env.WEBSITE_URL || 'https://tinyshinygifts.com').replace(/\/$/, '')}?order_confirm=${encodeURIComponent(order.name || order.order_number || order.id || '')}`;
+  return `Thank you for your order with Tiny Shiny Gifts.\nOrder: ${order.name || ''}\nAmount: ${order.currency || 'INR'} ${order.total_price || ''}\nItems: ${items || '-'}\nPlease reply CONFIRM ${order.name || ''} to confirm your order.\n${confirmUrl}`;
+}
+async function sendOrderConfirmationToCustomer(order = {}) {
+  const enabled = String(process.env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || process.env.CUSTOMER_WHATSAPP_MESSAGES_ENABLED || 'false').toLowerCase() === 'true';
+  const phone = orderCustomerPhone(order);
+  if (!enabled || !phone) return { ok:false, skipped:true, reason: enabled ? 'Customer phone missing.' : 'Order confirmation WhatsApp disabled.' };
+  return sendCustomerWhatsApp(phone, orderConfirmMessage(order));
+}
+
 app.post('/webhooks/shopify/orders/create', async (req, res) => {
   const order = req.body || {};
-  appendJson(leadsPath, { id: crypto.randomUUID(), type: 'shopify_order_webhook', createdAt: nowIso(), orderName: order.name, phone: order.phone || order.customer?.phone, total: order.total_price, raw: order });
-  sendOwnerWhatsApp(`New Shopify order received\nOrder: ${order.name || ''}\nCustomer: ${order.customer?.first_name || ''} ${order.customer?.last_name || ''}\nPhone: ${order.phone || order.customer?.phone || ''}\nTotal: ${order.currency || 'INR'} ${order.total_price || ''}`).catch(() => {});
-  res.json({ ok: true });
+  const phone = orderCustomerPhone(order);
+  const lead = appendJson(leadsPath, { id: crypto.randomUUID(), type: 'shopify_order_webhook', createdAt: nowIso(), orderName: order.name, phone, total: order.total_price, raw: order, status: 'Order Confirmation Pending' });
+  const customerWa = await sendOrderConfirmationToCustomer(order).catch(err => ({ ok:false, error:err.message }));
+  await sendOwnerWhatsApp(`New Shopify order received\nOrder: ${order.name || ''}\nCustomer: ${order.customer?.first_name || ''} ${order.customer?.last_name || ''}\nPhone: ${phone || ''}\nTotal: ${order.currency || 'INR'} ${order.total_price || ''}\nCustomer confirmation WhatsApp: ${customerWa.ok ? 'sent' : (customerWa.reason || customerWa.error || 'not sent')}`).catch(() => {});
+  res.json({ ok: true, lead, customerWhatsApp: customerWa });
+});
+
+app.post('/api/order-confirmed-by-customer', async (req, res) => {
+  const body = req.body || {};
+  const orderName = String(body.orderName || body.order || body.orderId || '').trim();
+  const phone = cleanPhone(body.phone || '');
+  const lead = appendJson(leadsPath, { id: crypto.randomUUID(), type: 'customer_order_confirmed', createdAt: nowIso(), orderName, phone, message: body.message || 'Customer confirmed order', raw: body });
+  const wa = await sendOwnerWhatsApp(`Customer confirmed order\nOrder: ${orderName || '-'}\nPhone: ${phone || '-'}\nMessage: ${body.message || ''}`).catch(err => ({ ok:false, error:err.message }));
+  res.json({ ok:true, lead, ownerWhatsApp: wa });
 });
 
 app.listen(PORT, () => console.log(`Tiny Shiny Chatbot running on http://localhost:${PORT}`));

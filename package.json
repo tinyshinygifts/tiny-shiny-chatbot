@@ -1,7 +1,7 @@
 {
   "name": "tiny-shiny-chatbot",
-  "version": "16.0.0",
-  "description": "Tiny Shiny Gifts chatbot with Shopify tracking links, image bulk customers, actual customer order status and compact mobile view",
+  "version": "17.0.0",
+  "description": "Tiny Shiny Gifts chatbot with persistent API update guidance, new product WhatsApp promotions and order confirmation automation",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",

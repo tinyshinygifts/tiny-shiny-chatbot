@@ -187,3 +187,14 @@ V16 updates:
 - Image Messages section can load Shopify customers and bulk send selected image.
 - Shopify Customers order status uses latest actual Shopify order status instead of customer state.
 - Mobile chatbot popup made more compact.
+
+
+V17 UPDATE
+----------
+- API Settings ko future updates me reset hone se bachane ke liye server data folder auto-create karta hai aur GOOGLE_SHEET_URL/config keys fix ki gayi hain.
+- Important update rule: GitHub me new ZIP se `data/settings.json`, `data/crm.json`, `data/leads.json`, `data/visitor-events.json`, `data/media-images.json` overwrite mat karein. Sirf `server.js`, `package.json`, `package-lock.json`, `README_HINDI.txt`, `public/` replace karein. Agar data folder replace karna zaroori ho to pehle backup lein.
+- Admin me New Products tab add hai. Shopify se latest products fetch karein, selected customers ko new product launch / offer / upsell / cross-sell WhatsApp message bhej sakte hain.
+- New Products tab me Select All Customers aur CRM-only save mode hai.
+- Order confirmation automation endpoint added: `/webhooks/shopify/orders/create`. Shopify webhook is URL par point karein. Order aate hi owner/team WhatsApp notification jayega aur customer WhatsApp order confirmation message send karne ka option hai.
+- API Settings -> Customer WhatsApp Follow-up me Order Confirmation Automation fields add hain.
+- Order confirmation customer WhatsApp send tabhi hoga jab WhatsApp Cloud API connected ho aur `ORDER_CONFIRMATION_WHATSAPP_ENABLED=true` ho.

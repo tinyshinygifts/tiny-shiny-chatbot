@@ -3,6 +3,8 @@ let mediaImages = [];
 let selectedMediaId = '';
 let crmCustomers = [];
 let shopifyCustomers = [];
+let shopifyProducts = [];
+let selectedPromoProductId = '';
 let googleSheetUrl = '';
 const colorOptions = ['#d63384','#9b35ff','#0ea5e9','#16a34a','#f97316','#111827'];
 const colorNames = {'#d63384':'Tiny Shiny Pink','#9b35ff':'Premium Purple','#0ea5e9':'Sky Blue','#16a34a':'Fresh Green','#f97316':'Festive Orange','#111827':'Luxury Black'};
@@ -84,8 +86,44 @@ async function loadShopifyCustomers(){ const d=await fetch('/api/shopify/custome
 function selectedCustomers(){ return [...document.querySelectorAll('.cust-check:checked')].map(i=>shopifyCustomers.find(c=>String(c.id)===String(i.dataset.customerId))).filter(Boolean); }
 function openCustomerTool(id){ const c=shopifyCustomers.find(x=>String(x.id)===String(id)); if(!c)return; showTab('crmPanel'); setTimeout(()=>{ if($('crmSearch')){ crmSearch.value=c.phone||c.email||c.name||''; renderCrm(); } },100); alert(`Customer selected: ${c.name}\nPhone: ${c.phone||'-'}\nEmail: ${c.email||'-'}\nUse CRM Dashboard to save follow-up / notes.`); }
 async function bulkCustomerMessage(saveOnly=false){ const selected=selectedCustomers(); if(!selected.length) return alert('Please select customers first.'); const message=$('bulkCustomerMessage')?.value.trim()||''; if(!message) return alert('Please write message text.'); const res=await fetch('/api/shopify/customers/bulk-message',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({customers:selected,message,saveOnly,sendVia:$('bulkSendVia')?.value||'whatsapp'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if($('shopifyCustomersResult')) shopifyCustomersResult.textContent=JSON.stringify(res,null,2); }
-document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } });
+
+function productValue(p){ return [p.title,p.handle,p.productType,p.vendor,p.status,p.price].join(' ').toLowerCase(); }
+function renderNewProducts(){
+  const q=($('newProductSearch')?.value||'').toLowerCase().trim();
+  const filtered=shopifyProducts.filter(p=>!q||productValue(p).includes(q));
+  if($('newProductsList')) newProductsList.innerHTML=filtered.map(p=>`<div class="product-card ${String(selectedPromoProductId)===String(p.id)?'selected':''}"><label><input type="radio" name="promoProduct" data-promo-product="${esc(p.id)}" ${String(selectedPromoProductId)===String(p.id)?'checked':''}/> <b>${esc(p.title)}</b></label>${p.image?`<img src="${esc(p.image)}" alt="${esc(p.title)}"/>`:''}<div>${esc(p.price||'')} ${p.compareAtPrice?`<small>MRP ${esc(p.compareAtPrice)}</small>`:''}</div><a href="${esc(p.url||'#')}" target="_blank">Open product</a><small>${esc(p.createdAt||'')} • ${esc(p.productType||'')}</small></div>`).join('') || '<p>No products loaded. Click Refresh Products.</p>';
+  renderNewProductCustomers();
+}
+function renderNewProductCustomers(){
+  const q=($('newProductCustomerSearch')?.value||'').toLowerCase().trim();
+  const filtered=shopifyCustomers.filter(c=>!q||customerValue(c).includes(q));
+  if(!$('newProductCustomerList')) return;
+  newProductCustomerList.innerHTML=filtered.map(c=>`<label class="mini-customer-row"><input class="promo-cust-check" type="checkbox" data-customer-id="${esc(c.id)}"/> <span><b>${esc(c.name||'Customer')}</b><small>${esc(c.phone||'No phone')}${c.email?' • '+esc(c.email):''}</small></span></label>`).join('') || '<p>No customers loaded. Refresh products/customers first.</p>';
+}
+async function loadNewProducts(){
+  const [prod] = await Promise.all([
+    fetch('/api/shopify/products',{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,products:[]})),
+    shopifyCustomers.length ? Promise.resolve() : loadShopifyCustomers().catch(()=>{})
+  ]);
+  shopifyProducts = prod.products || [];
+  if(!selectedPromoProductId && shopifyProducts[0]) selectedPromoProductId = shopifyProducts[0].id;
+  if($('newProductsResult')) newProductsResult.textContent = prod.ok ? `Loaded ${shopifyProducts.length} products` : JSON.stringify(prod,null,2);
+  renderNewProducts();
+}
+function selectedPromoCustomers(){ return [...document.querySelectorAll('.promo-cust-check:checked')].map(i=>shopifyCustomers.find(c=>String(c.id)===String(i.dataset.customerId))).filter(Boolean); }
+async function sendNewProductPromo(){
+  const product = shopifyProducts.find(p=>String(p.id)===String(selectedPromoProductId));
+  if(!product) return alert('Please select a product first.');
+  const customers = selectedPromoCustomers();
+  if(!customers.length) return alert('Please select customers first.');
+  const message = $('newProductMessage')?.value.trim() || '';
+  const saveOnly = ($('newProductSendMode')?.value || 'whatsapp') === 'crm';
+  const res = await fetch('/api/shopify/products/bulk-promo',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({product,customers,message,saveOnly})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('newProductsResult')) newProductsResult.textContent = JSON.stringify(res,null,2);
+}
+
+document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
+document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } });
 document.addEventListener('click',async e=>{
   if(e.target.closest('#logoutBtn')){ e.preventDefault(); return logout(); }
   if(e.target.classList.contains('tab-btn')){ e.preventDefault(); if(e.target.id==='openGoogleSheetTab' && googleSheetUrl){ window.open(googleSheetUrl,'_blank'); } return showTab(e.target.dataset.tab); }
@@ -101,6 +139,8 @@ document.addEventListener('click',async e=>{
   if(e.target.dataset.openCustomer) openCustomerTool(e.target.dataset.openCustomer);
   if(e.target.id==='sendBulkCustomerMessage') bulkCustomerMessage(false);
   if(e.target.id==='saveBulkCustomerFollowup') bulkCustomerMessage(true);
+  if(e.target.id==='refreshNewProducts') loadNewProducts();
+  if(e.target.id==='sendNewProductPromo') sendNewProductPromo();
   if(e.target.id==='uploadMedia') uploadMedia();
   if(e.target.id==='refreshMedia') loadMedia(); if(e.target.id==='refreshMediaCustomers') loadMediaCustomers();
   if(e.target.id==='sendSelectedMedia') sendSelectedMedia();

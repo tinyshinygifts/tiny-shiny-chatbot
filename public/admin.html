@@ -31,6 +31,7 @@
       <button class="tab-btn active" data-tab="basicPanel">Basic Settings</button>
       <button class="tab-btn" data-tab="crmPanel">CRM Dashboard</button>
       <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
+      <button class="tab-btn" data-tab="newProductsPanel">New Products</button>
       <button class="tab-btn" data-tab="leadPanel">Leads</button>
       <button class="tab-btn" data-tab="activityPanel">Visitor Activity</button>
       <button class="tab-btn" data-tab="messagePanel">Buy Messages</button>
@@ -89,6 +90,29 @@
       <pre id="shopifyCustomersResult"></pre>
       <div id="shopifyCustomersList" class="customer-table-wrap"></div>
     </section>
+
+    <section class="panel tab-panel" id="newProductsPanel">
+      <div class="section-head">
+        <div><h2>New Products</h2><p>Fetch latest Shopify products and send WhatsApp launch, upsell and cross-sell promotions.</p></div>
+        <div class="inline-actions"><button id="refreshNewProducts" class="ghost-btn">Refresh Products</button></div>
+      </div>
+      <div class="form-grid three">
+        <label>Search Product <input id="newProductSearch" placeholder="Product title, type, vendor"/></label>
+        <label>Promotion Message <textarea id="newProductMessage" placeholder="Write new product / offer / upsell message. Product link will be included if empty."></textarea></label>
+        <label>Send Mode
+          <select id="newProductSendMode"><option value="whatsapp">WhatsApp</option><option value="crm">Save CRM Follow-up Only</option></select>
+        </label>
+      </div>
+      <div class="inline-actions">
+        <label class="select-all-line"><input id="selectAllProductPromoCustomers" type="checkbox"/> Select All Customers</label>
+        <button id="sendNewProductPromo" class="primary-btn">Send Selected Product Promo</button>
+      </div>
+      <div class="form-grid two">
+        <div><h3>Products</h3><div id="newProductsList" class="product-grid"></div></div>
+        <div><h3>Customers</h3><input id="newProductCustomerSearch" placeholder="Search customer by name, phone, email"/><div id="newProductCustomerList" class="mini-customer-list"></div></div>
+      </div>
+      <pre id="newProductsResult"></pre>
+    
 
     <section class="panel tab-panel media-panel" id="imagePanel">
       <h2>Image Messages</h2>

@@ -138,6 +138,17 @@
         <label>Approved Template Name <input id="CUSTOMER_WHATSAPP_TEMPLATE_NAME" placeholder="product_followup"/></label>
         <label>Template Language <input id="CUSTOMER_WHATSAPP_TEMPLATE_LANG" placeholder="en"/></label>
       </div>
+      <hr class="soft-line"/>
+      <h3>Order Confirmation Automation</h3>
+      <p class="hint">When Shopify sends an order webhook, the chatbot can WhatsApp the customer for order confirmation and notify owner/team.</p>
+      <label>Enable Order Confirmation WhatsApp
+        <select id="ORDER_CONFIRMATION_WHATSAPP_ENABLED"><option value="false">false</option><option value="true">true</option></select>
+      </label>
+      <div class="form-grid two">
+        <label>Order Confirmation Template Name <input id="ORDER_CONFIRMATION_TEMPLATE_NAME" placeholder="order_confirmation"/></label>
+        <label>Order Confirmation Template Language <input id="ORDER_CONFIRMATION_TEMPLATE_LANG" placeholder="en"/></label>
+      </div>
+      <p class="hint">Shopify webhook URL: <code>https://chat.tinyshinygifts.com/webhooks/shopify/orders/create</code></p>
     </section>
 
 
