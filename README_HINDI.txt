@@ -198,3 +198,12 @@ V17 UPDATE
 - Order confirmation automation endpoint added: `/webhooks/shopify/orders/create`. Shopify webhook is URL par point karein. Order aate hi owner/team WhatsApp notification jayega aur customer WhatsApp order confirmation message send karne ka option hai.
 - API Settings -> Customer WhatsApp Follow-up me Order Confirmation Automation fields add hain.
 - Order confirmation customer WhatsApp send tabhi hoga jab WhatsApp Cloud API connected ho aur `ORDER_CONFIRMATION_WHATSAPP_ENABLED=true` ho.
+
+
+## v18 Fix - Admin tabs restore
+- Leads, Visitor Activity, Buy Messages aur Image Messages blank hone ka issue fix kiya.
+- New Products section ka missing closing tag fix kiya, jisse baaki tabs nested/hide ho rahe the.
+- API Settings safe rakhne ke liye data/settings.json is package me replace karne ki zaroorat nahi hai.
+
+Update karte time replace karo: server.js, package.json, package-lock.json, README_HINDI.txt, public/
+Replace mat karo: .env, node_modules, data/settings.json, data/crm.json, data/leads.json, data/visitor-events.json, data/media-images.json
