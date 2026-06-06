@@ -6,6 +6,7 @@ let shopifyCustomers = [];
 let shopifyProducts = [];
 let selectedPromoProductId = '';
 let whatsappTemplates = [];
+let whatsappTemplateMappings = {};
 let selectedTemplateId = '';
 let googleSheetUrl = '';
 const colorOptions = ['#d63384','#9b35ff','#0ea5e9','#16a34a','#f97316','#111827'];
@@ -36,7 +37,8 @@ async function load(){
   updateGoogleSheetTab();
   faqs=f.faqs||[]; renderFaqs();
   await Promise.all([loadCrm(), loadMedia(), loadTemplates(), loadLeads(), loadEvents(), loadMessages()]);
-  const active = localStorage.getItem('tsgAdminActiveTab') || 'basicPanel';
+  const hashTab = location.hash === '#templates' ? 'templateLibraryPanel' : '';
+  const active = hashTab || localStorage.getItem('tsgAdminActiveTab') || 'basicPanel';
   showTab($(active) ? active : 'basicPanel');
 }
 function updateGoogleSheetTab(){
@@ -47,6 +49,16 @@ function updateGoogleSheetTab(){
 }
 
 function templateValue(t){ return [t.name,t.category,t.language,t.useCase,t.body,(t.variables||[]).join(' ')].join(' ').toLowerCase(); }
+const templateTargetLabels = {customer_followup:'Customer Follow-up', order_confirmation:'Order Confirmation', test_whatsapp:'Test WhatsApp / Owner'};
+function templateUsedTargets(t){
+  const serverTargets = Array.isArray(t.usedTargets) ? t.usedTargets : [];
+  if(serverTargets.length) return serverTargets;
+  return Object.entries(whatsappTemplateMappings||{}).filter(([,m])=>m && m.name && m.name===t.name).map(([k])=>k);
+}
+function templateUsedLabel(t){
+  const targets = templateUsedTargets(t);
+  return targets.length ? targets.map(x=>templateTargetLabels[x]||x).join(', ') : '';
+}
 function parseTemplateButtons(text){
   return String(text||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{
     const parts=line.split('|').map(x=>x.trim());
@@ -90,21 +102,23 @@ function renderTemplates(){
   const q=($('templateSearch')?.value||'').toLowerCase().trim();
   const cat=$('templateCategoryFilter')?.value||'';
   const filtered=whatsappTemplates.filter(t=>(!q||templateValue(t).includes(q))&&(!cat||t.category===cat));
-  templateList.innerHTML=filtered.map(t=>`<div class="template-card ${String(selectedTemplateId)===String(t.id)?'selected':''}">
+  templateList.innerHTML=filtered.map(t=>{ const usedLabel=templateUsedLabel(t); const isUsed=Boolean(usedLabel); return `<div class="template-card ${String(selectedTemplateId)===String(t.id)?'selected':''} ${isUsed?'template-used':''}">
     <div class="template-card-head"><b>${esc(t.name)}</b><span>${esc(t.category||'')} • ${esc(t.language||'en')}</span></div>
+    ${isUsed?`<div class="used-badge">USED: ${esc(usedLabel)}</div>`:`<div class="available-badge">Available for use</div>`}
     <p>${esc(t.useCase||'')}</p>
     <small>Header: ${esc(t.headerType||'None')} • Variables: ${esc((t.variables||[]).length)}</small>
     <pre>${esc((t.body||'').slice(0,260))}${(t.body||'').length>260?'...':''}</pre>
     <div class="template-actions">
       <button class="ghost-btn" data-edit-template="${esc(t.id)}">Modify</button>
-      <button class="ghost-btn" data-map-template="${esc(t.id)}">Use</button>
+      <button class="ghost-btn ${isUsed?'used-btn':''}" data-map-template="${esc(t.id)}">${isUsed?'Used / Change Use':'Use'}</button>
       <button class="ghost-btn danger-outline" data-delete-template="${esc(t.id)}">Remove</button>
     </div>
-  </div>`).join('') || '<p>No templates found. Click Add Template or Restore Default 12.</p>';
+  </div>`}).join('') || '<p>No templates found. Click Add Template or Restore Default 12.</p>';
 }
 async function loadTemplates(){
-  const d=await fetch('/api/whatsapp-templates',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,templates:[]}));
+  const d=await fetch('/api/whatsapp-templates',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,templates:[],mappings:{}}));
   whatsappTemplates=d.templates||[];
+  whatsappTemplateMappings=d.mappings||{};
   if(!selectedTemplateId && whatsappTemplates[0]) selectedTemplateId=whatsappTemplates[0].id;
   renderTemplates();
 }
@@ -125,19 +139,19 @@ async function saveTemplate(){
   if(!body.body) return alert('Body Text required.');
   const res=await fetch('/api/whatsapp-templates',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
-  if(res.ok){ whatsappTemplates=res.templates||[]; selectedTemplateId=(res.template&&res.template.id)||body.id||body.name; renderTemplates(); alert('Template saved.'); }
+  if(res.ok){ whatsappTemplates=res.templates||[]; whatsappTemplateMappings=res.mappings||whatsappTemplateMappings||{}; selectedTemplateId=(res.template&&res.template.id)||body.id||body.name; renderTemplates(); alert('Template saved.'); }
 }
 async function deleteTemplate(id){
   if(!confirm('Remove this template from tool library? Meta WhatsApp Manager template delete nahi hoga.')) return;
   const res=await fetch('/api/whatsapp-templates/'+encodeURIComponent(id),{method:'DELETE',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
-  whatsappTemplates=res.templates||whatsappTemplates.filter(t=>String(t.id)!==String(id)); if(selectedTemplateId===id) selectedTemplateId=''; renderTemplates();
+  whatsappTemplates=res.templates||whatsappTemplates.filter(t=>String(t.id)!==String(id)); whatsappTemplateMappings=res.mappings||whatsappTemplateMappings||{}; if(selectedTemplateId===id) selectedTemplateId=''; renderTemplates();
 }
 async function restoreDefaultTemplates(){
   if(!confirm('Default 12 Tiny Shiny templates restore karne hain? Existing custom templates replace ho sakte hain.')) return;
   const res=await fetch('/api/whatsapp-templates/reset-defaults',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
-  if(res.ok){ whatsappTemplates=res.templates||[]; selectedTemplateId=whatsappTemplates[0]?.id||''; renderTemplates(); }
+  if(res.ok){ whatsappTemplates=res.templates||[]; whatsappTemplateMappings=res.mappings||whatsappTemplateMappings||{}; selectedTemplateId=whatsappTemplates[0]?.id||''; renderTemplates(); }
 }
 async function mapTemplate(id){
   const target=$('templateMapTarget')?.value||'customer_followup';

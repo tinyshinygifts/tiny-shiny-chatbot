@@ -393,6 +393,37 @@ function readWhatsAppTemplates() {
   return saved.map(normalizeTemplate);
 }
 function writeWhatsAppTemplates(list) { writeJson(whatsappTemplatesPath, list.map(normalizeTemplate)); return readWhatsAppTemplates(); }
+function getWhatsAppTemplateMappings(env = readEnvFile()) {
+  return {
+    customer_followup: {
+      key: 'CUSTOMER_WHATSAPP_TEMPLATE_NAME',
+      langKey: 'CUSTOMER_WHATSAPP_TEMPLATE_LANG',
+      name: env.CUSTOMER_WHATSAPP_TEMPLATE_NAME || '',
+      language: env.CUSTOMER_WHATSAPP_TEMPLATE_LANG || 'en',
+      enabled: String(env.CUSTOMER_WHATSAPP_MESSAGES_ENABLED || 'false').toLowerCase() === 'true'
+    },
+    order_confirmation: {
+      key: 'ORDER_CONFIRMATION_TEMPLATE_NAME',
+      langKey: 'ORDER_CONFIRMATION_TEMPLATE_LANG',
+      name: env.ORDER_CONFIRMATION_TEMPLATE_NAME || '',
+      language: env.ORDER_CONFIRMATION_TEMPLATE_LANG || 'en',
+      enabled: String(env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || 'false').toLowerCase() === 'true'
+    },
+    test_whatsapp: {
+      key: 'WHATSAPP_TEST_TEMPLATE_NAME',
+      langKey: 'WHATSAPP_TEST_TEMPLATE_LANG',
+      name: env.WHATSAPP_TEST_TEMPLATE_NAME || '',
+      language: env.WHATSAPP_TEST_TEMPLATE_LANG || 'en_US',
+      enabled: true
+    }
+  };
+}
+function mappedTargetsForTemplate(tpl, env = readEnvFile()) {
+  const maps = getWhatsAppTemplateMappings(env);
+  return Object.entries(maps)
+    .filter(([,m]) => m.name && tpl && tpl.name === m.name)
+    .map(([key]) => key);
+}
 
 function whatsappEndpoint() {
   const phoneNumberId = String(process.env.WHATSAPP_PHONE_NUMBER_ID || '').replace(/\D/g, '');
@@ -765,7 +796,9 @@ app.get('/api/config/download', (req, res) => {
 });
 
 app.get('/api/whatsapp-templates', (req, res) => {
-  res.json({ ok: true, templates: readWhatsAppTemplates() });
+  const env = readEnvFile();
+  const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, env) }));
+  res.json({ ok: true, templates, mappings: getWhatsAppTemplateMappings(env) });
 });
 app.post('/api/whatsapp-templates', (req, res) => {
   const body = req.body || {};
@@ -776,15 +809,27 @@ app.post('/api/whatsapp-templates', (req, res) => {
   const idx = list.findIndex(x => String(x.id) === String(tpl.id) || x.name === tpl.name);
   if (idx >= 0) list[idx] = { ...list[idx], ...tpl, id: list[idx].id || tpl.id, updatedAt: nowIso() };
   else list.unshift(tpl);
-  res.json({ ok:true, templates: writeWhatsAppTemplates(list), template: tpl, message:'Template saved in Template Library.' });
+  {
+    const env = readEnvFile();
+    const templates = writeWhatsAppTemplates(list).map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, env) }));
+    res.json({ ok:true, templates, mappings: getWhatsAppTemplateMappings(env), template: tpl, message:'Template saved in Template Library.' });
+  }
 });
 app.delete('/api/whatsapp-templates/:id', (req, res) => {
   const id = String(req.params.id || '');
   const next = readWhatsAppTemplates().filter(t => String(t.id) !== id && t.name !== id);
-  res.json({ ok:true, templates: writeWhatsAppTemplates(next), message:'Template removed.' });
+  {
+    const env = readEnvFile();
+    const templates = writeWhatsAppTemplates(next).map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, env) }));
+    res.json({ ok:true, templates, mappings: getWhatsAppTemplateMappings(env), message:'Template removed.' });
+  }
 });
 app.post('/api/whatsapp-templates/reset-defaults', (req, res) => {
-  res.json({ ok:true, templates: writeWhatsAppTemplates(defaultWhatsAppTemplates), message:'Default Tiny Shiny templates restored.' });
+  {
+    const env = readEnvFile();
+    const templates = writeWhatsAppTemplates(defaultWhatsAppTemplates).map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, env) }));
+    res.json({ ok:true, templates, mappings: getWhatsAppTemplateMappings(env), message:'Default Tiny Shiny templates restored.' });
+  }
 });
 app.post('/api/whatsapp-templates/use', (req, res) => {
   const { id, target } = req.body || {};
@@ -807,7 +852,11 @@ app.post('/api/whatsapp-templates/use', (req, res) => {
     return res.status(400).json({ ok:false, error:'Target required: customer_followup, order_confirmation, or test_whatsapp' });
   }
   writeEnvFile({ ...env, ...update });
-  res.json({ ok:true, template:tpl, target, message:`${tpl.name} mapped to ${target}. API Settings updated.` });
+  {
+    const savedEnv = readEnvFile();
+    const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, savedEnv) }));
+    res.json({ ok:true, template:tpl, target, templates, mappings: getWhatsAppTemplateMappings(savedEnv), message:`${tpl.name} mapped to ${target}. API Settings updated.` });
+  }
 });
 
 app.post('/api/test-whatsapp', async (req, res) => {

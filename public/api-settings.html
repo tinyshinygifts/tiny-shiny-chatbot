@@ -116,6 +116,9 @@
       <p>Use this to send new lead/order notifications to your WhatsApp.</p>
       <label>WhatsApp Cloud Token <input id="WHATSAPP_CLOUD_TOKEN" type="password" placeholder="EAAG..."/></label>
       <label>Phone Number ID <input id="WHATSAPP_PHONE_NUMBER_ID" placeholder="1234567890"/></label>
+      <label>Use Template From Library for Test WhatsApp
+        <select id="API_TEST_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
+      </label>
       <div class="form-grid two">
         <label>Test Template Name <input id="WHATSAPP_TEST_TEMPLATE_NAME" placeholder="approved_template_name"/></label>
         <label>Test Template Language <input id="WHATSAPP_TEST_TEMPLATE_LANG" placeholder="en_US"/></label>
@@ -155,10 +158,39 @@
     </section>
 
     <section class="panel">
+      <div class="section-head">
+        <div>
+          <h2>WhatsApp Templates in API Settings</h2>
+          <p>Template Library me jo bhi template add/modify/remove hoga, wo yaha automatically dropdown me update hoga.</p>
+        </div>
+        <div class="inline-actions">
+          <button id="refreshApiTemplates" type="button" class="ghost-btn">Refresh Templates</button>
+          <a class="pill-link" href="/admin.html#templates">Open Template Library</a>
+        </div>
+      </div>
+      <div class="form-grid three">
+        <label>Customer Follow-up Template
+          <select id="API_CUSTOMER_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
+        </label>
+        <label>Order Confirmation Template
+          <select id="API_ORDER_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
+        </label>
+        <label>Test WhatsApp / Owner Template
+          <select id="API_TEST_TEMPLATE_SELECT_2"><option value="">Manual / Select template</option></select>
+        </label>
+      </div>
+      <div id="apiTemplateList" class="template-status-list"></div>
+      <p class="hint">Jis template ka naam fields me saved hai, uspar USED dikhega. Baaki templates par Available dikhega.</p>
+    </section>
+
+    <section class="panel">
       <h2>Customer WhatsApp Follow-up</h2>
       <p>This sends product/cart follow-up to customers only after they share their phone number and consent.</p>
       <label>Enable Customer WhatsApp Messages
         <select id="CUSTOMER_WHATSAPP_MESSAGES_ENABLED"><option value="false">false</option><option value="true">true</option></select>
+      </label>
+      <label>Use Template From Library
+        <select id="API_CUSTOMER_TEMPLATE_SELECT_2"><option value="">Manual / Select template</option></select>
       </label>
       <div class="form-grid two">
         <label>Approved Template Name <input id="CUSTOMER_WHATSAPP_TEMPLATE_NAME" placeholder="product_followup"/></label>
@@ -169,6 +201,9 @@
       <p class="hint">When Shopify sends an order webhook, the chatbot can WhatsApp the customer for order confirmation and notify owner/team.</p>
       <label>Enable Order Confirmation WhatsApp
         <select id="ORDER_CONFIRMATION_WHATSAPP_ENABLED"><option value="false">false</option><option value="true">true</option></select>
+      </label>
+      <label>Use Template From Library
+        <select id="API_ORDER_TEMPLATE_SELECT_2"><option value="">Manual / Select template</option></select>
       </label>
       <div class="form-grid two">
         <label>Order Confirmation Template Name <input id="ORDER_CONFIRMATION_TEMPLATE_NAME" placeholder="order_confirmation"/></label>
