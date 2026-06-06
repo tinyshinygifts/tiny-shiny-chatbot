@@ -118,6 +118,73 @@
 
 
 
+
+    <section class="panel tab-panel media-panel" id="imagePanel">
+      <div class="section-head">
+        <div>
+          <h2>Image Messages</h2>
+          <p>WhatsApp message bhejne ke liye image optional hai. Image select hogi to attach hogi, nahi to sirf text message jayega.</p>
+        </div>
+        <div class="inline-actions"><button id="refreshMedia" class="ghost-btn">Refresh Images</button><button id="refreshMediaCustomers" class="ghost-btn" type="button">Load Shopify Customers</button></div>
+      </div>
+
+      <div class="form-grid two">
+        <label>Image Type
+          <select id="mediaCategory">
+            <option value="thanks_letter">Thanks Letter</option>
+            <option value="offer_discount">Offer / Discount Image</option>
+            <option value="wishes">Wishes</option>
+            <option value="product_offer">Product Offer</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label>Image Title <input id="mediaTitle" placeholder="Example: Rakhi Offer Banner"/></label>
+      </div>
+      <label>WhatsApp Message / Caption <textarea id="mediaCaption" placeholder="Write message. If no image is selected, only this text will be sent."></textarea></label>
+      <label>Upload Images <input id="mediaFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple/></label>
+      <div class="media-actions">
+        <button id="uploadMedia" class="primary-btn">Upload Selected Images</button>
+        <button id="clearSelectedMedia" class="ghost-btn" type="button">Clear Attached Images</button>
+      </div>
+      <p class="hint">Multiple images attach kar sakte ho. Har selected image ke saamne Remove hoga. WhatsApp me multiple images one-by-one jayengi.</p>
+
+      <div class="send-box">
+        <h3>Send WhatsApp Message</h3>
+        <div class="form-grid two">
+          <label>Send To
+            <select id="mediaSendTo">
+              <option value="owner">Owner / Team WhatsApp</option>
+              <option value="custom">Customer Number</option>
+              <option value="shopify_customers">Selected Shopify Customers</option>
+              <option value="all_shopify_customers">All Shopify Customers</option>
+            </select>
+          </label>
+          <label>Customer WhatsApp Number <input id="mediaPhone" placeholder="91XXXXXXXXXX"/></label>
+        </div>
+        <div class="media-customer-box">
+          <div class="media-actions">
+            <label class="checkline"><input id="selectAllMediaCustomers" type="checkbox"/> Select All Customers</label>
+            <button id="sendAllMediaCustomers" class="ghost-btn" type="button">Send Message to All Numbers</button>
+          </div>
+          <input id="mediaCustomerSearch" placeholder="Search Shopify customer by name, phone, email"/>
+          <div id="mediaCustomerList" class="mini-customer-list"></div>
+        </div>
+        <div id="selectedMediaList" class="selected-media-list"></div>
+        <button id="sendSelectedMedia" class="primary-btn">Send WhatsApp Message</button>
+        <pre id="mediaSendResult"></pre>
+      </div>
+      <h3>Saved Image Library</h3>
+      <div id="mediaList" class="media-grid"></div>
+    </section>
+
+    <section class="panel tab-panel" id="faqPanel">
+      <h2>FAQ Rules</h2>
+      <p>Format: separate keywords with commas.</p>
+      <div id="faqList"></div>
+      <button id="addFaq" class="ghost-btn">+ Add FAQ</button>
+      <button id="saveFaqs" class="primary-btn">Save FAQs</button>
+    </section>
+
     <section class="panel tab-panel" id="leadPanel"><h2>Leads / Order Requests</h2><button id="refreshLeads" class="ghost-btn">Refresh Leads</button><div id="leadList"></div></section>
     <section class="panel tab-panel" id="activityPanel"><h2>Visitor / Product Activity</h2><button id="refreshEvents" class="ghost-btn">Refresh Activity</button><div id="eventList"></div></section>
     <section class="panel tab-panel" id="messagePanel"><h2>Generated Buy Messages</h2><button id="refreshMsgs" class="ghost-btn">Refresh Messages</button><div id="messageList"></div></section>

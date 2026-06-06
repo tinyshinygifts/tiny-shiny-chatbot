@@ -1,13 +1,11 @@
 let faqs = [];
 let mediaImages = [];
 let selectedMediaId = '';
+let selectedMediaIds = [];
 let crmCustomers = [];
 let shopifyCustomers = [];
 let shopifyProducts = [];
 let selectedPromoProductId = '';
-let whatsappTemplates = [];
-let whatsappTemplateMappings = {};
-let selectedTemplateId = '';
 let googleSheetUrl = '';
 const colorOptions = ['#d63384','#9b35ff','#0ea5e9','#16a34a','#f97316','#111827'];
 const colorNames = {'#d63384':'Tiny Shiny Pink','#9b35ff':'Premium Purple','#0ea5e9':'Sky Blue','#16a34a':'Fresh Green','#f97316':'Festive Orange','#111827':'Luxury Black'};
@@ -36,9 +34,8 @@ async function load(){
   if(googleSheetUrl === '********') googleSheetUrl = '';
   updateGoogleSheetTab();
   faqs=f.faqs||[]; renderFaqs();
-  await Promise.all([loadCrm(), loadMedia(), loadTemplates(), loadLeads(), loadEvents(), loadMessages()]);
-  const hashTab = location.hash === '#templates' ? 'templateLibraryPanel' : '';
-  const active = hashTab || localStorage.getItem('tsgAdminActiveTab') || 'basicPanel';
+  await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages()]);
+  const active = localStorage.getItem('tsgAdminActiveTab') || 'basicPanel';
   showTab($(active) ? active : 'basicPanel');
 }
 function updateGoogleSheetTab(){
@@ -47,163 +44,91 @@ function updateGoogleSheetTab(){
   if(googleSheetUrl){ link.href=googleSheetUrl; link.style.display='inline-flex'; if(help) help.textContent='Click the button below to open your connected Google Sheet.'; }
   else { link.href='#'; link.style.display='none'; if(help) help.textContent='Google Sheet link not configured. Please add it in API Settings.'; }
 }
-
-function templateValue(t){ return [t.name,t.category,t.language,t.useCase,t.body,(t.variables||[]).join(' ')].join(' ').toLowerCase(); }
-const templateTargetLabels = {customer_followup:'Customer Follow-up', order_confirmation:'Order Confirmation', test_whatsapp:'Test WhatsApp / Owner'};
-function templateUsedTargets(t){
-  const serverTargets = Array.isArray(t.usedTargets) ? t.usedTargets : [];
-  if(serverTargets.length) return serverTargets;
-  return Object.entries(whatsappTemplateMappings||{}).filter(([,m])=>m && m.name && m.name===t.name).map(([k])=>k);
-}
-function templateUsedLabel(t){
-  const targets = templateUsedTargets(t);
-  return targets.length ? targets.map(x=>templateTargetLabels[x]||x).join(', ') : '';
-}
-function parseTemplateButtons(text){
-  return String(text||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{
-    const parts=line.split('|').map(x=>x.trim());
-    return { type: parts[0] || 'Quick Reply', text: parts[1] || '', url: parts[2] || '' };
-  }).filter(b=>b.text);
-}
-function buttonsToText(buttons){ return (buttons||[]).map(b=>[b.type||'Quick Reply', b.text||'', b.url||''].filter(Boolean).join(' | ')).join('\n'); }
-function clearTemplateForm(){
-  if($('templateId')) templateId.value='';
-  if($('templateName')) templateName.value='';
-  if($('templateLanguage')) templateLanguage.value='en';
-  if($('templateCategory')) templateCategory.value='Utility';
-  if($('templateHeaderType')) templateHeaderType.value='None';
-  if($('templateUseCase')) templateUseCase.value='';
-  if($('templateBody')) templateBody.value='';
-  if($('templateVariables')) templateVariables.value='';
-  if($('templateButtons')) templateButtons.value='';
-  if($('templateEnabled')) templateEnabled.checked=true;
-  if($('templateEditorTitle')) templateEditorTitle.textContent='Add / Modify Template';
-  selectedTemplateId='';
-  renderTemplates();
-}
-function editTemplate(id){
-  const t=whatsappTemplates.find(x=>String(x.id)===String(id) || x.name===id); if(!t) return;
-  selectedTemplateId=t.id;
-  if($('templateId')) templateId.value=t.id||'';
-  if($('templateName')) templateName.value=t.name||'';
-  if($('templateLanguage')) templateLanguage.value=t.language||'en';
-  if($('templateCategory')) templateCategory.value=t.category||'Utility';
-  if($('templateHeaderType')) templateHeaderType.value=t.headerType||'None';
-  if($('templateUseCase')) templateUseCase.value=t.useCase||'';
-  if($('templateBody')) templateBody.value=t.body||'';
-  if($('templateVariables')) templateVariables.value=(t.variables||[]).join('\n');
-  if($('templateButtons')) templateButtons.value=buttonsToText(t.buttons||[]);
-  if($('templateEnabled')) templateEnabled.checked=t.enabled!==false;
-  if($('templateEditorTitle')) templateEditorTitle.textContent='Modify Template: '+(t.name||'');
-  renderTemplates();
-}
-function renderTemplates(){
-  if(!$('templateList')) return;
-  const q=($('templateSearch')?.value||'').toLowerCase().trim();
-  const cat=$('templateCategoryFilter')?.value||'';
-  const filtered=whatsappTemplates.filter(t=>(!q||templateValue(t).includes(q))&&(!cat||t.category===cat));
-  templateList.innerHTML=filtered.map(t=>{ const usedLabel=templateUsedLabel(t); const isUsed=Boolean(usedLabel); return `<div class="template-card ${String(selectedTemplateId)===String(t.id)?'selected':''} ${isUsed?'template-used':''}">
-    <div class="template-card-head"><b>${esc(t.name)}</b><span>${esc(t.category||'')} • ${esc(t.language||'en')}</span></div>
-    ${isUsed?`<div class="used-badge">USED: ${esc(usedLabel)}</div>`:`<div class="available-badge">Available for use</div>`}
-    <p>${esc(t.useCase||'')}</p>
-    <small>Header: ${esc(t.headerType||'None')} • Variables: ${esc((t.variables||[]).length)}</small>
-    <pre>${esc((t.body||'').slice(0,260))}${(t.body||'').length>260?'...':''}</pre>
-    <div class="template-actions">
-      <button class="ghost-btn" data-edit-template="${esc(t.id)}">Modify</button>
-      <button class="ghost-btn ${isUsed?'used-btn':''}" data-map-template="${esc(t.id)}">${isUsed?'Used / Change Use':'Use'}</button>
-      <button class="ghost-btn danger-outline" data-delete-template="${esc(t.id)}">Remove</button>
-    </div>
-  </div>`}).join('') || '<p>No templates found. Click Add Template or Restore Default 12.</p>';
-}
-async function loadTemplates(){
-  const d=await fetch('/api/whatsapp-templates',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,templates:[],mappings:{}}));
-  whatsappTemplates=d.templates||[];
-  whatsappTemplateMappings=d.mappings||{};
-  if(!selectedTemplateId && whatsappTemplates[0]) selectedTemplateId=whatsappTemplates[0].id;
-  renderTemplates();
-}
-async function saveTemplate(){
-  const body={
-    id:$('templateId')?.value||undefined,
-    name:$('templateName')?.value.trim()||'',
-    language:$('templateLanguage')?.value.trim()||'en',
-    category:$('templateCategory')?.value||'Utility',
-    headerType:$('templateHeaderType')?.value||'None',
-    useCase:$('templateUseCase')?.value.trim()||'',
-    body:$('templateBody')?.value.trim()||'',
-    variables:($('templateVariables')?.value||'').split(/\r?\n|,/).map(x=>x.trim()).filter(Boolean),
-    buttons:parseTemplateButtons($('templateButtons')?.value||''),
-    enabled:$('templateEnabled') ? templateEnabled.checked : true
-  };
-  if(!body.name) return alert('Template Name required.');
-  if(!body.body) return alert('Body Text required.');
-  const res=await fetch('/api/whatsapp-templates',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
-  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
-  if(res.ok){ whatsappTemplates=res.templates||[]; whatsappTemplateMappings=res.mappings||whatsappTemplateMappings||{}; selectedTemplateId=(res.template&&res.template.id)||body.id||body.name; renderTemplates(); alert('Template saved.'); }
-}
-async function deleteTemplate(id){
-  if(!confirm('Remove this template from tool library? Meta WhatsApp Manager template delete nahi hoga.')) return;
-  const res=await fetch('/api/whatsapp-templates/'+encodeURIComponent(id),{method:'DELETE',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
-  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
-  whatsappTemplates=res.templates||whatsappTemplates.filter(t=>String(t.id)!==String(id)); whatsappTemplateMappings=res.mappings||whatsappTemplateMappings||{}; if(selectedTemplateId===id) selectedTemplateId=''; renderTemplates();
-}
-async function restoreDefaultTemplates(){
-  if(!confirm('Default 12 Tiny Shiny templates restore karne hain? Existing custom templates replace ho sakte hain.')) return;
-  const res=await fetch('/api/whatsapp-templates/reset-defaults',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
-  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
-  if(res.ok){ whatsappTemplates=res.templates||[]; whatsappTemplateMappings=res.mappings||whatsappTemplateMappings||{}; selectedTemplateId=whatsappTemplates[0]?.id||''; renderTemplates(); }
-}
-async function mapTemplate(id){
-  const target=$('templateMapTarget')?.value||'customer_followup';
-  const res=await fetch('/api/whatsapp-templates/use',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,target})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
-  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
-  if(res.ok) alert(res.message || 'Template mapped.');
-}
-
 function renderFaqs(){ if(!$('faqList')) return; faqList.innerHTML=''; faqs.forEach((faq,index)=>{ const row=document.createElement('div'); row.className='faq-row'; row.innerHTML=`<label>Keywords <input data-i="${index}" data-field="keywords" value="${esc((faq.keywords||[]).join(', '))}"/></label><label>Answer <textarea data-i="${index}" data-field="answer">${esc(faq.answer||'')}</textarea></label><button data-remove="${index}" class="ghost-btn danger-outline">Remove</button>`; faqList.appendChild(row); }); }
 async function loadLeads(){ const d=await fetch('/api/leads',{credentials:'include'}).then(r=>r.json()).catch(()=>({leads:[]})); if($('leadCount')) leadCount.textContent=(d.leads||[]).length; if($('leadList')) leadList.innerHTML=(d.leads||[]).slice(0,100).map(l=>`<div class="log-row"><b>${esc(l.type)}</b> <small>${esc(l.createdAt)}</small><br/>Phone: ${esc(l.phone)} | Order: ${esc(l.orderId||l.orderName)}<br/>Product: ${esc(l.productTitle||l.product||l?.product?.title)}<br/>Image: ${esc(l.productImage||l.image||l?.product?.image)}<br/>Page: ${esc(l.pageUrl||l?.product?.url)}<br/>Message: ${esc(l.message||l.note)}</div>`).join('') || 'No leads yet.'; }
 async function loadEvents(){ const d=await fetch('/api/visitor-events',{credentials:'include'}).then(r=>r.json()).catch(()=>({events:[]})); if($('eventCount')) eventCount.textContent=(d.events||[]).length; if($('eventList')) eventList.innerHTML=(d.events||[]).slice(0,120).map(e=>`<div class="log-row"><b>${esc(e.eventType)}</b> <small>${esc(e.createdAt)}</small><br/>Product: ${esc(e.productTitle)}<br/>Price: ${esc(e.productPrice)} | Discount: ${esc(e.discountText)}<br/>Image: ${esc(e.productImage)}<br/>Page: ${esc(e.pageUrl)}</div>`).join('') || 'No activity yet.'; }
 async function loadMessages(){ const d=await fetch('/api/lead-messages',{credentials:'include'}).then(r=>r.json()).catch(()=>({messages:[]})); if($('messageCount')) messageCount.textContent=(d.messages||[]).length; if($('messageList')) messageList.innerHTML=(d.messages||[]).slice(0,80).map(m=>`<div class="log-row"><b>${esc(m.type)}</b> <small>${esc(m.createdAt)}</small><br/><pre>${esc(m.message)}</pre></div>`).join('') || 'No messages yet.'; }
 async function fileToDataUrl(file){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=reject; r.readAsDataURL(file); }); }
-async function uploadMedia(){ const file=$('mediaFile')?.files?.[0]; if(!file) return alert('Please select an image first.'); if(file.size>6*1024*1024) return alert('Image size should be under 6 MB.'); const dataUrl=await fileToDataUrl(file); const body={filename:file.name,dataUrl,title:mediaTitle.value.trim(),category:mediaCategory.value,caption:mediaCaption.value.trim()}; const res=await fetch('/api/media-images',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if(!res.ok) return alert(res.error||'Image upload failed'); selectedMediaId=res.image.id; mediaFile.value=''; mediaTitle.value=''; mediaCaption.value=''; await loadMedia(); alert('Image uploaded successfully'); }
-async function loadMedia(){ const d=await fetch('/api/media-images',{credentials:'include'}).then(r=>r.json()).catch(()=>({images:[]})); mediaImages=d.images||[]; if(!selectedMediaId&&mediaImages[0]) selectedMediaId=mediaImages[0].id; if(!$('mediaList')) return; mediaList.innerHTML=mediaImages.map(img=>`<div class="media-card ${selectedMediaId===img.id?'selected':''}" data-media-card="${esc(img.id)}"><img src="${esc(img.url)}" alt="${esc(img.title)}"/><div class="media-info"><b>${esc(img.title)}</b><span>${esc(img.category)} • ${esc(img.createdAt)}</span><p>${esc(img.caption)}</p><small>${esc(img.absoluteUrl||img.url)}</small></div><div class="media-card-actions"><button class="ghost-btn" data-select-media="${esc(img.id)}">Select</button><button class="ghost-btn danger-outline" data-delete-media="${esc(img.id)}">Delete</button></div></div>`).join('') || '<p>No images uploaded yet.</p>'; }
-function renderMediaCustomers(){ const q=($('mediaCustomerSearch')?.value||'').toLowerCase().trim(); const filtered=shopifyCustomers.filter(c=>!q||customerValue(c).includes(q)); if(!$('mediaCustomerList')) return; mediaCustomerList.innerHTML=filtered.map(c=>`<label class="mini-customer-row"><input class="media-cust-check" type="checkbox" data-customer-id="${esc(c.id)}"/> <span><b>${esc(c.name||'Customer')}</b><small>${esc(c.phone||'No phone')}${c.email?' • '+esc(c.email):''}</small></span></label>`).join('') || '<p>No Shopify customers loaded. Click Load Shopify Customers.</p>'; }
+async function uploadMedia(){
+  const files=[...($('mediaFile')?.files||[])];
+  if(!files.length) return alert('Please select one or more images first.');
+  const uploaded=[];
+  for(const file of files){
+    if(file.size>6*1024*1024){ uploaded.push({file:file.name, ok:false, error:'Image size should be under 6 MB'}); continue; }
+    const dataUrl=await fileToDataUrl(file);
+    const titleBase=($('mediaTitle')?.value||'').trim();
+    const body={filename:file.name,dataUrl,title:titleBase || file.name,category:mediaCategory.value,caption:mediaCaption.value.trim()};
+    const res=await fetch('/api/media-images',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+    if(res.ok && res.image){ uploaded.push({file:file.name, ok:true, id:res.image.id}); if(!selectedMediaIds.includes(res.image.id)) selectedMediaIds.push(res.image.id); }
+    else uploaded.push({file:file.name, ok:false, error:res.error||'Image upload failed'});
+  }
+  selectedMediaId=selectedMediaIds[0]||'';
+  if($('mediaFile')) mediaFile.value='';
+  if($('mediaTitle')) mediaTitle.value='';
+  await loadMedia();
+  alert(`Uploaded ${uploaded.filter(x=>x.ok).length} image(s).`);
+}
+async function loadMedia(){
+  const d=await fetch('/api/media-images',{credentials:'include'}).then(r=>r.json()).catch(()=>({images:[]}));
+  mediaImages=d.images||[];
+  selectedMediaIds = selectedMediaIds.filter(id=>mediaImages.some(img=>String(img.id)===String(id)));
+  selectedMediaId = selectedMediaIds[0] || '';
+  renderSelectedMedia();
+  if(!$('mediaList')) return;
+  mediaList.innerHTML=mediaImages.map(img=>{
+    const selected=selectedMediaIds.includes(img.id);
+    return `<div class="media-card ${selected?'selected':''}" data-media-card="${esc(img.id)}"><img src="${esc(img.url)}" alt="${esc(img.title)}"/><div class="media-info"><b>${esc(img.title)}</b><span>${esc(img.category)} • ${esc(img.createdAt)}</span><p>${esc(img.caption)}</p><small>${esc(img.absoluteUrl||img.url)}</small></div><div class="media-card-actions"><button class="ghost-btn" data-select-media="${esc(img.id)}">${selected?'Attached':'Attach'}</button><button class="ghost-btn danger-outline" data-remove-selected-media="${esc(img.id)}">Remove Attach</button><button class="ghost-btn danger-outline" data-delete-media="${esc(img.id)}">Delete</button></div></div>`;
+  }).join('') || '<p>No images uploaded yet.</p>';
+}
+function renderSelectedMedia(){
+  const box=$('selectedMediaList'); if(!box) return;
+  const selected=selectedMediaIds.map(id=>mediaImages.find(x=>String(x.id)===String(id))).filter(Boolean);
+  box.innerHTML = selected.length ? `<h4>Attached Images (${selected.length})</h4><div class="attached-images">${selected.map(img=>`<div class="attached-image"><img src="${esc(img.url)}" alt="${esc(img.title)}"/><span>${esc(img.title||img.filename||'Image')}</span><button class="ghost-btn danger-outline" data-remove-selected-media="${esc(img.id)}" type="button">Remove</button></div>`).join('')}</div>` : '<p class="hint">No image attached. Message will go as text only.</p>';
+}
+function renderMediaCustomers(){
+  const q=($('mediaCustomerSearch')?.value||'').toLowerCase().trim();
+  const filtered=shopifyCustomers.filter(c=>!q||customerValue(c).includes(q));
+  if(!$('mediaCustomerList')) return;
+  mediaCustomerList.innerHTML=filtered.map(c=>`<label class="mini-customer-row"><input class="media-cust-check" type="checkbox" data-customer-id="${esc(c.id)}"/> <span><b>${esc(c.name||'Customer')}</b><small>${esc(c.phone||'No phone')}${c.email?' • '+esc(c.email):''}</small></span><button class="ghost-btn" type="button" data-fill-media-phone="${esc(c.id)}">Use Phone</button></label>`).join('') || '<p>No Shopify customers loaded. Click Load Shopify Customers.</p>';
+}
 async function loadMediaCustomers(){ if(!shopifyCustomers.length) await loadShopifyCustomers(); renderMediaCustomers(); }
 function selectedMediaCustomers(){ return [...document.querySelectorAll('.media-cust-check:checked')].map(i=>shopifyCustomers.find(c=>String(c.id)===String(i.dataset.customerId))).filter(Boolean); }
+function mediaMessageText(){ return ($('mediaCaption')?.value || '').trim(); }
+function mediaPayloadBase(){ return { imageIds:selectedMediaIds.slice(0,20), caption:mediaMessageText(), message:mediaMessageText() }; }
+async function sendMediaToPhone(phone, customer){
+  const payload={...mediaPayloadBase(),to:'custom',phone,customer};
+  return fetch('/api/send-image-message',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+}
 async function sendSelectedMedia(){
-  if(!selectedMediaId) return alert('Please select an image first.');
-  const image=mediaImages.find(x=>x.id===selectedMediaId);
-  const to=mediaSendTo.value;
-  const phone=mediaPhone.value.trim();
+  const to=$('mediaSendTo')?.value || 'owner';
+  const phone=($('mediaPhone')?.value || '').trim();
+  const message=mediaMessageText();
+  if(!selectedMediaIds.length && !message) return alert('Please write WhatsApp message or attach image first.');
   if(to==='custom'&&!phone) return alert('Please enter customer WhatsApp number.');
+  let customers=[];
   if(to==='shopify_customers'){
-    const customers=selectedMediaCustomers();
+    customers=selectedMediaCustomers();
     if(!customers.length) return alert('Please select Shopify customers first.');
+  }
+  if(to==='all_shopify_customers'){
+    if(!shopifyCustomers.length) await loadShopifyCustomers();
+    customers=shopifyCustomers.filter(c=>c.phone);
+    if(!customers.length) return alert('No Shopify customers with phone numbers found.');
+  }
+  if(customers.length){
     const results=[];
-    for(const c of customers){
+    for(const c of customers.slice(0,500)){
       if(!c.phone){ results.push({customer:c.name, ok:false, error:'No phone'}); continue; }
-      const res=await fetch('/api/send-image-message',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageId:selectedMediaId,to:'custom',phone:c.phone,caption:image?.caption||'', customer:c})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+      const res=await sendMediaToPhone(c.phone,c);
       results.push({customer:c.name, phone:c.phone, ...res});
     }
-    mediaSendResult.textContent=JSON.stringify({ok:true,count:results.length,results},null,2);
+    if($('mediaSendResult')) mediaSendResult.textContent=JSON.stringify({ok:true,count:results.length,attachedImages:selectedMediaIds.length,results},null,2);
     return;
   }
-  const res=await fetch('/api/send-image-message',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({imageId:selectedMediaId,to,phone,caption:image?.caption||''})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
-  mediaSendResult.textContent=JSON.stringify(res,null,2);
+  const payload={...mediaPayloadBase(),to,phone};
+  const res=await fetch('/api/send-image-message',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('mediaSendResult')) mediaSendResult.textContent=JSON.stringify(res,null,2);
 }
-function crmValue(c){ return [c.name,c.phone,c.email,c.productTitle,c.pageUrl,c.orderName,c.lastMessage,c.status].join(' ').toLowerCase(); }
-function shortUrl(u){ const s=String(u||''); return s.length>95 ? s.slice(0,95)+'…' : s; }
-function renderCrm(){ const q=($('crmSearch')?.value||'').toLowerCase().trim(); const st=$('crmStatusFilter')?.value||''; const filtered=crmCustomers.filter(c=>(!q||crmValue(c).includes(q))&&(!st||(c.status||'New')===st)); if($('crmCount')) crmCount.textContent=crmCustomers.length; if($('crmSummary')){ const counts=crmCustomers.reduce((a,c)=>{const k=c.status||'New';a[k]=(a[k]||0)+1;return a;},{}); crmSummary.innerHTML=['New','Hot Lead','Follow Up','Converted','Not Interested'].map(k=>`<span><b>${counts[k]||0}</b>${esc(k)}</span>`).join(''); } if(!$('crmList')) return; crmList.innerHTML=filtered.map(c=>`<div class="crm-card clean-crm-card" data-crm-id="${esc(c.id)}"><div class="crm-main"><b>${esc(c.name||'Customer')}</b><span>${esc(c.phone||'No phone')}${c.email?' • '+esc(c.email):''}</span></div><div class="crm-meta"><span class="status-chip">${esc(c.status||'New')}</span><span>${esc(c.updatedAt||c.createdAt)}</span><span>Leads: ${esc(c.leadCount||0)} • Activity: ${esc(c.activityCount||0)}</span></div><div class="crm-product-row">${c.productImage?`<img src="${esc(c.productImage)}" alt=""/>`:''}<div><b>${esc(c.productTitle||'No product yet')}</b><br/><a href="${esc(c.pageUrl||'#')}" target="_blank" title="${esc(c.pageUrl||'')}">${esc(shortUrl(c.pageUrl||''))}</a><div class="crm-message">${esc(c.lastMessage||'')}</div></div></div><div class="form-grid two"><label>Status <select data-crm-status="${esc(c.id)}"><option ${c.status==='New'?'selected':''}>New</option><option ${c.status==='Hot Lead'?'selected':''}>Hot Lead</option><option ${c.status==='Follow Up'?'selected':''}>Follow Up</option><option ${c.status==='Converted'?'selected':''}>Converted</option><option ${c.status==='Not Interested'?'selected':''}>Not Interested</option></select></label><label>Notes <input data-crm-notes="${esc(c.id)}" value="${esc(c.notes||'')}" placeholder="Follow-up note"/></label></div><button class="ghost-btn" data-crm-save="${esc(c.id)}">Save CRM</button></div>`).join('')||'<p>No CRM data yet. Leads will appear here when visitors use chatbot or product tracking runs.</p>'; }
-async function loadCrm(){ const d=await fetch('/api/crm',{credentials:'include'}).then(r=>r.json()).catch(()=>({customers:[]})); crmCustomers=d.customers||[]; renderCrm(); }
-function exportCrmCsv(){ const headers=['Status','Name','Phone','Email','Product','Product Link','Order','Total','Last Message','Notes','Updated At']; const rows=crmCustomers.map(c=>[c.status,c.name,c.phone,c.email,c.productTitle,c.pageUrl,c.orderName,c.total,c.lastMessage,c.notes,c.updatedAt]); const csv=[headers,...rows].map(row=>row.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='tiny-shiny-crm.csv'; a.click(); URL.revokeObjectURL(a.href); }
-async function saveCrm(id){ const status=document.querySelector(`[data-crm-status="${CSS.escape(id)}"]`)?.value||'New'; const notes=document.querySelector(`[data-crm-notes="${CSS.escape(id)}"]`)?.value||''; const data=await fetch('/api/crm/'+encodeURIComponent(id),{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,notes})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if(!data.ok) return alert(data.error||'CRM save failed'); await loadCrm(); }
-function customerValue(c){return [c.name,c.phone,c.email,c.city,c.orderStatus].join(' ').toLowerCase();}
-function renderShopifyCustomers(){ const q=($('shopifyCustomerSearch')?.value||'').toLowerCase().trim(); const filtered=shopifyCustomers.filter(c=>!q||customerValue(c).includes(q)); if(!$('shopifyCustomersList')) return; shopifyCustomersList.innerHTML=`<table class="customer-table"><thead><tr><th><input id="selectAllCustomersTop" type="checkbox"/></th><th>Customer / Party</th><th>City</th><th>Orders</th><th>Net Sales</th><th>Last Order</th><th>Order Status</th><th>Phone</th><th>Email</th></tr></thead><tbody>${filtered.map(c=>`<tr><td><input class="cust-check" type="checkbox" data-customer-id="${esc(c.id)}"/></td><td><button class="link-btn" data-open-customer="${esc(c.id)}">${esc(c.name||'Customer')}</button></td><td>${esc(c.city||'')}</td><td>${esc(c.ordersCount||0)}</td><td>${esc(c.totalSpent||'')}</td><td>${esc(c.lastOrderDate||'')}</td><td>${esc(c.orderStatus||'-')}</td><td>${esc(c.phone||'')}</td><td>${esc(c.email||'')}</td></tr>`).join('')}</tbody></table>`; }
-async function loadShopifyCustomers(){ const d=await fetch('/api/shopify/customers',{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,customers:[]})); shopifyCustomers=d.customers||[]; if($('shopifyCustomersResult')) shopifyCustomersResult.textContent=d.ok?`Loaded ${shopifyCustomers.length} customers` : JSON.stringify(d,null,2); renderShopifyCustomers(); }
-function selectedCustomers(){ return [...document.querySelectorAll('.cust-check:checked')].map(i=>shopifyCustomers.find(c=>String(c.id)===String(i.dataset.customerId))).filter(Boolean); }
-function openCustomerTool(id){ const c=shopifyCustomers.find(x=>String(x.id)===String(id)); if(!c)return; showTab('crmPanel'); setTimeout(()=>{ if($('crmSearch')){ crmSearch.value=c.phone||c.email||c.name||''; renderCrm(); } },100); alert(`Customer selected: ${c.name}\nPhone: ${c.phone||'-'}\nEmail: ${c.email||'-'}\nUse CRM Dashboard to save follow-up / notes.`); }
-async function bulkCustomerMessage(saveOnly=false){ const selected=selectedCustomers(); if(!selected.length) return alert('Please select customers first.'); const message=$('bulkCustomerMessage')?.value.trim()||''; if(!message) return alert('Please write message text.'); const res=await fetch('/api/shopify/customers/bulk-message',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({customers:selected,message,saveOnly,sendVia:$('bulkSendVia')?.value||'whatsapp'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if($('shopifyCustomersResult')) shopifyCustomersResult.textContent=JSON.stringify(res,null,2); }
-
 function productValue(p){ return [p.title,p.handle,p.productType,p.vendor,p.status,p.price].join(' ').toLowerCase(); }
 function renderNewProducts(){
   const q=($('newProductSearch')?.value||'').toLowerCase().trim();
@@ -239,8 +164,8 @@ async function sendNewProductPromo(){
   if($('newProductsResult')) newProductsResult.textContent = JSON.stringify(res,null,2);
 }
 
-document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='templateSearch') renderTemplates(); const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.id==='templateCategoryFilter') renderTemplates(); });
+document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
+document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } });
 document.addEventListener('click',async e=>{
   if(e.target.closest('#logoutBtn')){ e.preventDefault(); return logout(); }
   if(e.target.classList.contains('tab-btn')){ e.preventDefault(); if(e.target.id==='openGoogleSheetTab'){ if(googleSheetUrl){ window.open(googleSheetUrl,'_blank','noopener'); } else { alert('Google Sheet link not configured. Please add it in API Settings.'); } return showTab(e.target.dataset.tab); } return showTab(e.target.dataset.tab); }
@@ -258,20 +183,15 @@ document.addEventListener('click',async e=>{
   if(e.target.id==='saveBulkCustomerFollowup') bulkCustomerMessage(true);
   if(e.target.id==='refreshNewProducts') loadNewProducts();
   if(e.target.id==='sendNewProductPromo') sendNewProductPromo();
-  if(e.target.id==='refreshTemplates') loadTemplates();
-  if(e.target.id==='newTemplateBtn') { clearTemplateForm(); showTab('templateLibraryPanel'); }
-  if(e.target.id==='clearTemplateForm') clearTemplateForm();
-  if(e.target.id==='saveTemplate') saveTemplate();
-  if(e.target.id==='restoreDefaultTemplates') restoreDefaultTemplates();
-  if(e.target.dataset.editTemplate) editTemplate(e.target.dataset.editTemplate);
-  if(e.target.dataset.deleteTemplate) deleteTemplate(e.target.dataset.deleteTemplate);
-  if(e.target.dataset.mapTemplate) mapTemplate(e.target.dataset.mapTemplate);
-  if(e.target.id==='mapTemplateToAutomation') { const id=$('templateId')?.value || selectedTemplateId; if(!id) return alert('Please select or save a template first.'); mapTemplate(id); }
   if(e.target.id==='uploadMedia') uploadMedia();
   if(e.target.id==='refreshMedia') loadMedia(); if(e.target.id==='refreshMediaCustomers') loadMediaCustomers();
   if(e.target.id==='sendSelectedMedia') sendSelectedMedia();
-  if(e.target.dataset.selectMedia){ selectedMediaId=e.target.dataset.selectMedia; loadMedia(); }
-  if(e.target.dataset.deleteMedia){ if(confirm('Delete this image?')){ await fetch('/api/media-images/'+encodeURIComponent(e.target.dataset.deleteMedia),{method:'DELETE',credentials:'include'}); if(selectedMediaId===e.target.dataset.deleteMedia) selectedMediaId=''; loadMedia(); } }
+  if(e.target.id==='sendAllMediaCustomers'){ if($('mediaSendTo')) mediaSendTo.value='all_shopify_customers'; sendSelectedMedia(); }
+  if(e.target.id==='clearSelectedMedia'){ selectedMediaIds=[]; selectedMediaId=''; renderSelectedMedia(); loadMedia(); }
+  if(e.target.dataset.selectMedia){ const id=e.target.dataset.selectMedia; if(selectedMediaIds.includes(id)) selectedMediaIds=selectedMediaIds.filter(x=>x!==id); else selectedMediaIds.push(id); selectedMediaId=selectedMediaIds[0]||''; loadMedia(); }
+  if(e.target.dataset.removeSelectedMedia){ const id=e.target.dataset.removeSelectedMedia; selectedMediaIds=selectedMediaIds.filter(x=>x!==id); selectedMediaId=selectedMediaIds[0]||''; loadMedia(); }
+  if(e.target.dataset.fillMediaPhone){ const c=shopifyCustomers.find(x=>String(x.id)===String(e.target.dataset.fillMediaPhone)); if(c && $('mediaPhone')){ mediaPhone.value=c.phone||''; if($('mediaSendTo')) mediaSendTo.value='custom'; } }
+  if(e.target.dataset.deleteMedia){ if(confirm('Delete this image from library?')){ await fetch('/api/media-images/'+encodeURIComponent(e.target.dataset.deleteMedia),{method:'DELETE',credentials:'include'}); selectedMediaIds=selectedMediaIds.filter(x=>x!==e.target.dataset.deleteMedia); if(selectedMediaId===e.target.dataset.deleteMedia) selectedMediaId=selectedMediaIds[0]||''; loadMedia(); } }
   if(e.target.id==='refreshLeads') loadLeads(); if(e.target.id==='refreshEvents') loadEvents(); if(e.target.id==='refreshMsgs') loadMessages();
 });
 load().catch(err=>{console.error(err); if(String(err).includes('401')) location.href='/login.html';});

@@ -525,15 +525,16 @@ async function sendCustomerWhatsApp(phone, message) {
 }
 
 async function sendWhatsAppImage({ to, imageUrl, caption = '' }) {
-  const token = process.env.WHATSAPP_CLOUD_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
   const receiver = cleanPhone(to);
-  if (!token || !phoneNumberId || !receiver || !imageUrl) return { ok: false, skipped: true, reason: 'WhatsApp API, receiver phone, or image URL missing.' };
-  const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`;
-  const body = { messaging_product: 'whatsapp', to: receiver, type: 'image', image: { link: imageUrl, caption: caption || '' } };
-  const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
-  const json = await response.json().catch(() => ({}));
-  return { ok: response.ok, status: response.status, json };
+  if (!receiver || !imageUrl) return { ok: false, skipped: true, reason: 'Receiver phone or image URL missing.' };
+  return postWhatsApp({ messaging_product: 'whatsapp', recipient_type: 'individual', to: receiver, type: 'image', image: { link: imageUrl, caption: caption || '' } });
+}
+
+async function sendWhatsAppTextManual({ to, message = '' }) {
+  const receiver = cleanPhone(to);
+  const body = String(message || '').trim();
+  if (!receiver || !body) return { ok: false, skipped: true, reason: 'Receiver phone or message missing.' };
+  return postWhatsApp({ messaging_product: 'whatsapp', recipient_type: 'individual', to: receiver, type: 'text', text: { preview_url: true, body } });
 }
 function absoluteUrl(req, urlPath) {
   if (/^https?:\/\//i.test(String(urlPath || ''))) return urlPath;
@@ -1159,13 +1160,28 @@ app.delete('/api/media-images/:id', (req, res) => {
 app.post('/api/send-image-message', async (req, res) => {
   const body = req.body || {};
   const images = readJson(mediaImagesPath, []);
-  const image = body.imageId ? images.find(x => x.id === body.imageId) : null;
-  const imageUrl = absoluteUrl(req, body.imageUrl || image?.url || '');
-  const caption = String(body.caption || image?.caption || '').trim();
+  const rawIds = Array.isArray(body.imageIds) ? body.imageIds : (body.imageId ? [body.imageId] : []);
+  const selectedImages = rawIds
+    .map(id => images.find(x => x.id === id))
+    .filter(Boolean);
+  if (!selectedImages.length && body.imageUrl) selectedImages.push({ id: 'custom-url', url: body.imageUrl, caption: body.caption || '' });
+  const caption = String(body.caption || '').trim();
   const to = body.to === 'owner' ? (process.env.OWNER_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER) : body.phone;
-  const result = await sendWhatsAppImage({ to, imageUrl, caption }).catch(e => ({ ok: false, error: e.message }));
-  appendJson(leadMessagesPath, { id: crypto.randomUUID(), type: 'image_message', createdAt: nowIso(), to: body.to || 'custom', phone: cleanPhone(to), imageUrl, caption, result });
-  res.json({ ok: !!result.ok, result, imageUrl, caption });
+  const message = String(body.message || caption || '').trim();
+  const results = [];
+  if (selectedImages.length) {
+    for (const img of selectedImages.slice(0, 20)) {
+      const imageUrl = absoluteUrl(req, img.url || '');
+      const result = await sendWhatsAppImage({ to, imageUrl, caption: caption || img.caption || '' }).catch(e => ({ ok: false, error: e.message }));
+      results.push({ imageId: img.id, imageUrl, result });
+    }
+  } else {
+    const result = await sendWhatsAppTextManual({ to, message }).catch(e => ({ ok: false, error: e.message }));
+    results.push({ type: 'text', result });
+  }
+  const ok = results.some(r => r.result && r.result.ok);
+  appendJson(leadMessagesPath, { id: crypto.randomUUID(), type: selectedImages.length ? 'image_message' : 'text_message', createdAt: nowIso(), to: body.to || 'custom', phone: cleanPhone(to), imageIds: selectedImages.map(x=>x.id), caption: message, results });
+  res.json({ ok, count: results.length, results, imageIds: selectedImages.map(x=>x.id), caption: message });
 });
 
 

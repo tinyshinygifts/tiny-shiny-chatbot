@@ -1,0 +1,70 @@
+[
+  {
+    "keywords": [
+      "cod",
+      "cash on delivery",
+      "payment"
+    ],
+    "answer": "Yes, Cash on Delivery is available on eligible orders. COD charges may apply based on your order value and shipping rules."
+  },
+  {
+    "keywords": [
+      "shipping",
+      "delivery",
+      "deliver",
+      "courier",
+      "charges"
+    ],
+    "answer": "Orders are shipped through courier partners. Delivery usually takes 3\u20137 working days depending on your location. Shipping charges may vary based on order value and payment method."
+  },
+  {
+    "keywords": [
+      "return",
+      "refund",
+      "replace",
+      "exchange"
+    ],
+    "answer": "For return or replacement, please contact support soon after delivery. For damaged or incorrect items, opening video/photos help us resolve the issue faster."
+  },
+  {
+    "keywords": [
+      "rakhi",
+      "gift",
+      "hamper",
+      "box",
+      "home decor",
+      "decor"
+    ],
+    "answer": "We have rakhi, gift hampers, home decor and premium gifting products. Please explore the latest collection on tinyshinygifts.com."
+  },
+  {
+    "keywords": [
+      "confirm order",
+      "order confirmation",
+      "confirm my order",
+      "place order",
+      "buy this",
+      "book this"
+    ],
+    "answer": "Sure. Please share your name, mobile number, product name/link and quantity. I will send your order confirmation request to our team."
+  },
+  {
+    "keywords": [
+      "track order",
+      "tracking",
+      "order status",
+      "where is my order",
+      "shipment"
+    ],
+    "answer": "Please share your order number or registered mobile number. I will check the tracking status or forward it to our team."
+  },
+  {
+    "keywords": [
+      "whatsapp",
+      "support",
+      "agent",
+      "contact"
+    ],
+    "answer": "You can talk to our support team on WhatsApp. Please tap WhatsApp support or share your phone number here."
+  }
+]
