@@ -111,7 +111,8 @@ const apiKeys = [
   'GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET',
   'SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD',
   'ICARRY_ENABLED','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_ID','ICARRY_CLIENT_SECRET','ICARRY_USERNAME','ICARRY_PASSWORD','ICARRY_TRACKING_URL',
-  'ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG'
+  'ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG',
+  'COD_CONFIRMATION_WHATSAPP_ENABLED','COD_ORDER_CONFIRMATION_TEMPLATE_NAME','COD_ORDER_CONFIRMATION_TEMPLATE_LANG','COD_AUTO_CANCEL_ENABLED'
 ];
 const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_SECRET','ICARRY_PASSWORD']);
 function readEnvFileWithoutMongo() {
@@ -211,7 +212,11 @@ function writeEnvFile(next) {
     '# Order confirmation automation',
     'ORDER_CONFIRMATION_WHATSAPP_ENABLED=' + (merged.ORDER_CONFIRMATION_WHATSAPP_ENABLED || 'false'),
     'ORDER_CONFIRMATION_TEMPLATE_NAME=' + (merged.ORDER_CONFIRMATION_TEMPLATE_NAME || ''),
-    'ORDER_CONFIRMATION_TEMPLATE_LANG=' + (merged.ORDER_CONFIRMATION_TEMPLATE_LANG || 'en')
+    'ORDER_CONFIRMATION_TEMPLATE_LANG=' + (merged.ORDER_CONFIRMATION_TEMPLATE_LANG || 'en'),
+    'COD_CONFIRMATION_WHATSAPP_ENABLED=' + (merged.COD_CONFIRMATION_WHATSAPP_ENABLED || 'true'),
+    'COD_ORDER_CONFIRMATION_TEMPLATE_NAME=' + (merged.COD_ORDER_CONFIRMATION_TEMPLATE_NAME || 'cod_order_confirmation'),
+    'COD_ORDER_CONFIRMATION_TEMPLATE_LANG=' + (merged.COD_ORDER_CONFIRMATION_TEMPLATE_LANG || 'en'),
+    'COD_AUTO_CANCEL_ENABLED=' + (merged.COD_AUTO_CANCEL_ENABLED || 'true')
   ];
   fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
   for (const key of apiKeys) process.env[key] = merged[key] || '';
@@ -241,7 +246,8 @@ function configBackupText(env) {
     ['Admin Login Security', ['ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS']],
     ['Shopify API', ['SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER','SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI','SHOPIFY_WEBHOOK_SECRET']],
     ['WhatsApp Cloud API', ['WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG']],
-    ['Customer WhatsApp Follow-up', ['CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG']],
+    ['Customer WhatsApp Follow-up', ['CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG',
+  'COD_CONFIRMATION_WHATSAPP_ENABLED','COD_ORDER_CONFIRMATION_TEMPLATE_NAME','COD_ORDER_CONFIRMATION_TEMPLATE_LANG','COD_AUTO_CANCEL_ENABLED']],
     ['Google Sheets', ['GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET']],
     ['Shiprocket API', ['SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD']],
     ['iCarry API', ['ICARRY_ENABLED','ICARRY_TRACKING_URL','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_ID','ICARRY_CLIENT_SECRET','ICARRY_USERNAME','ICARRY_PASSWORD']]
@@ -501,12 +507,12 @@ function buildLeadMessage({ type, product = {}, cart = {}, customer = {}, pageUr
 
 
 const defaultWhatsAppTemplates = [
-  { id:'order_confirmation', name:'order_confirmation', category:'Utility', language:'en', useCase:'Shopify order create par customer ko order confirmation bhejna', enabled:true, headerType:'None', body:'Hi {{1}}, thank you for your order with Tiny Shiny Gifts.\n\nYour order {{2}} has been received successfully.\n\nOrder Total: ₹{{3}}\n\nWe will notify you once your order is shipped.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Order Number','Order Amount'], buttons:[{type:'URL', text:'Visit Website', url:'https://www.tinyshinygifts.com'}] },
+  { id:'order_confirmation', name:'order_confirmation', category:'Utility', language:'en', useCase:'Shopify order create par customer ko product image ke saath order confirmation bhejna', enabled:true, headerType:'Image', body:'Hi {{1}}, thank you for your order with Tiny Shiny Gifts.\n\nYour order {{2}} has been received successfully.\n\nOrder Total: ₹{{3}}\n\nWe will notify you once your order is shipped.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Order Number','Order Amount'], buttons:[{type:'URL', text:'Visit Website', url:'https://www.tinyshinygifts.com'}] },
   { id:'product_followup', name:'product_followup', category:'Marketing', language:'en', useCase:'Product/cart interest ke baad customer follow-up', enabled:true, headerType:'None', body:'Hi {{1}}, you recently showed interest in {{2}} on Tiny Shiny Gifts.\n\nComplete your purchase today and explore our beautiful gifts, home decor and festive collections.\n\nProduct link: {{3}}\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Product Name','Product Link'], buttons:[{type:'Quick Reply', text:'Interested'}, {type:'Quick Reply', text:'Need Help'}, {type:'Quick Reply', text:'Not Now'}] },
   { id:'abandoned_cart_reminder', name:'abandoned_cart_reminder', category:'Marketing', language:'en', useCase:'Cart abandon reminder', enabled:true, headerType:'None', body:'Hi {{1}}, you left some beautiful items in your cart at Tiny Shiny Gifts.\n\nYour cart is waiting for you. Complete your order before the items go out of stock.\n\nCart link: {{2}}\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Cart Link'], buttons:[{type:'URL', text:'Complete Order', url:'{{2}}'}] },
   { id:'order_shipped', name:'order_shipped', category:'Utility', language:'en', useCase:'Order shipped/tracking update', enabled:true, headerType:'None', body:'Hi {{1}}, your Tiny Shiny Gifts order {{2}} has been shipped.\n\nCourier Partner: {{3}}\nTracking ID: {{4}}\n\nTrack your order here: {{5}}\n\nThank you for shopping with us.', variables:['Customer Name','Order Number','Courier Name','AWB / Tracking ID','Tracking Link'], buttons:[{type:'URL', text:'Track Order', url:'{{5}}'}] },
   { id:'order_delivered', name:'order_delivered', category:'Utility', language:'en', useCase:'Delivery ke baad feedback/shop again', enabled:true, headerType:'None', body:'Hi {{1}}, your Tiny Shiny Gifts order {{2}} has been delivered.\n\nWe hope you loved your product.\n\nPlease share your feedback with us and visit again for more gifts and home decor collections.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Order Number'], buttons:[{type:'Quick Reply', text:'Loved It'}, {type:'Quick Reply', text:'Need Support'}, {type:'Quick Reply', text:'Shop Again'}] },
-  { id:'cod_order_confirmation', name:'cod_order_confirmation', category:'Utility', language:'en', useCase:'COD order confirmation', enabled:true, headerType:'None', body:'Hi {{1}}, your COD order {{2}} of ₹{{3}} has been placed successfully with Tiny Shiny Gifts.\n\nPlease keep the cash amount ready at the time of delivery.\n\nThank you for choosing Tiny Shiny Gifts.', variables:['Customer Name','Order Number','COD Amount'], buttons:[{type:'Quick Reply', text:'Confirm Order'}, {type:'Quick Reply', text:'Cancel Order'}, {type:'Quick Reply', text:'Need Help'}] },
+  { id:'cod_order_confirmation', name:'cod_order_confirmation', category:'Utility', language:'en', useCase:'COD order confirmation with product image and Yes/No customer approval', enabled:true, headerType:'Image', body:'Hi {{1}}, thank you for placing your COD order with Tiny Shiny Gifts.\n\nOrder Number: {{2}}\nOrder Amount: ₹{{3}}\n\nPlease confirm your COD order.\n\nIf you want to receive this order, tap Confirm.\nIf you do not want this order, tap Cancel.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Order Number','COD Amount'], buttons:[{type:'Quick Reply', text:'Confirm'}, {type:'Quick Reply', text:'Cancel'}, {type:'Quick Reply', text:'Help'}] },
   { id:'payment_pending', name:'payment_pending', category:'Utility', language:'en', useCase:'Payment pending reminder', enabled:true, headerType:'None', body:'Hi {{1}}, your order {{2}} at Tiny Shiny Gifts is pending because payment is not completed.\n\nPlease complete your payment to confirm the order.\n\nPayment link: {{3}}', variables:['Customer Name','Order Number','Payment Link'], buttons:[{type:'URL', text:'Complete Payment', url:'{{3}}'}] },
   { id:'customer_support_reply', name:'customer_support_reply', category:'Utility', language:'en', useCase:'Support query acknowledgement', enabled:true, headerType:'None', body:'Hi {{1}}, thank you for contacting Tiny Shiny Gifts.\n\nOur support team has received your query regarding {{2}}.\n\nWe will get back to you shortly.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Query / Order Number'], buttons:[] },
   { id:'new_product_broadcast', name:'new_product_broadcast', category:'Marketing', language:'en', useCase:'New product broadcast', enabled:true, headerType:'None', body:'Hi {{1}}, new arrivals are now live at Tiny Shiny Gifts.\n\nExplore beautiful gifts, home decor, pooja items and festive collections for your loved ones.\n\nShop now: {{2}}', variables:['Customer Name','Collection / Product Link'], buttons:[{type:'URL', text:'Shop Now', url:'{{2}}'}] },
@@ -598,7 +604,7 @@ async function postWhatsApp(body) {
   }
   const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
   const json = await response.json().catch(() => ({}));
-  return { ok: response.ok, status: response.status, json, request: { to: body.to, type: body.type, template: body.template?.name || '' } };
+  return { ok: response.ok, status: response.status, json, request: { to: body.to, type: body.type, template: body.template?.name || '', components: body.template?.components?.map(c => ({ type:c.type, parameters:(c.parameters||[]).map(p => p.type) })) || [] } };
 }
 async function sendOwnerWhatsApp(message, options = {}) {
   const env = readEnvFile();
@@ -946,7 +952,7 @@ app.get('/webhooks/whatsapp', (req, res) => {
   return res.status(403).send('Verification failed');
 });
 
-app.post('/webhooks/whatsapp', (req, res) => {
+app.post('/webhooks/whatsapp', async (req, res) => {
   try {
     const body = req.body || {};
     const saved = [];
@@ -958,6 +964,7 @@ app.post('/webhooks/whatsapp', (req, res) => {
           appendJson(whatsappInboxPath, item);
           upsertCrm({ name: item.customerName, phone: item.from, message: item.text, note: 'WhatsApp reply: ' + item.text }, 'whatsapp_reply');
           sendToGoogleSheets('WhatsApp Reply', item).catch(()=>{});
+          await handleCodConfirmationReply(item).catch(err => console.error('COD reply handler error:', err.message));
           saved.push(item);
         }
         for (const st of (value.statuses || [])) {
@@ -1572,16 +1579,186 @@ Items: ${items || '-'}
 Please reply CONFIRM ${order.name || ''} to confirm your order.
 ${confirmUrl}`;
 }
-function orderTemplateComponents(order = {}) {
-  return [{
-    type: 'body',
-    parameters: [
-      textParam(orderCustomerName(order)),
-      textParam(order.name || order.order_number || order.id || '-'),
-      textParam(String(order.total_price || order.current_total_price || order.subtotal_price || '0'))
-    ]
-  }];
+function orderFirstProductTitle(order = {}) {
+  const item = Array.isArray(order.line_items) ? order.line_items[0] : null;
+  return item?.title || item?.name || item?.product_title || 'Product';
 }
+function absoluteImageUrl(url) {
+  const raw = String(url || '').trim();
+  if (!raw) return '';
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (raw.startsWith('//')) return 'https:' + raw;
+  const base = String(process.env.WEBSITE_URL || 'https://www.tinyshinygifts.com').replace(/\/$/, '');
+  return raw.startsWith('/') ? base + raw : raw;
+}
+function extractImageFromAny(obj) {
+  if (!obj || typeof obj !== 'object') return '';
+  const candidates = [
+    obj.image?.src, obj.image?.url, obj.image_url, obj.imageUrl,
+    obj.featured_image?.src, obj.featured_image?.url, obj.featured_image,
+    obj.product_image, obj.src, obj.url
+  ];
+  for (const c of candidates) {
+    const u = absoluteImageUrl(c);
+    if (u) return u;
+  }
+  if (Array.isArray(obj.images) && obj.images.length) {
+    const first = obj.images[0];
+    const u = absoluteImageUrl(first?.src || first?.url || first);
+    if (u) return u;
+  }
+  return '';
+}
+async function getOrderProductImage(order = {}) {
+  const items = Array.isArray(order.line_items) ? order.line_items : [];
+  for (const item of items) {
+    const direct = extractImageFromAny(item);
+    if (direct) return direct;
+  }
+  for (const item of items) {
+    const productId = item?.product_id || item?.productId;
+    if (!productId) continue;
+    const r = await shopifyFetch(`products/${productId}.json?fields=id,title,image,images,variants`).catch(e => ({ ok:false, error:e.message }));
+    const product = r?.json?.product;
+    if (!r?.ok || !product) continue;
+    const variantId = String(item?.variant_id || '');
+    if (variantId && Array.isArray(product.images)) {
+      const variantImage = product.images.find(img => Array.isArray(img.variant_ids) && img.variant_ids.map(String).includes(variantId));
+      const vu = absoluteImageUrl(variantImage?.src || variantImage?.url);
+      if (vu) return vu;
+    }
+    const u = extractImageFromAny(product);
+    if (u) return u;
+  }
+  return '';
+}
+function orderBodyParameters(order = {}) {
+  return [
+    textParam(orderCustomerName(order)),
+    textParam(order.name || order.order_number || order.id || '-'),
+    textParam(String(order.total_price || order.current_total_price || order.subtotal_price || '0'))
+  ];
+}
+async function orderTemplateComponents(order = {}, options = {}) {
+  const components = [];
+  const imageUrl = options.imageUrl || await getOrderProductImage(order).catch(() => '');
+  if (imageUrl) {
+    components.push({
+      type: 'header',
+      parameters: [{ type: 'image', image: { link: imageUrl } }]
+    });
+  }
+  components.push({ type: 'body', parameters: orderBodyParameters(order) });
+  return components;
+}
+
+function isCodOrder(order = {}) {
+  const parts = [
+    order.payment_gateway_names,
+    order.gateway,
+    order.processing_method,
+    order.financial_status,
+    order.tags,
+    order.note,
+    order.source_name
+  ].flat().filter(Boolean).join(' ').toLowerCase();
+  return /\bcod\b|cash on delivery|cash_on_delivery|manual payment|payment on delivery/.test(parts);
+}
+async function codTemplateComponents(order = {}, options = {}) {
+  // COD template also uses image header when product image is available.
+  return orderTemplateComponents(order, options);
+}
+async function sendCodConfirmationToCustomer(order = {}) {
+  const env = readEnvFile();
+  const orderEnabled = String(process.env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || 'false').toLowerCase() === 'true';
+  const codEnabledRaw = process.env.COD_CONFIRMATION_WHATSAPP_ENABLED || env.COD_CONFIRMATION_WHATSAPP_ENABLED || 'true';
+  const codEnabled = String(codEnabledRaw).toLowerCase() === 'true';
+  const phone = orderCustomerPhone(order);
+  if (!orderEnabled || !codEnabled || !phone) return { ok:false, skipped:true, reason: !phone ? 'Customer phone missing or invalid.' : 'COD confirmation WhatsApp disabled.' };
+  const template = String(process.env.COD_ORDER_CONFIRMATION_TEMPLATE_NAME || env.COD_ORDER_CONFIRMATION_TEMPLATE_NAME || 'cod_order_confirmation').trim();
+  const lang = String(process.env.COD_ORDER_CONFIRMATION_TEMPLATE_LANG || env.COD_ORDER_CONFIRMATION_TEMPLATE_LANG || 'en').trim();
+  if (!template) return { ok:false, skipped:true, reason:'COD confirmation template name missing.' };
+  
+  const productImage = await getOrderProductImage(order).catch(() => '');
+  const components = await codTemplateComponents(order, { imageUrl: productImage });
+  const result = await postWhatsApp(whatsappTemplateBody(phone, template, lang, components));
+  return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage) };
+}
+function findLatestCodPendingLead(phone) {
+  const p = normalizeWhatsAppPhone(phone);
+  const leads = readJson(leadsPath, []);
+  return leads.find(l =>
+    l && l.type === 'shopify_order_webhook' && l.isCodOrder &&
+    normalizeWhatsAppPhone(l.phone || l.raw?.phone || l.raw?.customer?.phone || '') === p &&
+    !String(l.codCustomerResponse || '').trim() &&
+    !String(l.raw?.cancelled_at || '').trim()
+  ) || null;
+}
+function updateLeadById(id, patch = {}) {
+  const leads = readJson(leadsPath, []);
+  const idx = leads.findIndex(l => l && l.id === id);
+  if (idx >= 0) {
+    leads[idx] = { ...leads[idx], ...patch, updatedAt: nowIso() };
+    writeJson(leadsPath, leads);
+    return leads[idx];
+  }
+  return null;
+}
+async function findShopifyOrderForLead(lead = {}) {
+  const raw = lead.raw || {};
+  if (raw.id) return { ok:true, order: raw };
+  const name = String(lead.orderName || '').trim();
+  if (!name) return { ok:false, reason:'Order name missing.' };
+  const q = encodeURIComponent(`name:${name}`);
+  const r = await shopifyFetch(`orders.json?status=any&limit=5&query=${q}`);
+  if (!r.ok) return r;
+  const order = (r.json.orders || [])[0];
+  return order ? { ok:true, order } : { ok:false, reason:'Order not found in Shopify.' };
+}
+async function updateShopifyOrderNoteAndTags(orderId, addTag, noteLine) {
+  if (!orderId) return { ok:false, skipped:true, reason:'Shopify order id missing.' };
+  const current = await shopifyFetch(`orders/${orderId}.json?fields=id,tags,note`);
+  const order = current.json?.order || {};
+  const tags = Array.from(new Set(String(order.tags || '').split(',').map(t => t.trim()).filter(Boolean).concat(addTag ? [addTag] : []))).join(', ');
+  const note = [order.note || '', noteLine || ''].filter(Boolean).join('\n');
+  return shopifyFetch(`orders/${orderId}.json`, { method:'PUT', body:{ order:{ id: orderId, tags, note } } });
+}
+async function cancelShopifyOrder(orderId) {
+  if (!orderId) return { ok:false, skipped:true, reason:'Shopify order id missing.' };
+  return shopifyFetch(`orders/${orderId}/cancel.json`, {
+    method:'POST',
+    body:{ reason:'customer', email:false, restock:true, refund:false }
+  });
+}
+function isCodConfirmText(text) { return /^(confirm|yes|yes confirm|confirm order|order confirm|haan|ha|ha ji|ok|okay)$/i.test(String(text || '').trim()); }
+function isCodCancelText(text) { return /^(cancel|no|no cancel|cancel order|nahi|nahin|mat bhejo)$/i.test(String(text || '').trim()); }
+async function handleCodConfirmationReply(item = {}) {
+  if (!item || item.direction !== 'inbound') return { ok:false, skipped:true };
+  const text = String(item.text || '').trim();
+  if (!isCodConfirmText(text) && !isCodCancelText(text)) return { ok:false, skipped:true, reason:'Not a COD confirmation reply.' };
+  const lead = findLatestCodPendingLead(item.from);
+  if (!lead) return appendJson(leadsPath, { id: crypto.randomUUID(), type:'cod_confirmation_reply_unmatched', createdAt: nowIso(), phone:item.from, message:text, status:'No pending COD order found', raw:item });
+  const orderLookup = await findShopifyOrderForLead(lead).catch(e => ({ ok:false, error:e.message }));
+  const order = orderLookup.order || lead.raw || {};
+  const orderId = order.id || lead.raw?.id;
+  const orderName = lead.orderName || order.name || order.order_number || '-';
+  if (isCodConfirmText(text)) {
+    const shopifyUpdate = await updateShopifyOrderNoteAndTags(orderId, 'COD Confirmed', `COD Confirmed by customer via WhatsApp on ${nowIso()}. Phone: ${item.from}`).catch(e => ({ ok:false, error:e.message }));
+    updateLeadById(lead.id, { codCustomerResponse:'confirmed', codConfirmedAt: nowIso(), status:'COD Confirmed by Customer', shopifyUpdate });
+    const reply = await sendWhatsAppTextManual({ to:item.from, message:`Thank you. Your COD order ${orderName} is confirmed. Team Tiny Shiny Gifts` }).catch(e => ({ ok:false, error:e.message }));
+    await sendOwnerWhatsApp(`COD order confirmed by customer\nOrder: ${orderName}\nPhone: ${item.from}`).catch(()=>{});
+    return appendJson(leadsPath, { id: crypto.randomUUID(), type:'cod_order_confirmed', createdAt: nowIso(), phone:item.from, orderName, status:'COD Confirmed', shopifyUpdate, customerReply:reply, raw:item });
+  }
+  const env = readEnvFile();
+  const autoCancel = String(process.env.COD_AUTO_CANCEL_ENABLED || env.COD_AUTO_CANCEL_ENABLED || 'true').toLowerCase() === 'true';
+  const cancelResult = autoCancel ? await cancelShopifyOrder(orderId).catch(e => ({ ok:false, error:e.message })) : { ok:false, skipped:true, reason:'COD auto cancel disabled.' };
+  const shopifyUpdate = await updateShopifyOrderNoteAndTags(orderId, 'COD Cancelled by Customer', `COD Cancelled by customer via WhatsApp on ${nowIso()}. Phone: ${item.from}`).catch(e => ({ ok:false, error:e.message }));
+  updateLeadById(lead.id, { codCustomerResponse:'cancelled', codCancelledAt: nowIso(), status: autoCancel ? 'COD Cancelled by Customer' : 'COD Cancellation Requested', cancelResult, shopifyUpdate });
+  const reply = await sendWhatsAppTextManual({ to:item.from, message:`Your COD order ${orderName} cancellation request has been received.${autoCancel ? ' The order has been cancelled.' : ''} Team Tiny Shiny Gifts` }).catch(e => ({ ok:false, error:e.message }));
+  await sendOwnerWhatsApp(`COD order cancelled by customer\nOrder: ${orderName}\nPhone: ${item.from}\nAuto cancel: ${autoCancel ? 'yes' : 'no'}`).catch(()=>{});
+  return appendJson(leadsPath, { id: crypto.randomUUID(), type:'cod_order_cancelled', createdAt: nowIso(), phone:item.from, orderName, status:autoCancel ? 'COD Cancelled' : 'COD Cancellation Requested', cancelResult, shopifyUpdate, customerReply:reply, raw:item });
+}
+
 async function sendOrderConfirmationToCustomer(order = {}) {
   const env = readEnvFile();
   const enabled = String(process.env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || 'false').toLowerCase() === 'true';
@@ -1590,13 +1767,20 @@ async function sendOrderConfirmationToCustomer(order = {}) {
   const template = String(process.env.ORDER_CONFIRMATION_TEMPLATE_NAME || env.ORDER_CONFIRMATION_TEMPLATE_NAME || 'order_confirmation').trim();
   const lang = String(process.env.ORDER_CONFIRMATION_TEMPLATE_LANG || env.ORDER_CONFIRMATION_TEMPLATE_LANG || 'en').trim();
   if (!template) return { ok:false, skipped:true, reason:'Order confirmation template name missing.' };
-  return postWhatsApp(whatsappTemplateBody(phone, template, lang, orderTemplateComponents(order)));
+  
+  const productImage = await getOrderProductImage(order).catch(() => '');
+  const components = await orderTemplateComponents(order, { imageUrl: productImage });
+  const result = await postWhatsApp(whatsappTemplateBody(phone, template, lang, components));
+  return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage) };
 }
 
 app.post('/webhooks/shopify/orders/create', async (req, res) => {
   const order = req.body || {};
   const phone = orderCustomerPhone(order);
-  const customerWa = await sendOrderConfirmationToCustomer(order).catch(err => ({ ok:false, error:err.message }));
+  const cod = isCodOrder(order);
+  const customerWa = cod
+    ? await sendCodConfirmationToCustomer(order).catch(err => ({ ok:false, error:err.message }))
+    : await sendOrderConfirmationToCustomer(order).catch(err => ({ ok:false, error:err.message }));
   const lead = appendJson(leadsPath, {
     id: crypto.randomUUID(),
     type: 'shopify_order_webhook',
@@ -1605,18 +1789,30 @@ app.post('/webhooks/shopify/orders/create', async (req, res) => {
     phone,
     customerName: orderCustomerName(order),
     total: order.total_price,
+    productTitle: orderFirstProductTitle(order),
+    productImage: customerWa.productImage || '',
+    imageHeaderSent: Boolean(customerWa.imageHeaderSent),
+    paymentGateways: order.payment_gateway_names || [],
+    financialStatus: order.financial_status || '',
+    isCodOrder: cod,
+    codCustomerResponse: cod ? '' : undefined,
     raw: order,
-    status: customerWa.ok ? 'Order Confirmation WhatsApp Sent' : 'Order Confirmation WhatsApp Failed',
+    status: cod
+      ? (customerWa.ok ? 'COD Confirmation Pending - WhatsApp Sent' : 'COD Confirmation WhatsApp Failed')
+      : (customerWa.ok ? 'Order Confirmation WhatsApp Sent' : 'Order Confirmation WhatsApp Failed'),
     whatsappResult: customerWa,
-    message: customerWa.ok ? 'Order confirmation WhatsApp sent to customer.' : (customerWa.reason || customerWa.error || customerWa.json?.error?.message || 'Order confirmation WhatsApp not sent.')
+    message: customerWa.ok
+      ? (cod ? `COD confirmation WhatsApp sent${customerWa.imageHeaderSent ? ' with product image' : ''}. Waiting for customer Confirm/Cancel.` : `Order confirmation WhatsApp sent${customerWa.imageHeaderSent ? ' with product image' : ''} to customer.`)
+      : (customerWa.reason || customerWa.error || customerWa.json?.error?.message || 'Order confirmation WhatsApp not sent.')
   });
   await sendOwnerWhatsApp(`New Shopify order received
 Order: ${order.name || ''}
 Customer: ${orderCustomerName(order)}
 Phone: ${phone || ''}
 Total: ${orderTotalAmount(order)}
-Customer confirmation WhatsApp: ${customerWa.ok ? 'sent' : (customerWa.reason || customerWa.error || customerWa.json?.error?.message || 'not sent')}`).catch(() => {});
-  res.json({ ok: true, lead, customerWhatsApp: customerWa });
+Payment: ${cod ? 'COD' : (order.payment_gateway_names || []).join(', ')}
+Customer WhatsApp: ${customerWa.ok ? 'sent' : (customerWa.reason || customerWa.error || customerWa.json?.error?.message || 'not sent')}`).catch(() => {});
+  res.json({ ok: true, lead, customerWhatsApp: customerWa, isCodOrder: cod });
 });
 
 app.post('/api/order-confirmed-by-customer', async (req, res) => {
