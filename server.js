@@ -74,6 +74,7 @@ const leadMessagesPath = path.join(dataDir, 'lead-messages.json');
 const mediaImagesPath = path.join(dataDir, 'media-images.json');
 const crmPath = path.join(dataDir, 'crm.json');
 const whatsappTemplatesPath = path.join(dataDir, 'whatsapp-templates.json');
+const whatsappInboxPath = path.join(dataDir, 'whatsapp-inbox.json');
 const shopifyOAuthStatePath = path.join(dataDir, 'shopify-oauth-state.json');
 
 const envPath = path.join(__dirname, '.env');
@@ -82,7 +83,7 @@ const apiKeys = [
   'ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS',
   'SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER',
   'SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI',
-  'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG',
+  'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG','WHATSAPP_WEBHOOK_VERIFY_TOKEN',
   'CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG',
   'SHOPIFY_WEBHOOK_SECRET',
   'GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET',
@@ -145,6 +146,7 @@ function writeEnvFile(next) {
     '# For test/business-initiated messages from your own number, use an approved template, not hello_world.',
     'WHATSAPP_TEST_TEMPLATE_NAME=' + (merged.WHATSAPP_TEST_TEMPLATE_NAME || ''),
     'WHATSAPP_TEST_TEMPLATE_LANG=' + (merged.WHATSAPP_TEST_TEMPLATE_LANG || 'en_US'),
+    'WHATSAPP_WEBHOOK_VERIFY_TOKEN=' + (merged.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'tinyshiny_verify_token'),
     '',
     '# Customer WhatsApp follow-up. Keep false until you have customer opt-in and approved WhatsApp template/session rules.',
     'CUSTOMER_WHATSAPP_MESSAGES_ENABLED=' + (merged.CUSTOMER_WHATSAPP_MESSAGES_ENABLED || 'false'),
@@ -199,6 +201,7 @@ function envLine(key, env) {
 }
 function configBackupText(env) {
   const templates = readJson(whatsappTemplatesPath, []);
+  const whatsappInbox = readJson(whatsappInboxPath, []);
   const settings = readJson(settingsPath, {});
   const sections = [
     ['Business', ['BUSINESS_NAME','WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER']],
@@ -234,7 +237,7 @@ function configBackupText(env) {
   lines.push(JSON.stringify(settings, null, 2));
   lines.push('');
   lines.push('__TSG_BACKUP_JSON_START__');
-  lines.push(JSON.stringify({ version: 2, downloadedAt: nowIso(), env, whatsappTemplates: templates, settings }, null, 2));
+  lines.push(JSON.stringify({ version: 3, downloadedAt: nowIso(), env, whatsappTemplates: templates, whatsappInbox, settings }, null, 2));
   lines.push('__TSG_BACKUP_JSON_END__');
   return lines.join('\n');
 }
@@ -249,6 +252,7 @@ function parseBackupText(text = '') {
     return {
       env: parsed.env || {},
       whatsappTemplates: Array.isArray(parsed.whatsappTemplates) ? parsed.whatsappTemplates : null,
+      whatsappInbox: Array.isArray(parsed.whatsappInbox) ? parsed.whatsappInbox : null,
       settings: parsed.settings && typeof parsed.settings === 'object' ? parsed.settings : null
     };
   }
@@ -261,7 +265,7 @@ function parseBackupText(text = '') {
     const value = trimmed.slice(idx + 1).trim();
     if (apiKeys.includes(key)) env[key] = value;
   }
-  return { env, whatsappTemplates: null, settings: null };
+  return { env, whatsappTemplates: null, whatsappInbox: null, settings: null };
 }
 
 function safeMergeConfigUpload(current, incoming) {
@@ -806,6 +810,74 @@ app.get('/widget.js', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'widget.js'));
 });
 
+
+function normalizeWhatsAppWebhookMessage(change = {}, value = {}, message = {}) {
+  const contacts = Array.isArray(value.contacts) ? value.contacts : [];
+  const contact = contacts.find(c => c.wa_id === message.from) || contacts[0] || {};
+  const profileName = contact.profile?.name || '';
+  let text = '';
+  let media = null;
+  const type = message.type || '';
+  if (type === 'text') text = message.text?.body || '';
+  else if (type === 'button') text = message.button?.text || message.button?.payload || '';
+  else if (type === 'interactive') text = message.interactive?.button_reply?.title || message.interactive?.list_reply?.title || JSON.stringify(message.interactive || {});
+  else if (type === 'image') { text = message.image?.caption || '[Image received]'; media = { type:'image', id:message.image?.id || '', mimeType:message.image?.mime_type || '', sha256:message.image?.sha256 || '' }; }
+  else if (type === 'document') { text = message.document?.caption || message.document?.filename || '[Document received]'; media = { type:'document', id:message.document?.id || '', filename:message.document?.filename || '', mimeType:message.document?.mime_type || '' }; }
+  else if (type === 'audio') { text = '[Audio received]'; media = { type:'audio', id:message.audio?.id || '', mimeType:message.audio?.mime_type || '' }; }
+  else if (type === 'video') { text = message.video?.caption || '[Video received]'; media = { type:'video', id:message.video?.id || '', mimeType:message.video?.mime_type || '' }; }
+  else text = type ? '[' + type + ' received]' : '[Message received]';
+  return {
+    id: message.id || crypto.randomUUID(),
+    direction: 'inbound',
+    from: cleanPhone(message.from || ''),
+    customerName: profileName,
+    phoneNumberId: value.metadata?.phone_number_id || '',
+    displayPhoneNumber: value.metadata?.display_phone_number || '',
+    type,
+    text,
+    media,
+    status: 'unread',
+    createdAt: message.timestamp ? new Date(Number(message.timestamp) * 1000).toISOString() : nowIso(),
+    raw: { changeField: change.field, message }
+  };
+}
+
+app.get('/webhooks/whatsapp', (req, res) => {
+  const env = readEnvFile();
+  const verifyToken = String(process.env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || env.WHATSAPP_WEBHOOK_VERIFY_TOKEN || 'tinyshiny_verify_token').trim();
+  const mode = req.query['hub.mode'];
+  const token = req.query['hub.verify_token'];
+  const challenge = req.query['hub.challenge'];
+  if (mode === 'subscribe' && token === verifyToken) return res.status(200).send(challenge || '');
+  return res.status(403).send('Verification failed');
+});
+
+app.post('/webhooks/whatsapp', (req, res) => {
+  try {
+    const body = req.body || {};
+    const saved = [];
+    for (const entry of (body.entry || [])) {
+      for (const change of (entry.changes || [])) {
+        const value = change.value || {};
+        for (const msg of (value.messages || [])) {
+          const item = normalizeWhatsAppWebhookMessage(change, value, msg);
+          appendJson(whatsappInboxPath, item);
+          upsertCrm({ name: item.customerName, phone: item.from, message: item.text, note: 'WhatsApp reply: ' + item.text }, 'whatsapp_reply');
+          sendToGoogleSheets('WhatsApp Reply', item).catch(()=>{});
+          saved.push(item);
+        }
+        for (const st of (value.statuses || [])) {
+          appendJson(whatsappInboxPath, { id: st.id || crypto.randomUUID(), direction: 'status', statusType: st.status || '', to: cleanPhone(st.recipient_id || ''), createdAt: st.timestamp ? new Date(Number(st.timestamp)*1000).toISOString() : nowIso(), raw: st });
+        }
+      }
+    }
+    res.json({ ok: true, saved: saved.length });
+  } catch (e) {
+    console.error('WhatsApp webhook error:', e);
+    res.status(200).json({ ok: false, error: e.message });
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/health', (req, res) => res.json({ ok: true, service: 'Tiny Shiny Chatbot', time: nowIso() }));
@@ -815,6 +887,7 @@ app.get('/api/settings', (req, res) => { res.set('Cache-Control','no-store'); re
 // From here, admin/API settings routes are protected by login.
 app.use(['/api/config','/api/test-whatsapp','/api/test-shopify','/api/leads','/api/visitor-events','/api/lead-messages','/api/media-images','/api/send-image-message','/api/faqs','/api/crm','/api/test-google-sheets','/api/sync-google-sheets','/api/shopify/customers','/api/shopify/products'], requireAdmin);
 app.use('/api/whatsapp-templates', requireAdmin);
+app.use('/api/whatsapp-inbox', requireAdmin);
 app.post('/api/settings', requireAdmin);
 
 app.get('/api/config', (req, res) => {
@@ -968,6 +1041,42 @@ app.post('/api/whatsapp-templates/unuse', (req, res) => {
   const savedEnv = readEnvFile();
   const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, savedEnv) }));
   res.json({ ok:true, template:tpl, target, templates, mappings: getWhatsAppTemplateMappings(savedEnv), message:`${tpl.name} removed from ${target}.` });
+});
+
+
+app.get('/api/whatsapp-inbox', (req, res) => {
+  const messages = readJson(whatsappInboxPath, []);
+  res.json({ ok: true, messages });
+});
+
+app.post('/api/whatsapp-inbox/:id/read', (req, res) => {
+  const messages = readJson(whatsappInboxPath, []);
+  const idx = messages.findIndex(m => String(m.id) === String(req.params.id));
+  if (idx >= 0) messages[idx].status = 'read';
+  writeJson(whatsappInboxPath, messages);
+  res.json({ ok: true, message: idx >= 0 ? messages[idx] : null });
+});
+
+app.post('/api/whatsapp-inbox/reply', async (req, res) => {
+  try {
+    const { phone = '', message = '', imageIds = [] } = req.body || {};
+    const to = cleanPhone(phone);
+    if (!to) return res.status(400).json({ ok: false, error: 'Customer phone required' });
+    const text = String(message || '').trim();
+    const images = readJson(mediaImagesPath, []);
+    const selectedImages = (Array.isArray(imageIds) ? imageIds : []).map(id => images.find(x => String(x.id) === String(id))).filter(Boolean);
+    const results = [];
+    if (text && !selectedImages.length) {
+      results.push({ type: 'text', result: await sendWhatsAppTextManual({ to, message: text }).catch(e => ({ ok:false, error:e.message })) });
+    }
+    for (const img of selectedImages.slice(0, 20)) {
+      const imageUrl = img.url && img.url.startsWith('/uploads/') ? img.url : (img.url || '');
+      results.push({ type:'image', imageId: img.id, result: await sendWhatsAppImage({ to, imageUrl: imageUrl.startsWith('http') ? imageUrl : (String(process.env.WEBSITE_URL || '').replace(/\/$/, '') + imageUrl), caption: text || img.caption || '' }).catch(e => ({ ok:false, error:e.message })) });
+    }
+    const ok = results.some(r => r.result && r.result.ok);
+    const out = appendJson(whatsappInboxPath, { id: crypto.randomUUID(), direction: 'outbound', to, type: selectedImages.length ? 'image' : 'text', text, imageIds: selectedImages.map(x=>x.id), createdAt: nowIso(), status: ok ? 'sent' : 'failed', results });
+    res.json({ ok, message: out, results });
+  } catch (e) { res.status(500).json({ ok:false, error:e.message }); }
 });
 
 app.post('/api/test-whatsapp', async (req, res) => {

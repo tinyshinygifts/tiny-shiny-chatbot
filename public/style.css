@@ -149,3 +149,13 @@ pre[id$="Result"],#templateResult,#appearanceResult,#whatsappResult,#shopifyResu
 .selected-media-list{margin:12px 0}.selected-media-list .hint{margin:0;padding:10px 12px;border:1px dashed var(--line);border-radius:14px;background:#fff}
 .attached-images{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:8px}.attached-image{display:grid;grid-template-columns:54px minmax(0,1fr) auto;align-items:center;gap:10px;border:1px solid var(--line);border-radius:16px;background:#fff;padding:8px}.attached-image img{width:54px;height:54px;object-fit:cover;border-radius:12px;border:1px solid #f0d7e7}.attached-image span{font-weight:800;overflow-wrap:anywhere}.media-card.selected{border-color:#8fe0b3;outline:3px solid rgba(20,140,74,.12)}.media-card-actions{display:flex;gap:8px;flex-wrap:wrap}.media-info small{overflow-wrap:anywhere}.media-panel #mediaSendResult{max-height:260px!important;overflow:auto!important;white-space:pre-wrap!important;word-break:break-word!important;background:#061a36;color:#fff;border-radius:16px;padding:14px}.mini-customer-row .ghost-btn{padding:6px 10px;font-size:12px;margin-left:auto;white-space:nowrap}.media-actions{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
 @media(max-width:760px){.attached-image{grid-template-columns:48px minmax(0,1fr)}.attached-image button{grid-column:1/-1}.mini-customer-row{flex-wrap:wrap}.mini-customer-row .ghost-btn{margin-left:0}}
+
+/* v24 WhatsApp Inbox / Customer Replies */
+.inbox-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(320px,1fr));gap:14px;margin-top:14px}
+.inbox-row{border:1px solid var(--line);border-radius:18px;background:#fff;padding:13px;box-shadow:0 10px 24px rgba(130,40,90,.05);display:flex;flex-direction:column;gap:7px;min-width:0}
+.inbox-row.unread{border-color:#8fe0b3;background:linear-gradient(135deg,#ffffff,#f6fff9)}
+.inbox-row.selected{outline:3px solid color-mix(in srgb,var(--pink) 24%,transparent);border-color:var(--pink)}
+.inbox-row label{display:flex;align-items:center;gap:7px;margin:0;min-width:0;flex-wrap:wrap}
+.inbox-row input[type="radio"]{width:auto!important}.inbox-row b{overflow-wrap:anywhere}.inbox-row small{color:#766a78;font-weight:750}.inbox-text{background:#160b18;color:#fff;border-radius:14px;padding:10px;white-space:pre-wrap;word-break:break-word;max-height:150px;overflow:auto}
+#whatsappInboxResult{max-height:260px!important;overflow:auto!important;white-space:pre-wrap!important;word-break:break-word!important;background:#061a36;color:#fff;border-radius:16px;padding:14px}
+@media(max-width:760px){.inbox-list{grid-template-columns:1fr}.inbox-row .inline-actions{align-items:flex-start}}

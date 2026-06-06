@@ -26,6 +26,7 @@
       <div><b id="leadCount">0</b><span>Leads</span></div>
       <div><b id="eventCount">0</b><span>Activities</span></div>
       <div><b id="messageCount">0</b><span>Buy Messages</span></div>
+      <div><b id="whatsappInboxCount">0</b><span>WhatsApp Replies</span></div>
       <div><b id="crmCount">0</b><span>CRM Customers</span></div>
     </section>
 
@@ -33,6 +34,7 @@
       <button class="tab-btn active" data-tab="basicPanel">Basic Settings</button>
       <button class="tab-btn" data-tab="crmPanel">CRM Dashboard</button>
       <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
+      <button class="tab-btn" data-tab="whatsappInboxPanel">WhatsApp Inbox</button>
       <button class="tab-btn" data-tab="newProductsPanel">New Products</button>
       <button class="tab-btn" data-tab="leadPanel">Leads</button>
       <button class="tab-btn" data-tab="activityPanel">Visitor Activity</button>
@@ -91,6 +93,31 @@
       </div>
       <pre id="shopifyCustomersResult"></pre>
       <div id="shopifyCustomersList" class="customer-table-wrap"></div>
+    </section>
+
+
+    <section class="panel tab-panel" id="whatsappInboxPanel">
+      <div class="section-head">
+        <div>
+          <h2>WhatsApp Inbox / Customer Replies</h2>
+          <p>Customer ne WhatsApp par jo reply kiya hai, wo yaha webhook se show hoga. Yahi se reply bhi bhej sakte ho.</p>
+        </div>
+        <div class="inline-actions"><button id="refreshWhatsappInbox" class="ghost-btn">Refresh Inbox</button></div>
+      </div>
+      <div class="form-grid three">
+        <label>Search Reply <input id="whatsappInboxSearch" placeholder="Name, phone, message"/></label>
+        <label>Reply To Number <input id="whatsappReplyPhone" placeholder="91XXXXXXXXXX"/></label>
+        <label>Attach Image Optional
+          <select id="whatsappReplyImage"><option value="">No image / Text only</option></select>
+        </label>
+      </div>
+      <label>Reply Message <textarea id="whatsappReplyText" placeholder="Write reply to customer"></textarea></label>
+      <div class="inline-actions">
+        <button id="sendWhatsappInboxReply" class="primary-btn">Send Reply</button>
+        <button id="markWhatsappInboxRead" class="ghost-btn">Mark Selected Read</button>
+      </div>
+      <pre id="whatsappInboxResult"></pre>
+      <div id="whatsappInboxList" class="inbox-list"></div>
     </section>
 
     <section class="panel tab-panel" id="newProductsPanel">
