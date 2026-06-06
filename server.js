@@ -630,10 +630,11 @@ function orderMatchesInput(order, { orderId, phone }) {
   return false;
 }
 async function shopifyFetch(pathAndQuery, options = {}) {
-  const store = process.env.SHOPIFY_STORE_DOMAIN;
-  const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
-  const version = process.env.SHOPIFY_API_VERSION || '2026-04';
-  if (!store || !token) return { ok: false, skipped: true, message: 'Shopify API is not connected yet.' };
+  const envNow = readEnvFile();
+  const store = normalizeShopDomain(envNow.SHOPIFY_STORE_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN);
+  const token = String(envNow.SHOPIFY_ADMIN_ACCESS_TOKEN || process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || '').trim();
+  const version = envNow.SHOPIFY_API_VERSION || process.env.SHOPIFY_API_VERSION || '2025-10';
+  if (!store || !token || token === '********') return { ok: false, skipped: true, message: 'Shopify API is not connected yet. Add Shopify Store Domain and Admin Access Token in API Settings.' };
   const response = await fetch(`https://${store}/admin/api/${version}/${pathAndQuery}`, {
     method: options.method || 'GET',
     headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
@@ -977,10 +978,11 @@ app.post('/api/test-whatsapp', async (req, res) => {
 });
 app.post('/api/test-shopify', async (req, res) => {
   try {
-    const store = process.env.SHOPIFY_STORE_DOMAIN;
-    const token = process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
-    const version = process.env.SHOPIFY_API_VERSION || '2025-10';
-    if (!store || !token) return res.json({ ok: false, message: 'Shopify store domain/token is missing.' });
+    const envNow = readEnvFile();
+    const store = normalizeShopDomain(envNow.SHOPIFY_STORE_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN);
+    const token = String(envNow.SHOPIFY_ADMIN_ACCESS_TOKEN || process.env.SHOPIFY_ADMIN_ACCESS_TOKEN || '').trim();
+    const version = envNow.SHOPIFY_API_VERSION || process.env.SHOPIFY_API_VERSION || '2025-10';
+    if (!store || !token || token === '********') return res.json({ ok: false, message: 'Shopify store domain/token is missing.' });
     const response = await fetch(`https://${store}/admin/api/${version}/shop.json`, { headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' } });
     const json = await response.json().catch(() => ({}));
     res.json({ ok: response.ok, status: response.status, shop: json.shop ? { name: json.shop.name, domain: json.shop.domain, email: json.shop.email } : undefined, detail: response.ok ? undefined : json });
