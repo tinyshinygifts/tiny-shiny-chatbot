@@ -157,18 +157,30 @@
       <p class="hint">Fill only the fields iCarry provides. Existing API settings stay safe when updating.</p>
     </section>
 
-    <section class="panel">
+    <section class="panel api-template-library-panel">
       <div class="section-head">
         <div>
-          <h2>WhatsApp Templates in API Settings</h2>
-          <p>Template Library me jo bhi template add/modify/remove hoga, wo yaha automatically dropdown me update hoga.</p>
+          <h2>WhatsApp Templates Library</h2>
+          <p>Meta WhatsApp Manager me approved templates yaha save rakho. Add, modify, remove aur multiple automation use yahi se manage hoga.</p>
         </div>
         <div class="inline-actions">
           <button id="refreshApiTemplates" type="button" class="ghost-btn">Refresh Templates</button>
-          <a class="pill-link" href="/admin.html#templates">Open Template Library</a>
+          <button id="newTemplateBtn" type="button" class="ghost-btn">+ Add Template</button>
+          <button id="restoreDefaultTemplates" type="button" class="ghost-btn">Restore Default 12</button>
         </div>
       </div>
+
       <div class="form-grid three">
+        <label>Search Template <input id="templateSearch" placeholder="order, followup, shipped, offer"/></label>
+        <label>Filter Category
+          <select id="templateCategoryFilter"><option value="">All</option><option>Utility</option><option>Marketing</option><option>Authentication</option></select>
+        </label>
+        <label>Quick Use For
+          <select id="templateMapTarget"><option value="customer_followup">Customer Follow-up</option><option value="order_confirmation">Order Confirmation</option><option value="test_whatsapp">Test WhatsApp / Owner</option></select>
+        </label>
+      </div>
+
+      <div class="form-grid three template-quick-map">
         <label>Customer Follow-up Template
           <select id="API_CUSTOMER_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
         </label>
@@ -179,8 +191,46 @@
           <select id="API_TEST_TEMPLATE_SELECT_2"><option value="">Manual / Select template</option></select>
         </label>
       </div>
+
+      <div class="template-workspace api-template-workspace">
+        <div>
+          <h3>Saved Templates</h3>
+          <div id="templateList" class="template-grid"></div>
+        </div>
+        <div class="template-editor">
+          <h3 id="templateEditorTitle">Add / Modify Template</h3>
+          <input id="templateId" type="hidden"/>
+          <div class="form-grid two">
+            <label>Template Name <input id="templateName" placeholder="order_confirmation"/></label>
+            <label>Language Code <input id="templateLanguage" placeholder="en"/></label>
+            <label>Category
+              <select id="templateCategory"><option>Utility</option><option>Marketing</option><option>Authentication</option></select>
+            </label>
+            <label>Header Type
+              <select id="templateHeaderType"><option>None</option><option>Image</option><option>Video</option><option>Document</option><option>Text</option></select>
+            </label>
+          </div>
+          <label>Use Case <input id="templateUseCase" placeholder="Kis automation ke liye use hoga"/></label>
+          <label>Body Text <textarea id="templateBody" rows="8" placeholder="Hi {{1}}, your order {{2}}..."></textarea></label>
+          <label>Variables <textarea id="templateVariables" rows="3" placeholder="Customer Name
+Order Number
+Order Amount"></textarea></label>
+          <label>Buttons <textarea id="templateButtons" rows="3" placeholder="Quick Reply | Interested
+URL | Shop Now | https://www.tinyshinygifts.com"></textarea></label>
+          <label class="checkline"><input id="templateEnabled" type="checkbox" checked/> Enabled in library</label>
+          <div class="inline-actions">
+            <button id="saveTemplate" class="primary-btn" type="button">Save Template</button>
+            <button id="mapTemplateToAutomation" class="ghost-btn" type="button">Use Selected</button>
+            <button id="clearTemplateForm" class="ghost-btn" type="button">Clear</button>
+          </div>
+          <pre id="templateResult"></pre>
+          <p class="hint">Ek template ko multiple places par use kar sakte ho. Template card par Customer / Order / Test buttons use karo.</p>
+        </div>
+      </div>
+
+      <h3>Template Use Status</h3>
       <div id="apiTemplateList" class="template-status-list"></div>
-      <p class="hint">Jis template ka naam fields me saved hai, uspar USED dikhega. Baaki templates par Available dikhega.</p>
+      <p class="hint">Jo template automation me laga hoga uspar USED dikhega. Ek hi template multiple automation me USED ho sakta hai.</p>
     </section>
 
     <section class="panel">

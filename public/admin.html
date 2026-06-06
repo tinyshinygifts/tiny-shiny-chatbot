@@ -34,7 +34,6 @@
       <button class="tab-btn" data-tab="crmPanel">CRM Dashboard</button>
       <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
       <button class="tab-btn" data-tab="newProductsPanel">New Products</button>
-      <button class="tab-btn" data-tab="templateLibraryPanel">WhatsApp Templates</button>
       <button class="tab-btn" data-tab="leadPanel">Leads</button>
       <button class="tab-btn" data-tab="activityPanel">Visitor Activity</button>
       <button class="tab-btn" data-tab="messagePanel">Buy Messages</button>
@@ -118,113 +117,6 @@
     </section>
 
 
-
-    <section class="panel tab-panel" id="templateLibraryPanel">
-      <div class="section-head">
-        <div>
-          <h2>WhatsApp Template Library</h2>
-          <p>Sare approved/pending Meta WhatsApp templates yaha save rakhein. Yaha se add, modify, remove aur automation mapping kar sakte hain.</p>
-        </div>
-        <div class="inline-actions">
-          <button id="refreshTemplates" class="ghost-btn" type="button">Refresh Templates</button>
-          <button id="newTemplateBtn" class="ghost-btn" type="button">+ Add Template</button>
-          <button id="restoreDefaultTemplates" class="ghost-btn" type="button">Restore Default 12</button>
-        </div>
-      </div>
-      <div class="form-grid three">
-        <label>Search Template <input id="templateSearch" placeholder="order, followup, shipped, offer"/></label>
-        <label>Filter Category
-          <select id="templateCategoryFilter"><option value="">All</option><option>Utility</option><option>Marketing</option><option>Authentication</option></select>
-        </label>
-        <label>Map selected template to
-          <select id="templateMapTarget"><option value="customer_followup">Customer Follow-up</option><option value="order_confirmation">Order Confirmation</option><option value="test_whatsapp">Test WhatsApp / Owner</option></select>
-        </label>
-      </div>
-      <div class="template-workspace">
-        <div>
-          <h3>Saved Templates</h3>
-          <div id="templateList" class="template-grid"></div>
-        </div>
-        <div class="template-editor">
-          <h3 id="templateEditorTitle">Add / Modify Template</h3>
-          <input id="templateId" type="hidden"/>
-          <div class="form-grid two">
-            <label>Template Name <input id="templateName" placeholder="order_confirmation"/></label>
-            <label>Language Code <input id="templateLanguage" placeholder="en"/></label>
-            <label>Category
-              <select id="templateCategory"><option>Utility</option><option>Marketing</option><option>Authentication</option></select>
-            </label>
-            <label>Header Type
-              <select id="templateHeaderType"><option>None</option><option>Image</option><option>Video</option><option>Document</option><option>Text</option></select>
-            </label>
-          </div>
-          <label>Use Case <input id="templateUseCase" placeholder="Kis automation ke liye use hoga"/></label>
-          <label>Body Text <textarea id="templateBody" rows="8" placeholder="Hi {{1}}, your order {{2}}..."></textarea></label>
-          <label>Variables <textarea id="templateVariables" rows="3" placeholder="Customer Name\nOrder Number\nOrder Amount"></textarea></label>
-          <label>Buttons <textarea id="templateButtons" rows="3" placeholder="Quick Reply | Interested\nURL | Shop Now | https://www.tinyshinygifts.com"></textarea></label>
-          <label class="checkline"><input id="templateEnabled" type="checkbox" checked/> Enabled in library</label>
-          <div class="inline-actions">
-            <button id="saveTemplate" class="primary-btn" type="button">Save Template</button>
-            <button id="clearTemplateForm" class="ghost-btn" type="button">Clear Form</button>
-            <button id="mapTemplateToAutomation" class="ghost-btn" type="button">Use Selected for Automation</button>
-          </div>
-          <pre id="templateResult"></pre>
-          <p class="hint">Meta WhatsApp Manager me template approve hone ke baad yahi exact Template Name aur Language Code chatbot automation me use hoga.</p>
-        </div>
-      </div>
-    </section>
-
-    <section class="panel tab-panel media-panel" id="imagePanel">
-      <h2>Image Messages</h2>
-      <p>Upload images such as thank you letter, offer/discount image or wishes. You can preview them here and send them through WhatsApp after WhatsApp Cloud API is connected.</p>
-      <div class="form-grid two">
-        <label>Image Type
-          <select id="mediaCategory">
-            <option value="thanks_letter">Thanks Letter</option>
-            <option value="offer_discount">Offer / Discount Image</option>
-            <option value="wishes">Wishes</option>
-            <option value="product_offer">Product Offer</option>
-            <option value="other">Other</option>
-          </select>
-        </label>
-        <label>Image Title <input id="mediaTitle" placeholder="Example: Rakhi Offer Banner"/></label>
-      </div>
-      <label>Caption / WhatsApp Message <textarea id="mediaCaption" placeholder="Write English message to send with this image"></textarea></label>
-      <label>Upload Image <input id="mediaFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif"/></label>
-      <div class="media-actions">
-        <button id="uploadMedia" class="primary-btn">Upload Image</button>
-        <button id="refreshMedia" class="ghost-btn">Refresh Images</button>
-      </div>
-      <p class="hint">Local test me image admin panel me dikhegi. WhatsApp image send ke liye chatbot public URL par host hona chahiye, jaise Render URL ya chat.tinyshinygifts.com.</p>
-      <div class="send-box">
-        <h3>Send selected image on WhatsApp</h3>
-        <div class="form-grid two">
-          <label>Send To
-            <select id="mediaSendTo"><option value="owner">Owner / Team WhatsApp</option><option value="custom">Customer Number</option><option value="shopify_customers">Selected Shopify Customers</option></select>
-          </label>
-          <label>Customer WhatsApp Number <input id="mediaPhone" placeholder="91XXXXXXXXXX"/></label>
-        </div>
-        <div class="media-customer-box">
-          <div class="media-actions">
-            <button id="refreshMediaCustomers" class="ghost-btn" type="button">Load Shopify Customers</button>
-            <label class="checkline"><input id="selectAllMediaCustomers" type="checkbox"/> Select All Customers</label>
-          </div>
-          <input id="mediaCustomerSearch" placeholder="Search customer by name, phone, email"/>
-          <div id="mediaCustomerList" class="mini-customer-list"></div>
-        </div>
-        <button id="sendSelectedMedia" class="ghost-btn">Send Selected Image</button>
-        <pre id="mediaSendResult"></pre>
-      </div>
-      <div id="mediaList" class="media-grid"></div>
-    </section>
-
-    <section class="panel tab-panel" id="faqPanel">
-      <h2>FAQ Rules</h2>
-      <p>Format: separate keywords with commas.</p>
-      <div id="faqList"></div>
-      <button id="addFaq" class="ghost-btn">+ Add FAQ</button>
-      <button id="saveFaqs" class="primary-btn">Save FAQs</button>
-    </section>
 
     <section class="panel tab-panel" id="leadPanel"><h2>Leads / Order Requests</h2><button id="refreshLeads" class="ghost-btn">Refresh Leads</button><div id="leadList"></div></section>
     <section class="panel tab-panel" id="activityPanel"><h2>Visitor / Product Activity</h2><button id="refreshEvents" class="ghost-btn">Refresh Activity</button><div id="eventList"></div></section>
