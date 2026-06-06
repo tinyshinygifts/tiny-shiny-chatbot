@@ -198,6 +198,8 @@ function envLine(key, env) {
   return `${key}=${env[key] || ''}`;
 }
 function configBackupText(env) {
+  const templates = readJson(whatsappTemplatesPath, []);
+  const settings = readJson(settingsPath, {});
   const sections = [
     ['Business', ['BUSINESS_NAME','WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER']],
     ['Admin Login Security', ['ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS']],
@@ -212,7 +214,7 @@ function configBackupText(env) {
   lines.push('Tiny Shiny Chatbot - API Settings Backup');
   lines.push('Downloaded: ' + new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST');
   lines.push('');
-  lines.push('NOTE: Is file ko safe rakhein. Isme secret keys/passwords full value me hain.');
+  lines.push('NOTE: Is file ko safe rakhein. Isme secret keys/passwords full value me hain. Isi file ko Upload API Backup se restore bhi kar sakte hain.');
   lines.push('');
   for (const [title, keys] of sections) {
     lines.push('==============================');
@@ -221,7 +223,57 @@ function configBackupText(env) {
     for (const key of keys) lines.push(envLine(key, env));
     lines.push('');
   }
+  lines.push('==============================');
+  lines.push('WhatsApp Template Library JSON');
+  lines.push('==============================');
+  lines.push(JSON.stringify(templates, null, 2));
+  lines.push('');
+  lines.push('==============================');
+  lines.push('Chatbot UI Settings JSON');
+  lines.push('==============================');
+  lines.push(JSON.stringify(settings, null, 2));
+  lines.push('');
+  lines.push('__TSG_BACKUP_JSON_START__');
+  lines.push(JSON.stringify({ version: 2, downloadedAt: nowIso(), env, whatsappTemplates: templates, settings }, null, 2));
+  lines.push('__TSG_BACKUP_JSON_END__');
   return lines.join('\n');
+}
+
+function parseBackupText(text = '') {
+  const raw = String(text || '');
+  const start = raw.indexOf('__TSG_BACKUP_JSON_START__');
+  const end = raw.indexOf('__TSG_BACKUP_JSON_END__');
+  if (start >= 0 && end > start) {
+    const jsonText = raw.slice(start + '__TSG_BACKUP_JSON_START__'.length, end).trim();
+    const parsed = JSON.parse(jsonText);
+    return {
+      env: parsed.env || {},
+      whatsappTemplates: Array.isArray(parsed.whatsappTemplates) ? parsed.whatsappTemplates : null,
+      settings: parsed.settings && typeof parsed.settings === 'object' ? parsed.settings : null
+    };
+  }
+  const env = {};
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('=') || !trimmed.includes('=')) continue;
+    const idx = trimmed.indexOf('=');
+    const key = trimmed.slice(0, idx).trim();
+    const value = trimmed.slice(idx + 1).trim();
+    if (apiKeys.includes(key)) env[key] = value;
+  }
+  return { env, whatsappTemplates: null, settings: null };
+}
+
+function safeMergeConfigUpload(current, incoming) {
+  const next = {};
+  for (const key of apiKeys) {
+    if (!Object.prototype.hasOwnProperty.call(incoming || {}, key)) continue;
+    const val = String(incoming[key] ?? '').trim();
+    const looksMasked = val === '' || val === '********' || /\*{2,}/.test(val) || /\.\.\.$/.test(val);
+    if (secretKeys.has(key) && looksMasked && current[key]) next[key] = current[key];
+    else if (val !== '' || !current[key]) next[key] = val;
+  }
+  return next;
 }
 
 
@@ -795,6 +847,30 @@ app.get('/api/config/download', (req, res) => {
   res.send(text);
 });
 
+app.post('/api/config/upload', (req, res) => {
+  try {
+    const parsed = parseBackupText((req.body || {}).text || '');
+    const current = readEnvFile();
+    const envUpdate = safeMergeConfigUpload(current, parsed.env || {});
+    const savedEnv = writeEnvFile(envUpdate);
+    let templatesUpdated = false;
+    let settingsUpdated = false;
+    if (Array.isArray(parsed.whatsappTemplates)) {
+      writeWhatsAppTemplates(parsed.whatsappTemplates);
+      templatesUpdated = true;
+    }
+    if (parsed.settings && typeof parsed.settings === 'object') {
+      const currentSettings = readJson(settingsPath, {});
+      writeJson(settingsPath, { ...currentSettings, ...parsed.settings });
+      settingsUpdated = true;
+    }
+    const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, savedEnv) }));
+    res.json({ ok: true, message: 'API backup uploaded and settings updated.', updatedKeys: Object.keys(envUpdate), templatesUpdated, settingsUpdated, config: publicConfig(savedEnv), templates, mappings: getWhatsAppTemplateMappings(savedEnv) });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message || 'Invalid backup file' });
+  }
+});
+
 app.get('/api/whatsapp-templates', (req, res) => {
   const env = readEnvFile();
   const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, env) }));
@@ -857,6 +933,39 @@ app.post('/api/whatsapp-templates/use', (req, res) => {
     const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, savedEnv) }));
     res.json({ ok:true, template:tpl, target, templates, mappings: getWhatsAppTemplateMappings(savedEnv), message:`${tpl.name} mapped to ${target}. API Settings updated.` });
   }
+});
+
+
+app.post('/api/whatsapp-templates/unuse', (req, res) => {
+  const { id, target } = req.body || {};
+  const tpl = readWhatsAppTemplates().find(t => String(t.id) === String(id) || t.name === id);
+  if (!tpl) return res.status(404).json({ ok:false, error:'Template not found' });
+  const env = readEnvFile();
+  const update = {};
+  if (target === 'customer_followup') {
+    if ((env.CUSTOMER_WHATSAPP_TEMPLATE_NAME || '') === tpl.name) {
+      update.CUSTOMER_WHATSAPP_MESSAGES_ENABLED = 'false';
+      update.CUSTOMER_WHATSAPP_TEMPLATE_NAME = '';
+      update.CUSTOMER_WHATSAPP_TEMPLATE_LANG = env.CUSTOMER_WHATSAPP_TEMPLATE_LANG || 'en';
+    }
+  } else if (target === 'order_confirmation') {
+    if ((env.ORDER_CONFIRMATION_TEMPLATE_NAME || '') === tpl.name) {
+      update.ORDER_CONFIRMATION_WHATSAPP_ENABLED = 'false';
+      update.ORDER_CONFIRMATION_TEMPLATE_NAME = '';
+      update.ORDER_CONFIRMATION_TEMPLATE_LANG = env.ORDER_CONFIRMATION_TEMPLATE_LANG || 'en';
+    }
+  } else if (target === 'test_whatsapp') {
+    if ((env.WHATSAPP_TEST_TEMPLATE_NAME || '') === tpl.name) {
+      update.WHATSAPP_TEST_TEMPLATE_NAME = '';
+      update.WHATSAPP_TEST_TEMPLATE_LANG = env.WHATSAPP_TEST_TEMPLATE_LANG || 'en_US';
+    }
+  } else {
+    return res.status(400).json({ ok:false, error:'Target required: customer_followup, order_confirmation, or test_whatsapp' });
+  }
+  writeEnvFile({ ...env, ...update });
+  const savedEnv = readEnvFile();
+  const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, savedEnv) }));
+  res.json({ ok:true, template:tpl, target, templates, mappings: getWhatsAppTemplateMappings(savedEnv), message:`${tpl.name} removed from ${target}.` });
 });
 
 app.post('/api/test-whatsapp', async (req, res) => {

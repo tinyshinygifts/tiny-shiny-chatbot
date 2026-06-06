@@ -32,6 +32,20 @@ function applyApiTemplateToTarget(tpl, target){
   renderTemplates();
 }
 function templateBySelectValue(value){ return whatsappTemplates.find(t=>String(t.id)===String(value) || t.name===value); }
+function selectedMapTarget(){ return $('templateMapTarget')?.value || 'customer_followup'; }
+function applyApiFontSize(size){
+  const allowed = ['small','medium','large','xlarge'];
+  const val = allowed.includes(String(size)) ? String(size) : 'medium';
+  document.body.classList.remove('api-font-small','api-font-medium','api-font-large','api-font-xlarge');
+  document.body.classList.add('api-font-' + val);
+  localStorage.setItem('tsgApiFontSize', val);
+  if($('apiFontSize')) $('apiFontSize').value = val;
+}
+async function saveApiFontSize(size){
+  applyApiFontSize(size);
+  try{ await fetch('/api/settings',{method:'POST',credentials:'include',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiFontSize:size})}); }catch(e){}
+}
+
 
 function clearTemplateForm(){
   if($('templateId')) templateId.value='';
@@ -68,10 +82,13 @@ function renderTemplates(){
   const list=$('templateList'); if(!list) return;
   const q=($('templateSearch')?.value||'').toLowerCase().trim();
   const cat=$('templateCategoryFilter')?.value||'';
+  const activeTarget=selectedMapTarget();
   const filtered=whatsappTemplates.filter(t=>(!q||templateValue(t).includes(q))&&(!cat||t.category===cat));
   list.innerHTML=filtered.map(t=>{
     const usedTargets=templateUsedTargets(t); const usedLabel=templateUsedLabel(t); const isUsed=usedTargets.length>0;
-    const btn=(target,label)=>`<button class="ghost-btn ${usedTargets.includes(target)?'used-btn':''}" data-map-template="${esc(t.id)}" data-map-target="${target}">${usedTargets.includes(target)?'USED '+label:'Use '+label}</button>`;
+    const targetUsed=usedTargets.includes(activeTarget);
+    const actionText = targetUsed ? 'USED' : 'Use';
+    const actionClass = targetUsed ? 'used-btn' : '';
     return `<div class="template-card ${String(selectedTemplateId)===String(t.id)?'selected':''} ${isUsed?'template-used':''}">
       <div class="template-card-head"><b>${esc(t.name)}</b><span>${esc(t.category||'')} • ${esc(t.language||'en')}</span></div>
       ${isUsed?`<div class="used-badge">USED: ${esc(usedLabel)}</div>`:`<div class="available-badge">Available / Use</div>`}
@@ -80,9 +97,7 @@ function renderTemplates(){
       <pre>${esc((t.body||'').slice(0,260))}${(t.body||'').length>260?'...':''}</pre>
       <div class="template-actions">
         <button class="ghost-btn" data-edit-template="${esc(t.id)}">Modify</button>
-        ${btn('customer_followup','Customer')}
-        ${btn('order_confirmation','Order')}
-        ${btn('test_whatsapp','Test')}
+        <button class="ghost-btn ${actionClass}" data-toggle-template="${esc(t.id)}" data-map-target="${esc(activeTarget)}">${actionText}</button>
         <button class="ghost-btn danger-outline" data-delete-template="${esc(t.id)}">Remove</button>
       </div>
     </div>`;
@@ -126,11 +141,23 @@ async function restoreDefaultTemplates(){
   if(res.ok){ whatsappTemplates=res.templates||[]; whatsappTemplateMappings=res.mappings||{}; selectedTemplateId=whatsappTemplates[0]?.id||''; await loadApiTemplates(); }
 }
 async function mapTemplate(id, target){
-  target = target || $('templateMapTarget')?.value || 'customer_followup';
+  target = target || selectedMapTarget();
   const res=await fetch('/api/whatsapp-templates/use',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,target})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
   if(res.ok){ whatsappTemplates=res.templates||whatsappTemplates; whatsappTemplateMappings=res.mappings||whatsappTemplateMappings; applyMappingsToFields(whatsappTemplateMappings); await loadApiTemplates(); }
   else alert(res.error || 'Template map failed.');
+}
+async function unmapTemplate(id, target){
+  target = target || selectedMapTarget();
+  const res=await fetch('/api/whatsapp-templates/unuse',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,target})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
+  if(res.ok){ whatsappTemplates=res.templates||whatsappTemplates; whatsappTemplateMappings=res.mappings||whatsappTemplateMappings; applyMappingsToFields(whatsappTemplateMappings); await loadApiTemplates(); }
+  else alert(res.error || 'Template unuse failed.');
+}
+async function toggleTemplateUse(id, target){
+  const tpl = whatsappTemplates.find(t=>String(t.id)===String(id) || t.name===id);
+  const used = tpl ? templateUsedTargets(tpl).includes(target || selectedMapTarget()) : false;
+  return used ? unmapTemplate(id, target) : mapTemplate(id, target);
 }
 
 function renderApiTemplates(){
@@ -166,7 +193,7 @@ function normalizeColor(value){ const v=String(value||'').trim().toLowerCase(); 
 function tint(hex, amount){ hex=normalizeColor(hex).slice(1); const n=parseInt(hex,16); let r=(n>>16)&255,g=(n>>8)&255,b=n&255; if(amount>=0){r+=(255-r)*amount;g+=(255-g)*amount;b+=(255-b)*amount}else{r*=(1+amount);g*=(1+amount);b*=(1+amount)} return '#'+[r,g,b].map(x=>Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,'0')).join(''); }
 function applyThemeColor(value){ const color=normalizeColor(value); document.documentElement.style.setProperty('--pink', color); document.documentElement.style.setProperty('--pink2', tint(color,.28)); document.documentElement.style.setProperty('--purple', tint(color,-.12)); document.documentElement.style.setProperty('--line', tint(color,.76)); localStorage.setItem('tsgAdminThemeColor', color); }
 function setThemeColor(value){ const color=normalizeColor(value); applyThemeColor(color); if($('themeColor')) $('themeColor').value=color; if($('themeHex')) $('themeHex').value=color.toUpperCase(); if($('themeColorPreview')) $('themeColorPreview').textContent=colorNames[color] || color.toUpperCase(); if($('themeColorPreset')) $('themeColorPreset').value=colorOptions.includes(color)?color:'custom'; }
-async function loadTheme(){ try{ const data=await fetch('/api/settings',{credentials:'include',cache:'no-store'}).then(r=>r.json()); const settings=data.settings||{}; const color=settings.themeColor || localStorage.getItem('tsgAdminThemeColor') || '#d63384'; setThemeColor(color); if($('botName')) $('botName').value=settings.botName || 'Tiny Shiny Assistant'; if($('chatbotEnabled')) { $('chatbotEnabled').checked = settings.chatbotEnabled !== false; if($('chatbotStatusText')) $('chatbotStatusText').textContent = $('chatbotEnabled').checked ? 'ON' : 'OFF'; } }catch{ setThemeColor(localStorage.getItem('tsgAdminThemeColor') || '#d63384'); } }
+async function loadTheme(){ try{ const data=await fetch('/api/settings',{credentials:'include',cache:'no-store'}).then(r=>r.json()); const settings=data.settings||{}; const color=settings.themeColor || localStorage.getItem('tsgAdminThemeColor') || '#d63384'; setThemeColor(color); if($('botName')) $('botName').value=settings.botName || 'Tiny Shiny Assistant'; applyApiFontSize(settings.apiFontSize || localStorage.getItem('tsgApiFontSize') || 'medium'); if($('chatbotEnabled')) { $('chatbotEnabled').checked = settings.chatbotEnabled !== false; if($('chatbotStatusText')) $('chatbotStatusText').textContent = $('chatbotEnabled').checked ? 'ON' : 'OFF'; } }catch{ setThemeColor(localStorage.getItem('tsgAdminThemeColor') || '#d63384'); } }
 async function logout(){ try{ await fetch('/api/admin/logout',{method:'POST',credentials:'include',cache:'no-store'}); }catch(e){} window.location.replace('/login.html?logout=1&t='+Date.now()); }
 async function loadConfig(){
   await loadTheme();
@@ -196,6 +223,18 @@ function downloadConfigBackup(){
   a.click();
   a.remove();
 }
+async function uploadConfigBackup(fileInput){
+  const file = fileInput?.files?.[0];
+  if(!file) return;
+  if(!confirm('This will update your current API settings from backup file. Continue?')) { fileInput.value=''; return; }
+  const text = await file.text();
+  const res = await fetch('/api/config/upload',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('saveStatus')) $('saveStatus').textContent = res.message || (res.ok ? 'Backup uploaded.' : 'Upload failed');
+  if($('templateResult')) templateResult.textContent = JSON.stringify(res, null, 2);
+  fileInput.value='';
+  if(res.ok) await loadConfig();
+  else alert(res.error || 'Backup upload failed.');
+}
 
 async function saveConfig(){
   const body = {};
@@ -214,7 +253,9 @@ document.addEventListener('input', e=>{
 });
 document.addEventListener('change', e=>{
   if(e.target.id === 'themeColorPreset' && e.target.value !== 'custom') setThemeColor(e.target.value);
-  if(e.target.id==='templateCategoryFilter') renderTemplates();
+  if(e.target.id==='templateCategoryFilter' || e.target.id==='templateMapTarget') renderTemplates();
+  if(e.target.id==='apiFontSize') saveApiFontSize(e.target.value);
+  if(e.target.id==='uploadConfigFile' || e.target.id==='uploadConfigFile2') uploadConfigBackup(e.target);
   const selectMap={API_CUSTOMER_TEMPLATE_SELECT:'customer_followup',API_CUSTOMER_TEMPLATE_SELECT_2:'customer_followup',API_ORDER_TEMPLATE_SELECT:'order_confirmation',API_ORDER_TEMPLATE_SELECT_2:'order_confirmation',API_TEST_TEMPLATE_SELECT:'test_whatsapp',API_TEST_TEMPLATE_SELECT_2:'test_whatsapp'};
   if(selectMap[e.target.id]) applyApiTemplateToTarget(templateBySelectValue(e.target.value), selectMap[e.target.id]);
 });
@@ -231,6 +272,7 @@ document.addEventListener('click', async (e)=>{
   if(e.target.dataset.editTemplate) editTemplate(e.target.dataset.editTemplate);
   if(e.target.dataset.deleteTemplate) deleteTemplate(e.target.dataset.deleteTemplate);
   if(e.target.dataset.mapTemplate) mapTemplate(e.target.dataset.mapTemplate, e.target.dataset.mapTarget || undefined);
+  if(e.target.dataset.toggleTemplate) toggleTemplateUse(e.target.dataset.toggleTemplate, e.target.dataset.mapTarget || undefined);
   if(e.target.id === 'downloadConfig' || e.target.id === 'downloadConfig2') downloadConfigBackup();
   if(e.target.id === 'connectShopify') {
     const saved = await saveConfig();

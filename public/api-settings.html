@@ -16,8 +16,18 @@
         <h1>API Settings</h1>
         <p>Manage login, Shopify, WhatsApp and customer follow-up settings.</p>
       </div>
-      <div class="top-actions">
+      <div class="top-actions api-top-actions">
+        <label class="font-size-control">Font Size
+          <select id="apiFontSize">
+            <option value="medium">Medium</option>
+            <option value="large">Large</option>
+            <option value="xlarge">Extra Large</option>
+            <option value="small">Small</option>
+          </select>
+        </label>
         <button id="downloadConfig" type="button" class="ghost-btn">Download API Backup</button>
+        <label class="ghost-btn file-upload-btn" for="uploadConfigFile">Upload API Backup</label>
+        <input id="uploadConfigFile" type="file" accept=".txt,.json,text/plain,application/json" hidden/>
         <a class="pill-link" href="/admin.html">← Back to Admin</a>
         <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
       </div>
@@ -197,10 +207,10 @@
           <h3>Saved Templates</h3>
           <div id="templateList" class="template-grid"></div>
         </div>
-        <div class="template-editor">
+        <div class="template-editor template-editor-fixed">
           <h3 id="templateEditorTitle">Add / Modify Template</h3>
           <input id="templateId" type="hidden"/>
-          <div class="form-grid two">
+          <div class="template-form-grid">
             <label>Template Name <input id="templateName" placeholder="order_confirmation"/></label>
             <label>Language Code <input id="templateLanguage" placeholder="en"/></label>
             <label>Category
@@ -224,13 +234,13 @@ URL | Shop Now | https://www.tinyshinygifts.com"></textarea></label>
             <button id="clearTemplateForm" class="ghost-btn" type="button">Clear</button>
           </div>
           <pre id="templateResult"></pre>
-          <p class="hint">Ek template ko multiple places par use kar sakte ho. Template card par Customer / Order / Test buttons use karo.</p>
+          <p class="hint">Quick Use For dropdown me automation select karo. Template card ke Use/USED button se selected automation me add/remove kar sakte ho.</p>
         </div>
       </div>
 
       <h3>Template Use Status</h3>
       <div id="apiTemplateList" class="template-status-list"></div>
-      <p class="hint">Jo template automation me laga hoga uspar USED dikhega. Ek hi template multiple automation me USED ho sakta hai.</p>
+      <p class="hint">Jo template automation me laga hoga uspar USED dikhega. Quick Use For badal kar same template ko alag automation me bhi use kar sakte ho.</p>
     </section>
 
     <section class="panel">
@@ -281,6 +291,8 @@ URL | Shop Now | https://www.tinyshinygifts.com"></textarea></label>
       <h2>Save</h2>
       <button id="saveConfig" class="primary-btn">Save API Settings</button>
       <button id="downloadConfig2" class="ghost-btn" type="button">Download API Settings Text File</button>
+      <label class="ghost-btn file-upload-btn" for="uploadConfigFile2">Upload API Backup</label>
+      <input id="uploadConfigFile2" type="file" accept=".txt,.json,text/plain,application/json" hidden/>
       <p id="saveStatus" class="success"></p>
       <p class="hint">Download backup me saved settings block-wise text file me milengi. Is file ko safe rakhein kyunki secret keys bhi full value me hoti hain.</p>
       <p><b>Note:</b> After saving API settings locally, close the black command window and start <code>start_chatbot.bat</code> again.</p>
