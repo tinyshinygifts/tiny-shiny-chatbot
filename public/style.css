@@ -159,3 +159,8 @@ pre[id$="Result"],#templateResult,#appearanceResult,#whatsappResult,#shopifyResu
 .inbox-row input[type="radio"]{width:auto!important}.inbox-row b{overflow-wrap:anywhere}.inbox-row small{color:#766a78;font-weight:750}.inbox-text{background:#160b18;color:#fff;border-radius:14px;padding:10px;white-space:pre-wrap;word-break:break-word;max-height:150px;overflow:auto}
 #whatsappInboxResult{max-height:260px!important;overflow:auto!important;white-space:pre-wrap!important;word-break:break-word!important;background:#061a36;color:#fff;border-radius:16px;padding:14px}
 @media(max-width:760px){.inbox-list{grid-template-columns:1fr}.inbox-row .inline-actions{align-items:flex-start}}
+
+/* PWA install button */
+.pwa-install-btn{white-space:nowrap;}
+@media (display-mode: standalone){.pwa-install-btn{display:none!important;}}
+@media (max-width:720px){.top-actions{gap:8px;flex-wrap:wrap}.pwa-install-btn{padding:9px 12px;font-size:13px}}
