@@ -375,6 +375,14 @@ function appendJson(filePath, item) {
 }
 function nowIso() { return new Date().toISOString(); }
 function cleanPhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
+function normalizeWhatsAppPhone(phone, defaultCountryCode = '91') {
+  let digits = cleanPhone(phone);
+  if (!digits) return '';
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.length === 10) return String(defaultCountryCode || '91') + digits;
+  if (digits.length === 11 && digits.startsWith('0')) return String(defaultCountryCode || '91') + digits.slice(1);
+  return digits;
+}
 function money(v){ return v === undefined || v === null || v === '' ? '' : String(v); }
 
 function cleanText(v){ return String(v || '').trim(); }
@@ -568,15 +576,18 @@ function whatsappEndpoint() {
   const phoneNumberId = String(process.env.WHATSAPP_PHONE_NUMBER_ID || '').replace(/\D/g, '');
   return { phoneNumberId, url: `https://graph.facebook.com/v20.0/${phoneNumberId}/messages` };
 }
-function whatsappTemplateBody(to, templateName, lang) {
-  return {
+function whatsappTemplateBody(to, templateName, lang, components = []) {
+  const body = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
-    to: cleanPhone(to),
+    to: normalizeWhatsAppPhone(to),
     type: 'template',
     template: { name: templateName, language: { code: lang || 'en_US' } }
   };
+  if (Array.isArray(components) && components.length) body.template.components = components;
+  return body;
 }
+function textParam(value) { return { type: 'text', text: String(value ?? '') }; }
 async function postWhatsApp(body) {
   const env = readEnvFile();
   const token = String(process.env.WHATSAPP_CLOUD_TOKEN || env.WHATSAPP_CLOUD_TOKEN || '').trim();
@@ -604,7 +615,7 @@ async function sendOwnerWhatsApp(message, options = {}) {
 async function sendCustomerWhatsApp(phone, message) {
   const enabled = String(process.env.CUSTOMER_WHATSAPP_MESSAGES_ENABLED || 'false').toLowerCase() === 'true';
   if (!enabled) return { ok: false, skipped: true, reason: 'Customer WhatsApp follow-up is disabled in API Settings.' };
-  const to = cleanPhone(phone);
+  const to = normalizeWhatsAppPhone(phone);
   if (!to) return { ok: false, skipped: true, reason: 'Customer phone missing.' };
   const template = process.env.CUSTOMER_WHATSAPP_TEMPLATE_NAME || '';
   if (template) return postWhatsApp(whatsappTemplateBody(to, template, process.env.CUSTOMER_WHATSAPP_TEMPLATE_LANG || 'en'));
@@ -612,13 +623,13 @@ async function sendCustomerWhatsApp(phone, message) {
 }
 
 async function sendWhatsAppImage({ to, imageUrl, caption = '' }) {
-  const receiver = cleanPhone(to);
+  const receiver = normalizeWhatsAppPhone(to);
   if (!receiver || !imageUrl) return { ok: false, skipped: true, reason: 'Receiver phone or image URL missing.' };
   return postWhatsApp({ messaging_product: 'whatsapp', recipient_type: 'individual', to: receiver, type: 'image', image: { link: imageUrl, caption: caption || '' } });
 }
 
 async function sendWhatsAppTextManual({ to, message = '' }) {
-  const receiver = cleanPhone(to);
+  const receiver = normalizeWhatsAppPhone(to);
   const body = String(message || '').trim();
   if (!receiver || !body) return { ok: false, skipped: true, reason: 'Receiver phone or message missing.' };
   return postWhatsApp({ messaging_product: 'whatsapp', recipient_type: 'individual', to: receiver, type: 'text', text: { preview_url: true, body } });
@@ -1538,26 +1549,73 @@ app.post('/api/settings', (req, res) => { const current = readJson(settingsPath,
 
 
 function orderCustomerPhone(order = {}) {
-  return cleanPhone(order.phone || order.customer?.phone || order.billing_address?.phone || order.shipping_address?.phone || order.customer?.default_address?.phone);
+  return normalizeWhatsAppPhone(order.phone || order.customer?.phone || order.billing_address?.phone || order.shipping_address?.phone || order.customer?.default_address?.phone);
+}
+function orderCustomerName(order = {}) {
+  const fromCustomer = [order.customer?.first_name, order.customer?.last_name].filter(Boolean).join(' ').trim();
+  const fromBilling = [order.billing_address?.first_name, order.billing_address?.last_name].filter(Boolean).join(' ').trim();
+  const fromShipping = [order.shipping_address?.first_name, order.shipping_address?.last_name].filter(Boolean).join(' ').trim();
+  return fromCustomer || fromBilling || fromShipping || order.customer?.email || order.email || 'Customer';
+}
+function orderTotalAmount(order = {}) {
+  const amount = String(order.total_price || order.current_total_price || order.subtotal_price || '').trim();
+  const currency = String(order.currency || order.presentment_currency || 'INR').trim();
+  return amount ? `${currency} ${amount}` : currency;
 }
 function orderConfirmMessage(order = {}) {
   const items = (order.line_items || []).slice(0, 6).map(i => `${i.title} x ${i.quantity}`).join(', ');
   const confirmUrl = `${String(process.env.WEBSITE_URL || 'https://tinyshinygifts.com').replace(/\/$/, '')}?order_confirm=${encodeURIComponent(order.name || order.order_number || order.id || '')}`;
-  return `Thank you for your order with Tiny Shiny Gifts.\nOrder: ${order.name || ''}\nAmount: ${order.currency || 'INR'} ${order.total_price || ''}\nItems: ${items || '-'}\nPlease reply CONFIRM ${order.name || ''} to confirm your order.\n${confirmUrl}`;
+  return `Thank you for your order with Tiny Shiny Gifts.
+Order: ${order.name || ''}
+Amount: ${orderTotalAmount(order)}
+Items: ${items || '-'}
+Please reply CONFIRM ${order.name || ''} to confirm your order.
+${confirmUrl}`;
+}
+function orderTemplateComponents(order = {}) {
+  return [{
+    type: 'body',
+    parameters: [
+      textParam(orderCustomerName(order)),
+      textParam(order.name || order.order_number || order.id || '-'),
+      textParam(String(order.total_price || order.current_total_price || order.subtotal_price || '0'))
+    ]
+  }];
 }
 async function sendOrderConfirmationToCustomer(order = {}) {
-  const enabled = String(process.env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || process.env.CUSTOMER_WHATSAPP_MESSAGES_ENABLED || 'false').toLowerCase() === 'true';
+  const env = readEnvFile();
+  const enabled = String(process.env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || 'false').toLowerCase() === 'true';
   const phone = orderCustomerPhone(order);
-  if (!enabled || !phone) return { ok:false, skipped:true, reason: enabled ? 'Customer phone missing.' : 'Order confirmation WhatsApp disabled.' };
-  return sendCustomerWhatsApp(phone, orderConfirmMessage(order));
+  if (!enabled || !phone) return { ok:false, skipped:true, reason: enabled ? 'Customer phone missing or invalid.' : 'Order confirmation WhatsApp disabled.' };
+  const template = String(process.env.ORDER_CONFIRMATION_TEMPLATE_NAME || env.ORDER_CONFIRMATION_TEMPLATE_NAME || 'order_confirmation').trim();
+  const lang = String(process.env.ORDER_CONFIRMATION_TEMPLATE_LANG || env.ORDER_CONFIRMATION_TEMPLATE_LANG || 'en').trim();
+  if (!template) return { ok:false, skipped:true, reason:'Order confirmation template name missing.' };
+  return postWhatsApp(whatsappTemplateBody(phone, template, lang, orderTemplateComponents(order)));
 }
 
 app.post('/webhooks/shopify/orders/create', async (req, res) => {
   const order = req.body || {};
   const phone = orderCustomerPhone(order);
-  const lead = appendJson(leadsPath, { id: crypto.randomUUID(), type: 'shopify_order_webhook', createdAt: nowIso(), orderName: order.name, phone, total: order.total_price, raw: order, status: 'Order Confirmation Pending' });
   const customerWa = await sendOrderConfirmationToCustomer(order).catch(err => ({ ok:false, error:err.message }));
-  await sendOwnerWhatsApp(`New Shopify order received\nOrder: ${order.name || ''}\nCustomer: ${order.customer?.first_name || ''} ${order.customer?.last_name || ''}\nPhone: ${phone || ''}\nTotal: ${order.currency || 'INR'} ${order.total_price || ''}\nCustomer confirmation WhatsApp: ${customerWa.ok ? 'sent' : (customerWa.reason || customerWa.error || 'not sent')}`).catch(() => {});
+  const lead = appendJson(leadsPath, {
+    id: crypto.randomUUID(),
+    type: 'shopify_order_webhook',
+    createdAt: nowIso(),
+    orderName: order.name,
+    phone,
+    customerName: orderCustomerName(order),
+    total: order.total_price,
+    raw: order,
+    status: customerWa.ok ? 'Order Confirmation WhatsApp Sent' : 'Order Confirmation WhatsApp Failed',
+    whatsappResult: customerWa,
+    message: customerWa.ok ? 'Order confirmation WhatsApp sent to customer.' : (customerWa.reason || customerWa.error || customerWa.json?.error?.message || 'Order confirmation WhatsApp not sent.')
+  });
+  await sendOwnerWhatsApp(`New Shopify order received
+Order: ${order.name || ''}
+Customer: ${orderCustomerName(order)}
+Phone: ${phone || ''}
+Total: ${orderTotalAmount(order)}
+Customer confirmation WhatsApp: ${customerWa.ok ? 'sent' : (customerWa.reason || customerWa.error || customerWa.json?.error?.message || 'not sent')}`).catch(() => {});
   res.json({ ok: true, lead, customerWhatsApp: customerWa });
 });
 
