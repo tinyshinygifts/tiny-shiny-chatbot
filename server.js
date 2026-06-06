@@ -4,6 +4,8 @@ const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
 require('dotenv').config();
+let MongoClient = null;
+try { ({ MongoClient } = require('mongodb')); } catch (err) { console.warn('MongoDB package not installed; JSON file storage fallback active.'); }
 
 const app = express();
 const PORT = process.env.PORT || 5057;
@@ -77,6 +79,26 @@ const whatsappTemplatesPath = path.join(dataDir, 'whatsapp-templates.json');
 const whatsappInboxPath = path.join(dataDir, 'whatsapp-inbox.json');
 const shopifyOAuthStatePath = path.join(dataDir, 'shopify-oauth-state.json');
 
+// MongoDB persistent storage (Render-safe). When MONGODB_URI is set, JSON data and API settings are loaded from MongoDB and kept synced.
+const mongoUri = process.env.MONGODB_URI || '';
+const mongoDbName = process.env.MONGODB_DB_NAME || 'tiny_shiny_chatbot';
+const mongoCollectionName = process.env.MONGODB_COLLECTION || 'chatbot_store';
+let mongoClient = null;
+let mongoCollection = null;
+let mongoReady = false;
+let mongoEnvCache = null;
+const mongoJsonCache = new Map();
+function deepClone(value) { return value === undefined ? value : JSON.parse(JSON.stringify(value)); }
+function mongoKeyFromPath(filePath) { return 'json:' + path.basename(String(filePath || 'unknown.json')); }
+function readLocalJson(filePath, fallback) { try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; } }
+function mongoKnownPaths() { return [faqPath, settingsPath, leadsPath, eventsPath, leadMessagesPath, mediaImagesPath, crmPath, whatsappTemplatesPath, whatsappInboxPath, shopifyOAuthStatePath]; }
+async function mongoSave(key, value) {
+  if (!mongoReady || !mongoCollection) return;
+  try { await mongoCollection.updateOne({ key }, { $set: { key, value, updatedAt: new Date() } }, { upsert: true }); }
+  catch (err) { console.error('Mongo save failed for', key, err.message); }
+}
+function mongoSaveSoon(key, value) { mongoSave(key, deepClone(value)).catch(() => {}); }
+
 const envPath = path.join(__dirname, '.env');
 const apiKeys = [
   'PORT','BUSINESS_NAME','WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER',
@@ -92,7 +114,7 @@ const apiKeys = [
   'ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG'
 ];
 const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_SECRET','ICARRY_PASSWORD']);
-function readEnvFile() {
+function readEnvFileWithoutMongo() {
   const out = {};
   const text = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
   for (const line of text.split(/\r?\n/)) {
@@ -104,6 +126,15 @@ function readEnvFile() {
     out[key] = value;
   }
   for (const key of apiKeys) if (process.env[key] && !out[key]) out[key] = process.env[key];
+  return out;
+}
+function readEnvFile() {
+  const out = readEnvFileWithoutMongo();
+  if (mongoEnvCache && typeof mongoEnvCache === 'object') {
+    for (const key of apiKeys) {
+      if (Object.prototype.hasOwnProperty.call(mongoEnvCache, key)) out[key] = String(mongoEnvCache[key] ?? '');
+    }
+  }
   return out;
 }
 function writeEnvFile(next) {
@@ -184,6 +215,8 @@ function writeEnvFile(next) {
   ];
   fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
   for (const key of apiKeys) process.env[key] = merged[key] || '';
+  mongoEnvCache = { ...merged };
+  mongoSaveSoon('env', mongoEnvCache);
   return merged;
 }
 function publicConfig(env) {
@@ -268,6 +301,46 @@ function parseBackupText(text = '') {
   return { env, whatsappTemplates: null, whatsappInbox: null, settings: null };
 }
 
+
+async function initMongoStorage() {
+  if (!mongoUri || !MongoClient) {
+    console.log('MongoDB storage disabled. Using local JSON files. Set MONGODB_URI to enable permanent storage.');
+    return;
+  }
+  try {
+    mongoClient = new MongoClient(mongoUri, { serverSelectionTimeoutMS: 10000 });
+    await mongoClient.connect();
+    const db = mongoClient.db(mongoDbName);
+    mongoCollection = db.collection(mongoCollectionName);
+    await mongoCollection.createIndex({ key: 1 }, { unique: true });
+    const docs = await mongoCollection.find({}).toArray();
+    for (const doc of docs) {
+      if (doc.key === 'env') mongoEnvCache = doc.value || {};
+      else if (String(doc.key || '').startsWith('json:')) mongoJsonCache.set(doc.key, doc.value);
+    }
+    mongoReady = true;
+    for (const filePath of mongoKnownPaths()) {
+      const key = mongoKeyFromPath(filePath);
+      if (!mongoJsonCache.has(key)) {
+        const localValue = readLocalJson(filePath, []);
+        mongoJsonCache.set(key, localValue);
+        await mongoSave(key, localValue);
+      }
+    }
+    if (!mongoEnvCache) {
+      mongoEnvCache = readEnvFileWithoutMongo();
+      await mongoSave('env', mongoEnvCache);
+    }
+    for (const [key, value] of Object.entries(mongoEnvCache || {})) {
+      if (apiKeys.includes(key)) process.env[key] = String(value || '');
+    }
+    console.log('MongoDB persistent storage connected:', mongoDbName + '.' + mongoCollectionName);
+  } catch (err) {
+    console.error('MongoDB connection failed. Local JSON fallback active:', err.message);
+    mongoReady = false;
+  }
+}
+
 function safeMergeConfigUpload(current, incoming) {
   const next = {};
   for (const key of apiKeys) {
@@ -281,8 +354,18 @@ function safeMergeConfigUpload(current, incoming) {
 }
 
 
-function readJson(filePath, fallback) { try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; } }
-function writeJson(filePath, data) { fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8'); }
+function readJson(filePath, fallback) {
+  const key = mongoKeyFromPath(filePath);
+  if (mongoJsonCache.has(key)) return deepClone(mongoJsonCache.get(key));
+  return readLocalJson(filePath, fallback);
+}
+function writeJson(filePath, data) {
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
+  const key = mongoKeyFromPath(filePath);
+  mongoJsonCache.set(key, deepClone(data));
+  mongoSaveSoon(key, data);
+}
 function appendJson(filePath, item) {
   const arr = readJson(filePath, []);
   arr.unshift(item);
@@ -1328,6 +1411,7 @@ app.post('/api/sync-google-sheets', async (req, res) => {
 app.get('/api/leads', (req, res) => res.json({ ok: true, leads: readJson(leadsPath, []) }));
 app.get('/api/visitor-events', (req, res) => res.json({ ok: true, events: readJson(eventsPath, []) }));
 app.get('/api/lead-messages', (req, res) => res.json({ ok: true, messages: readJson(leadMessagesPath, []) }));
+app.get('/api/storage/status', (req, res) => res.json({ ok: true, storage: mongoReady ? 'mongodb' : 'json-file', mongodb: { configured: Boolean(mongoUri), connected: mongoReady, database: mongoReady ? mongoDbName : '', collection: mongoReady ? mongoCollectionName : '' } }));
 app.get('/api/faqs', (req, res) => res.json({ ok: true, faqs: readJson(faqPath, []) }));
 
 function simplifyShopifyCustomer(c = {}) {
@@ -1486,4 +1570,6 @@ app.post('/api/order-confirmed-by-customer', async (req, res) => {
   res.json({ ok:true, lead, ownerWhatsApp: wa });
 });
 
-app.listen(PORT, () => console.log(`Tiny Shiny Chatbot running on http://localhost:${PORT}`));
+initMongoStorage().finally(() => {
+  app.listen(PORT, () => console.log(`Tiny Shiny Chatbot running on http://localhost:${PORT}`));
+});

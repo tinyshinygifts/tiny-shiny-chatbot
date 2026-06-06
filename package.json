@@ -1,7 +1,7 @@
 {
   "name": "tiny-shiny-chatbot",
-  "version": "19.0.0",
-  "description": "Tiny Shiny Gifts chatbot v19 with safe API settings, WhatsApp template support, iCarry tracking, Google Sheet button fix and logo branding",
+  "version": "20.0.0",
+  "description": "Tiny Shiny Gifts chatbot v20 with MongoDB persistent storage for Render",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -10,7 +10,8 @@
   "dependencies": {
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
-    "express": "^4.21.2"
+    "express": "^4.21.2",
+    "mongodb": "^6.12.0"
   },
   "engines": {
     "node": ">=18"
