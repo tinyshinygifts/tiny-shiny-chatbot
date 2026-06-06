@@ -5,6 +5,8 @@ let crmCustomers = [];
 let shopifyCustomers = [];
 let shopifyProducts = [];
 let selectedPromoProductId = '';
+let whatsappTemplates = [];
+let selectedTemplateId = '';
 let googleSheetUrl = '';
 const colorOptions = ['#d63384','#9b35ff','#0ea5e9','#16a34a','#f97316','#111827'];
 const colorNames = {'#d63384':'Tiny Shiny Pink','#9b35ff':'Premium Purple','#0ea5e9':'Sky Blue','#16a34a':'Fresh Green','#f97316':'Festive Orange','#111827':'Luxury Black'};
@@ -33,7 +35,7 @@ async function load(){
   if(googleSheetUrl === '********') googleSheetUrl = '';
   updateGoogleSheetTab();
   faqs=f.faqs||[]; renderFaqs();
-  await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages()]);
+  await Promise.all([loadCrm(), loadMedia(), loadTemplates(), loadLeads(), loadEvents(), loadMessages()]);
   const active = localStorage.getItem('tsgAdminActiveTab') || 'basicPanel';
   showTab($(active) ? active : 'basicPanel');
 }
@@ -43,6 +45,107 @@ function updateGoogleSheetTab(){
   if(googleSheetUrl){ link.href=googleSheetUrl; link.style.display='inline-flex'; if(help) help.textContent='Click the button below to open your connected Google Sheet.'; }
   else { link.href='#'; link.style.display='none'; if(help) help.textContent='Google Sheet link not configured. Please add it in API Settings.'; }
 }
+
+function templateValue(t){ return [t.name,t.category,t.language,t.useCase,t.body,(t.variables||[]).join(' ')].join(' ').toLowerCase(); }
+function parseTemplateButtons(text){
+  return String(text||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{
+    const parts=line.split('|').map(x=>x.trim());
+    return { type: parts[0] || 'Quick Reply', text: parts[1] || '', url: parts[2] || '' };
+  }).filter(b=>b.text);
+}
+function buttonsToText(buttons){ return (buttons||[]).map(b=>[b.type||'Quick Reply', b.text||'', b.url||''].filter(Boolean).join(' | ')).join('\n'); }
+function clearTemplateForm(){
+  if($('templateId')) templateId.value='';
+  if($('templateName')) templateName.value='';
+  if($('templateLanguage')) templateLanguage.value='en';
+  if($('templateCategory')) templateCategory.value='Utility';
+  if($('templateHeaderType')) templateHeaderType.value='None';
+  if($('templateUseCase')) templateUseCase.value='';
+  if($('templateBody')) templateBody.value='';
+  if($('templateVariables')) templateVariables.value='';
+  if($('templateButtons')) templateButtons.value='';
+  if($('templateEnabled')) templateEnabled.checked=true;
+  if($('templateEditorTitle')) templateEditorTitle.textContent='Add / Modify Template';
+  selectedTemplateId='';
+  renderTemplates();
+}
+function editTemplate(id){
+  const t=whatsappTemplates.find(x=>String(x.id)===String(id) || x.name===id); if(!t) return;
+  selectedTemplateId=t.id;
+  if($('templateId')) templateId.value=t.id||'';
+  if($('templateName')) templateName.value=t.name||'';
+  if($('templateLanguage')) templateLanguage.value=t.language||'en';
+  if($('templateCategory')) templateCategory.value=t.category||'Utility';
+  if($('templateHeaderType')) templateHeaderType.value=t.headerType||'None';
+  if($('templateUseCase')) templateUseCase.value=t.useCase||'';
+  if($('templateBody')) templateBody.value=t.body||'';
+  if($('templateVariables')) templateVariables.value=(t.variables||[]).join('\n');
+  if($('templateButtons')) templateButtons.value=buttonsToText(t.buttons||[]);
+  if($('templateEnabled')) templateEnabled.checked=t.enabled!==false;
+  if($('templateEditorTitle')) templateEditorTitle.textContent='Modify Template: '+(t.name||'');
+  renderTemplates();
+}
+function renderTemplates(){
+  if(!$('templateList')) return;
+  const q=($('templateSearch')?.value||'').toLowerCase().trim();
+  const cat=$('templateCategoryFilter')?.value||'';
+  const filtered=whatsappTemplates.filter(t=>(!q||templateValue(t).includes(q))&&(!cat||t.category===cat));
+  templateList.innerHTML=filtered.map(t=>`<div class="template-card ${String(selectedTemplateId)===String(t.id)?'selected':''}">
+    <div class="template-card-head"><b>${esc(t.name)}</b><span>${esc(t.category||'')} • ${esc(t.language||'en')}</span></div>
+    <p>${esc(t.useCase||'')}</p>
+    <small>Header: ${esc(t.headerType||'None')} • Variables: ${esc((t.variables||[]).length)}</small>
+    <pre>${esc((t.body||'').slice(0,260))}${(t.body||'').length>260?'...':''}</pre>
+    <div class="template-actions">
+      <button class="ghost-btn" data-edit-template="${esc(t.id)}">Modify</button>
+      <button class="ghost-btn" data-map-template="${esc(t.id)}">Use</button>
+      <button class="ghost-btn danger-outline" data-delete-template="${esc(t.id)}">Remove</button>
+    </div>
+  </div>`).join('') || '<p>No templates found. Click Add Template or Restore Default 12.</p>';
+}
+async function loadTemplates(){
+  const d=await fetch('/api/whatsapp-templates',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,templates:[]}));
+  whatsappTemplates=d.templates||[];
+  if(!selectedTemplateId && whatsappTemplates[0]) selectedTemplateId=whatsappTemplates[0].id;
+  renderTemplates();
+}
+async function saveTemplate(){
+  const body={
+    id:$('templateId')?.value||undefined,
+    name:$('templateName')?.value.trim()||'',
+    language:$('templateLanguage')?.value.trim()||'en',
+    category:$('templateCategory')?.value||'Utility',
+    headerType:$('templateHeaderType')?.value||'None',
+    useCase:$('templateUseCase')?.value.trim()||'',
+    body:$('templateBody')?.value.trim()||'',
+    variables:($('templateVariables')?.value||'').split(/\r?\n|,/).map(x=>x.trim()).filter(Boolean),
+    buttons:parseTemplateButtons($('templateButtons')?.value||''),
+    enabled:$('templateEnabled') ? templateEnabled.checked : true
+  };
+  if(!body.name) return alert('Template Name required.');
+  if(!body.body) return alert('Body Text required.');
+  const res=await fetch('/api/whatsapp-templates',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
+  if(res.ok){ whatsappTemplates=res.templates||[]; selectedTemplateId=(res.template&&res.template.id)||body.id||body.name; renderTemplates(); alert('Template saved.'); }
+}
+async function deleteTemplate(id){
+  if(!confirm('Remove this template from tool library? Meta WhatsApp Manager template delete nahi hoga.')) return;
+  const res=await fetch('/api/whatsapp-templates/'+encodeURIComponent(id),{method:'DELETE',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
+  whatsappTemplates=res.templates||whatsappTemplates.filter(t=>String(t.id)!==String(id)); if(selectedTemplateId===id) selectedTemplateId=''; renderTemplates();
+}
+async function restoreDefaultTemplates(){
+  if(!confirm('Default 12 Tiny Shiny templates restore karne hain? Existing custom templates replace ho sakte hain.')) return;
+  const res=await fetch('/api/whatsapp-templates/reset-defaults',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
+  if(res.ok){ whatsappTemplates=res.templates||[]; selectedTemplateId=whatsappTemplates[0]?.id||''; renderTemplates(); }
+}
+async function mapTemplate(id){
+  const target=$('templateMapTarget')?.value||'customer_followup';
+  const res=await fetch('/api/whatsapp-templates/use',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,target})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
+  if(res.ok) alert(res.message || 'Template mapped.');
+}
+
 function renderFaqs(){ if(!$('faqList')) return; faqList.innerHTML=''; faqs.forEach((faq,index)=>{ const row=document.createElement('div'); row.className='faq-row'; row.innerHTML=`<label>Keywords <input data-i="${index}" data-field="keywords" value="${esc((faq.keywords||[]).join(', '))}"/></label><label>Answer <textarea data-i="${index}" data-field="answer">${esc(faq.answer||'')}</textarea></label><button data-remove="${index}" class="ghost-btn danger-outline">Remove</button>`; faqList.appendChild(row); }); }
 async function loadLeads(){ const d=await fetch('/api/leads',{credentials:'include'}).then(r=>r.json()).catch(()=>({leads:[]})); if($('leadCount')) leadCount.textContent=(d.leads||[]).length; if($('leadList')) leadList.innerHTML=(d.leads||[]).slice(0,100).map(l=>`<div class="log-row"><b>${esc(l.type)}</b> <small>${esc(l.createdAt)}</small><br/>Phone: ${esc(l.phone)} | Order: ${esc(l.orderId||l.orderName)}<br/>Product: ${esc(l.productTitle||l.product||l?.product?.title)}<br/>Image: ${esc(l.productImage||l.image||l?.product?.image)}<br/>Page: ${esc(l.pageUrl||l?.product?.url)}<br/>Message: ${esc(l.message||l.note)}</div>`).join('') || 'No leads yet.'; }
 async function loadEvents(){ const d=await fetch('/api/visitor-events',{credentials:'include'}).then(r=>r.json()).catch(()=>({events:[]})); if($('eventCount')) eventCount.textContent=(d.events||[]).length; if($('eventList')) eventList.innerHTML=(d.events||[]).slice(0,120).map(e=>`<div class="log-row"><b>${esc(e.eventType)}</b> <small>${esc(e.createdAt)}</small><br/>Product: ${esc(e.productTitle)}<br/>Price: ${esc(e.productPrice)} | Discount: ${esc(e.discountText)}<br/>Image: ${esc(e.productImage)}<br/>Page: ${esc(e.pageUrl)}</div>`).join('') || 'No activity yet.'; }
@@ -122,8 +225,8 @@ async function sendNewProductPromo(){
   if($('newProductsResult')) newProductsResult.textContent = JSON.stringify(res,null,2);
 }
 
-document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } });
+document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='templateSearch') renderTemplates(); const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
+document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.id==='templateCategoryFilter') renderTemplates(); });
 document.addEventListener('click',async e=>{
   if(e.target.closest('#logoutBtn')){ e.preventDefault(); return logout(); }
   if(e.target.classList.contains('tab-btn')){ e.preventDefault(); if(e.target.id==='openGoogleSheetTab'){ if(googleSheetUrl){ window.open(googleSheetUrl,'_blank','noopener'); } else { alert('Google Sheet link not configured. Please add it in API Settings.'); } return showTab(e.target.dataset.tab); } return showTab(e.target.dataset.tab); }
@@ -141,6 +244,15 @@ document.addEventListener('click',async e=>{
   if(e.target.id==='saveBulkCustomerFollowup') bulkCustomerMessage(true);
   if(e.target.id==='refreshNewProducts') loadNewProducts();
   if(e.target.id==='sendNewProductPromo') sendNewProductPromo();
+  if(e.target.id==='refreshTemplates') loadTemplates();
+  if(e.target.id==='newTemplateBtn') { clearTemplateForm(); showTab('templateLibraryPanel'); }
+  if(e.target.id==='clearTemplateForm') clearTemplateForm();
+  if(e.target.id==='saveTemplate') saveTemplate();
+  if(e.target.id==='restoreDefaultTemplates') restoreDefaultTemplates();
+  if(e.target.dataset.editTemplate) editTemplate(e.target.dataset.editTemplate);
+  if(e.target.dataset.deleteTemplate) deleteTemplate(e.target.dataset.deleteTemplate);
+  if(e.target.dataset.mapTemplate) mapTemplate(e.target.dataset.mapTemplate);
+  if(e.target.id==='mapTemplateToAutomation') { const id=$('templateId')?.value || selectedTemplateId; if(!id) return alert('Please select or save a template first.'); mapTemplate(id); }
   if(e.target.id==='uploadMedia') uploadMedia();
   if(e.target.id==='refreshMedia') loadMedia(); if(e.target.id==='refreshMediaCustomers') loadMediaCustomers();
   if(e.target.id==='sendSelectedMedia') sendSelectedMedia();

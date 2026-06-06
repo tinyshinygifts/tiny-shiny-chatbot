@@ -85,3 +85,14 @@ button,.primary-btn,.ghost-btn{border:0;border-radius:999px;padding:12px 18px;cu
 .brand-logo{display:block;object-fit:contain;background:#fff;border-radius:14px;border:1px solid var(--line);box-shadow:0 10px 26px rgba(130,40,90,.08)}
 .brand-logo.small{width:118px;height:auto;margin:0 0 10px 0;padding:6px}.brand-head{min-width:0}.hero{text-align:center}.hero-logo{width:min(360px,82vw);height:auto;margin:0 auto 18px;padding:10px;border-radius:22px}.login-logo{width:min(260px,72vw);height:auto;margin:0 auto 18px;padding:8px;border-radius:22px}.login-card{text-align:left}.login-card .badge{margin-left:auto;margin-right:auto}.login-card .brand-logo+ .badge{display:flex;width:max-content}.login-card h1{text-align:left}.topbar .brand-head .badge{margin-top:4px}
 @media(max-width:720px){.brand-logo.small{width:96px}.hero-logo{width:min(280px,80vw)}.login-logo{width:min(230px,75vw)}}
+
+/* v20 WhatsApp Template Library */
+.template-workspace{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(360px,.85fr);gap:18px;align-items:start;margin-top:16px}
+.template-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:14px;max-height:760px;overflow:auto;padding:4px}
+.template-card{border:1px solid var(--line);border-radius:20px;background:#fff;padding:14px;box-shadow:0 12px 28px rgba(130,40,90,.06);display:flex;flex-direction:column;gap:8px}
+.template-card.selected{outline:3px solid color-mix(in srgb,var(--pink) 26%,transparent);border-color:var(--pink)}
+.template-card-head{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;flex-wrap:wrap}
+.template-card-head b{font-size:16px;color:#27172a;overflow-wrap:anywhere}.template-card-head span{font-size:12px;color:#806b7c;font-weight:800;background:#fff6fb;border:1px solid var(--line);padding:5px 8px;border-radius:999px}
+.template-card p{margin:0;color:#645464;font-size:13px}.template-card small{color:#867888;font-weight:700}.template-card pre{max-height:160px;overflow:auto;white-space:pre-wrap;word-break:break-word;background:#140c17;color:#fff;border-radius:14px;padding:10px;font-size:12px;margin:0}.template-actions{display:flex;gap:8px;flex-wrap:wrap}.template-editor{border:1px solid var(--line);border-radius:22px;background:linear-gradient(135deg,#fff,#fff8fc);padding:16px;position:sticky;top:235px;box-shadow:0 12px 34px rgba(130,40,90,.07)}
+.template-editor textarea{min-height:74px}.template-editor #templateBody{min-height:170px}
+@media(max-width:980px){.template-workspace{grid-template-columns:1fr}.template-editor{position:static}.template-grid{max-height:none}}

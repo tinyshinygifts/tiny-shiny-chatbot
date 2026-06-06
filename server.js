@@ -73,6 +73,7 @@ const eventsPath = path.join(dataDir, 'visitor-events.json');
 const leadMessagesPath = path.join(dataDir, 'lead-messages.json');
 const mediaImagesPath = path.join(dataDir, 'media-images.json');
 const crmPath = path.join(dataDir, 'crm.json');
+const whatsappTemplatesPath = path.join(dataDir, 'whatsapp-templates.json');
 const shopifyOAuthStatePath = path.join(dataDir, 'shopify-oauth-state.json');
 
 const envPath = path.join(__dirname, '.env');
@@ -351,6 +352,48 @@ function buildLeadMessage({ type, product = {}, cart = {}, customer = {}, pageUr
   return `${intro}\n\nProduct: ${title}\n${product.price ? `Price: ${product.price}\n` : ''}Discount: ${discount}\nBuy here: ${link}${image ? `\nImage: ${image}` : ''}`;
 }
 
+
+const defaultWhatsAppTemplates = [
+  { id:'order_confirmation', name:'order_confirmation', category:'Utility', language:'en', useCase:'Shopify order create par customer ko order confirmation bhejna', enabled:true, headerType:'None', body:'Hi {{1}}, thank you for your order with Tiny Shiny Gifts.\n\nYour order {{2}} has been received successfully.\n\nOrder Total: ₹{{3}}\n\nWe will notify you once your order is shipped.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Order Number','Order Amount'], buttons:[{type:'URL', text:'Visit Website', url:'https://www.tinyshinygifts.com'}] },
+  { id:'product_followup', name:'product_followup', category:'Marketing', language:'en', useCase:'Product/cart interest ke baad customer follow-up', enabled:true, headerType:'None', body:'Hi {{1}}, you recently showed interest in {{2}} on Tiny Shiny Gifts.\n\nComplete your purchase today and explore our beautiful gifts, home decor and festive collections.\n\nProduct link: {{3}}\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Product Name','Product Link'], buttons:[{type:'Quick Reply', text:'Interested'}, {type:'Quick Reply', text:'Need Help'}, {type:'Quick Reply', text:'Not Now'}] },
+  { id:'abandoned_cart_reminder', name:'abandoned_cart_reminder', category:'Marketing', language:'en', useCase:'Cart abandon reminder', enabled:true, headerType:'None', body:'Hi {{1}}, you left some beautiful items in your cart at Tiny Shiny Gifts.\n\nYour cart is waiting for you. Complete your order before the items go out of stock.\n\nCart link: {{2}}\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Cart Link'], buttons:[{type:'URL', text:'Complete Order', url:'{{2}}'}] },
+  { id:'order_shipped', name:'order_shipped', category:'Utility', language:'en', useCase:'Order shipped/tracking update', enabled:true, headerType:'None', body:'Hi {{1}}, your Tiny Shiny Gifts order {{2}} has been shipped.\n\nCourier Partner: {{3}}\nTracking ID: {{4}}\n\nTrack your order here: {{5}}\n\nThank you for shopping with us.', variables:['Customer Name','Order Number','Courier Name','AWB / Tracking ID','Tracking Link'], buttons:[{type:'URL', text:'Track Order', url:'{{5}}'}] },
+  { id:'order_delivered', name:'order_delivered', category:'Utility', language:'en', useCase:'Delivery ke baad feedback/shop again', enabled:true, headerType:'None', body:'Hi {{1}}, your Tiny Shiny Gifts order {{2}} has been delivered.\n\nWe hope you loved your product.\n\nPlease share your feedback with us and visit again for more gifts and home decor collections.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Order Number'], buttons:[{type:'Quick Reply', text:'Loved It'}, {type:'Quick Reply', text:'Need Support'}, {type:'Quick Reply', text:'Shop Again'}] },
+  { id:'cod_order_confirmation', name:'cod_order_confirmation', category:'Utility', language:'en', useCase:'COD order confirmation', enabled:true, headerType:'None', body:'Hi {{1}}, your COD order {{2}} of ₹{{3}} has been placed successfully with Tiny Shiny Gifts.\n\nPlease keep the cash amount ready at the time of delivery.\n\nThank you for choosing Tiny Shiny Gifts.', variables:['Customer Name','Order Number','COD Amount'], buttons:[{type:'Quick Reply', text:'Confirm Order'}, {type:'Quick Reply', text:'Cancel Order'}, {type:'Quick Reply', text:'Need Help'}] },
+  { id:'payment_pending', name:'payment_pending', category:'Utility', language:'en', useCase:'Payment pending reminder', enabled:true, headerType:'None', body:'Hi {{1}}, your order {{2}} at Tiny Shiny Gifts is pending because payment is not completed.\n\nPlease complete your payment to confirm the order.\n\nPayment link: {{3}}', variables:['Customer Name','Order Number','Payment Link'], buttons:[{type:'URL', text:'Complete Payment', url:'{{3}}'}] },
+  { id:'customer_support_reply', name:'customer_support_reply', category:'Utility', language:'en', useCase:'Support query acknowledgement', enabled:true, headerType:'None', body:'Hi {{1}}, thank you for contacting Tiny Shiny Gifts.\n\nOur support team has received your query regarding {{2}}.\n\nWe will get back to you shortly.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Query / Order Number'], buttons:[] },
+  { id:'new_product_broadcast', name:'new_product_broadcast', category:'Marketing', language:'en', useCase:'New product broadcast', enabled:true, headerType:'None', body:'Hi {{1}}, new arrivals are now live at Tiny Shiny Gifts.\n\nExplore beautiful gifts, home decor, pooja items and festive collections for your loved ones.\n\nShop now: {{2}}', variables:['Customer Name','Collection / Product Link'], buttons:[{type:'URL', text:'Shop Now', url:'{{2}}'}] },
+  { id:'festival_offer', name:'festival_offer', category:'Marketing', language:'en', useCase:'Festival/offer promotion', enabled:true, headerType:'None', body:'Hi {{1}}, festival gifting is now more special with Tiny Shiny Gifts.\n\nGet beautiful home decor, candles, idols and gift collections for your loved ones.\n\nOffer: {{2}}\n\nShop here: {{3}}', variables:['Customer Name','Offer Text','Website / Collection Link'], buttons:[{type:'URL', text:'Shop Offer', url:'{{3}}'}] },
+  { id:'thank_you_image', name:'thank_you_image', category:'Utility', language:'en', useCase:'Image header thank you template', enabled:true, headerType:'Image', body:'Hi {{1}}, thank you for connecting with Tiny Shiny Gifts.\n\nWe are happy to help you with gifting, home decor, pooja items and festive products.\n\nVisit us: {{2}}', variables:['Customer Name','Website Link'], buttons:[] },
+  { id:'admin_new_order_alert', name:'admin_new_order_alert', category:'Utility', language:'en', useCase:'Admin/team ko new order alert', enabled:true, headerType:'None', body:'New order received on Tiny Shiny Gifts.\n\nOrder: {{1}}\nCustomer: {{2}}\nPhone: {{3}}\nAmount: ₹{{4}}\nPayment: {{5}}\n\nPlease process the order.', variables:['Order Number','Customer Name','Customer Phone','Order Amount','Payment Method'], buttons:[] }
+];
+function normalizeTemplate(t = {}) {
+  const name = String(t.name || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+  return {
+    id: String(t.id || name || crypto.randomUUID()),
+    name,
+    category: String(t.category || 'Utility').trim(),
+    language: String(t.language || 'en').trim(),
+    useCase: String(t.useCase || '').trim(),
+    enabled: t.enabled !== false,
+    headerType: String(t.headerType || 'None').trim(),
+    body: String(t.body || '').trim(),
+    variables: Array.isArray(t.variables) ? t.variables.map(x => String(x).trim()).filter(Boolean) : String(t.variables || '').split(/\r?\n|,/).map(x => x.trim()).filter(Boolean),
+    buttons: Array.isArray(t.buttons) ? t.buttons.map(b => ({ type: String(b.type || 'Quick Reply').trim(), text: String(b.text || '').trim(), url: String(b.url || '').trim() })).filter(b => b.text) : [],
+    updatedAt: t.updatedAt || nowIso()
+  };
+}
+function readWhatsAppTemplates() {
+  const saved = readJson(whatsappTemplatesPath, null);
+  if (!Array.isArray(saved) || !saved.length) {
+    const defaults = defaultWhatsAppTemplates.map(normalizeTemplate);
+    writeJson(whatsappTemplatesPath, defaults);
+    return defaults;
+  }
+  return saved.map(normalizeTemplate);
+}
+function writeWhatsAppTemplates(list) { writeJson(whatsappTemplatesPath, list.map(normalizeTemplate)); return readWhatsAppTemplates(); }
+
 function whatsappEndpoint() {
   const phoneNumberId = String(process.env.WHATSAPP_PHONE_NUMBER_ID || '').replace(/\D/g, '');
   return { phoneNumberId, url: `https://graph.facebook.com/v20.0/${phoneNumberId}/messages` };
@@ -365,20 +408,25 @@ function whatsappTemplateBody(to, templateName, lang) {
   };
 }
 async function postWhatsApp(body) {
-  const token = process.env.WHATSAPP_CLOUD_TOKEN;
-  const { phoneNumberId, url } = whatsappEndpoint();
-  if (!token || !phoneNumberId) return { ok: false, skipped: true, reason: 'WhatsApp Cloud token or Phone Number ID missing.' };
+  const env = readEnvFile();
+  const token = String(process.env.WHATSAPP_CLOUD_TOKEN || env.WHATSAPP_CLOUD_TOKEN || '').trim();
+  const savedPhoneNumberId = String(process.env.WHATSAPP_PHONE_NUMBER_ID || env.WHATSAPP_PHONE_NUMBER_ID || '').replace(/\D/g, '');
+  const url = `https://graph.facebook.com/v20.0/${savedPhoneNumberId}/messages`;
+  if (!token || token.includes('...') || token.includes('*') || !savedPhoneNumberId) {
+    return { ok: false, skipped: true, reason: 'WhatsApp Cloud token or Phone Number ID missing. Paste full token once, click Save Settings, then test again.' };
+  }
   const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
   const json = await response.json().catch(() => ({}));
   return { ok: response.ok, status: response.status, json, request: { to: body.to, type: body.type, template: body.template?.name || '' } };
 }
 async function sendOwnerWhatsApp(message, options = {}) {
-  const owner = cleanPhone(process.env.OWNER_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER);
+  const env = readEnvFile();
+  const owner = cleanPhone(process.env.OWNER_WHATSAPP_NUMBER || env.OWNER_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || env.WHATSAPP_NUMBER);
   if (!owner) return { ok: false, skipped: true, reason: 'Owner WhatsApp number missing.' };
-  const template = options.template || process.env.WHATSAPP_TEST_TEMPLATE_NAME || '';
+  const template = options.template || process.env.WHATSAPP_TEST_TEMPLATE_NAME || env.WHATSAPP_TEST_TEMPLATE_NAME || '';
   if (options.forceTemplate || template) {
     if (!template) return { ok:false, skipped:true, reason:'Approved WhatsApp template name missing. Add WHATSAPP_TEST_TEMPLATE_NAME in API Settings.' };
-    return postWhatsApp(whatsappTemplateBody(owner, template, process.env.WHATSAPP_TEST_TEMPLATE_LANG || 'en_US'));
+    return postWhatsApp(whatsappTemplateBody(owner, template, process.env.WHATSAPP_TEST_TEMPLATE_LANG || env.WHATSAPP_TEST_TEMPLATE_LANG || 'en_US'));
   }
   return postWhatsApp({ messaging_product: 'whatsapp', recipient_type: 'individual', to: owner, type: 'text', text: { preview_url: true, body: message } });
 }
@@ -681,6 +729,7 @@ app.get('/api/settings', (req, res) => { res.set('Cache-Control','no-store'); re
 
 // From here, admin/API settings routes are protected by login.
 app.use(['/api/config','/api/test-whatsapp','/api/test-shopify','/api/leads','/api/visitor-events','/api/lead-messages','/api/media-images','/api/send-image-message','/api/faqs','/api/crm','/api/test-google-sheets','/api/sync-google-sheets','/api/shopify/customers','/api/shopify/products'], requireAdmin);
+app.use('/api/whatsapp-templates', requireAdmin);
 app.post('/api/settings', requireAdmin);
 
 app.get('/api/config', (req, res) => {
@@ -693,8 +742,9 @@ app.post('/api/config', (req, res) => {
   for (const key of apiKeys) {
     if (Object.prototype.hasOwnProperty.call(body, key)) {
       const val = String(body[key] ?? '').trim();
-      // Secret fields: blank or ******** means keep old value. Only a newly typed value changes it.
-      if (secretKeys.has(key) && (val === '' || val === '********') && current[key]) {
+      // Secret fields: blank, ********, or masked preview like EAAG... means keep old value.
+      const looksMasked = val === '' || val === '********' || /\*{2,}/.test(val) || /\.\.\.$/.test(val);
+      if (secretKeys.has(key) && looksMasked && current[key]) {
         next[key] = current[key];
       } else {
         next[key] = val;
@@ -713,6 +763,53 @@ app.get('/api/config/download', (req, res) => {
   res.setHeader('Content-Disposition', `attachment; filename="tiny-shiny-api-settings-${stamp}.txt"`);
   res.send(text);
 });
+
+app.get('/api/whatsapp-templates', (req, res) => {
+  res.json({ ok: true, templates: readWhatsAppTemplates() });
+});
+app.post('/api/whatsapp-templates', (req, res) => {
+  const body = req.body || {};
+  const list = readWhatsAppTemplates();
+  const tpl = normalizeTemplate({ ...body, id: body.id || body.name || crypto.randomUUID(), updatedAt: nowIso() });
+  if (!tpl.name) return res.status(400).json({ ok:false, error:'Template name required' });
+  if (!tpl.body) return res.status(400).json({ ok:false, error:'Template body required' });
+  const idx = list.findIndex(x => String(x.id) === String(tpl.id) || x.name === tpl.name);
+  if (idx >= 0) list[idx] = { ...list[idx], ...tpl, id: list[idx].id || tpl.id, updatedAt: nowIso() };
+  else list.unshift(tpl);
+  res.json({ ok:true, templates: writeWhatsAppTemplates(list), template: tpl, message:'Template saved in Template Library.' });
+});
+app.delete('/api/whatsapp-templates/:id', (req, res) => {
+  const id = String(req.params.id || '');
+  const next = readWhatsAppTemplates().filter(t => String(t.id) !== id && t.name !== id);
+  res.json({ ok:true, templates: writeWhatsAppTemplates(next), message:'Template removed.' });
+});
+app.post('/api/whatsapp-templates/reset-defaults', (req, res) => {
+  res.json({ ok:true, templates: writeWhatsAppTemplates(defaultWhatsAppTemplates), message:'Default Tiny Shiny templates restored.' });
+});
+app.post('/api/whatsapp-templates/use', (req, res) => {
+  const { id, target } = req.body || {};
+  const tpl = readWhatsAppTemplates().find(t => String(t.id) === String(id) || t.name === id);
+  if (!tpl) return res.status(404).json({ ok:false, error:'Template not found' });
+  const env = readEnvFile();
+  const update = {};
+  if (target === 'customer_followup') {
+    update.CUSTOMER_WHATSAPP_MESSAGES_ENABLED = 'true';
+    update.CUSTOMER_WHATSAPP_TEMPLATE_NAME = tpl.name;
+    update.CUSTOMER_WHATSAPP_TEMPLATE_LANG = tpl.language || 'en';
+  } else if (target === 'order_confirmation') {
+    update.ORDER_CONFIRMATION_WHATSAPP_ENABLED = 'true';
+    update.ORDER_CONFIRMATION_TEMPLATE_NAME = tpl.name;
+    update.ORDER_CONFIRMATION_TEMPLATE_LANG = tpl.language || 'en';
+  } else if (target === 'test_whatsapp') {
+    update.WHATSAPP_TEST_TEMPLATE_NAME = tpl.name;
+    update.WHATSAPP_TEST_TEMPLATE_LANG = tpl.language || 'en';
+  } else {
+    return res.status(400).json({ ok:false, error:'Target required: customer_followup, order_confirmation, or test_whatsapp' });
+  }
+  writeEnvFile({ ...env, ...update });
+  res.json({ ok:true, template:tpl, target, message:`${tpl.name} mapped to ${target}. API Settings updated.` });
+});
+
 app.post('/api/test-whatsapp', async (req, res) => {
   try {
     const result = await sendOwnerWhatsApp('Tiny Shiny Chatbot test message. WhatsApp API is connected successfully.', { forceTemplate: true });
