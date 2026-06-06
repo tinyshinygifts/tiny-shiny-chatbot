@@ -17,6 +17,7 @@
         <p>Manage login, Shopify, WhatsApp and customer follow-up settings.</p>
       </div>
       <div class="top-actions">
+        <button id="downloadConfig" type="button" class="ghost-btn">Download API Backup</button>
         <a class="pill-link" href="/admin.html">← Back to Admin</a>
         <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
       </div>
@@ -194,7 +195,9 @@
     <section class="panel save-panel">
       <h2>Save</h2>
       <button id="saveConfig" class="primary-btn">Save API Settings</button>
+      <button id="downloadConfig2" class="ghost-btn" type="button">Download API Settings Text File</button>
       <p id="saveStatus" class="success"></p>
+      <p class="hint">Download backup me saved settings block-wise text file me milengi. Is file ko safe rakhein kyunki secret keys bhi full value me hoti hain.</p>
       <p><b>Note:</b> After saving API settings locally, close the black command window and start <code>start_chatbot.bat</code> again.</p>
       <p>On Render hosting, add the same values in Render → Service → Environment.</p>
     </section>

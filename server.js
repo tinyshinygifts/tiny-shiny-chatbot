@@ -81,13 +81,13 @@ const apiKeys = [
   'ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS',
   'SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER',
   'SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI',
-  'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_LANG',
+  'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG',
   'CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG',
   'SHOPIFY_WEBHOOK_SECRET',
   'GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET',
   'SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD',
   'ICARRY_ENABLED','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_ID','ICARRY_CLIENT_SECRET','ICARRY_USERNAME','ICARRY_PASSWORD','ICARRY_TRACKING_URL',
-  'ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_LANG'
+  'ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG'
 ];
 const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_SECRET','ICARRY_PASSWORD']);
 function readEnvFile() {
@@ -191,6 +191,36 @@ function publicConfig(env) {
     out[key + '_SET'] = Boolean(value);
   }
   return out;
+}
+
+function envLine(key, env) {
+  return `${key}=${env[key] || ''}`;
+}
+function configBackupText(env) {
+  const sections = [
+    ['Business', ['BUSINESS_NAME','WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER']],
+    ['Admin Login Security', ['ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS']],
+    ['Shopify API', ['SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER','SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI','SHOPIFY_WEBHOOK_SECRET']],
+    ['WhatsApp Cloud API', ['WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG']],
+    ['Customer WhatsApp Follow-up', ['CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG']],
+    ['Google Sheets', ['GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET']],
+    ['Shiprocket API', ['SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD']],
+    ['iCarry API', ['ICARRY_ENABLED','ICARRY_TRACKING_URL','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_ID','ICARRY_CLIENT_SECRET','ICARRY_USERNAME','ICARRY_PASSWORD']]
+  ];
+  const lines = [];
+  lines.push('Tiny Shiny Chatbot - API Settings Backup');
+  lines.push('Downloaded: ' + new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' }) + ' IST');
+  lines.push('');
+  lines.push('NOTE: Is file ko safe rakhein. Isme secret keys/passwords full value me hain.');
+  lines.push('');
+  for (const [title, keys] of sections) {
+    lines.push('==============================');
+    lines.push(title);
+    lines.push('==============================');
+    for (const key of keys) lines.push(envLine(key, env));
+    lines.push('');
+  }
+  return lines.join('\n');
 }
 
 
@@ -663,12 +693,25 @@ app.post('/api/config', (req, res) => {
   for (const key of apiKeys) {
     if (Object.prototype.hasOwnProperty.call(body, key)) {
       const val = String(body[key] ?? '').trim();
-      // If secret field is left as ********, keep old value.
-      next[key] = (secretKeys.has(key) && val === '********') ? (current[key] || '') : val;
+      // Secret fields: blank or ******** means keep old value. Only a newly typed value changes it.
+      if (secretKeys.has(key) && (val === '' || val === '********') && current[key]) {
+        next[key] = current[key];
+      } else {
+        next[key] = val;
+      }
     }
   }
   const saved = writeEnvFile(next);
-  res.json({ ok: true, config: publicConfig(saved), message: 'API settings saved. Restart chatbot once to reload all integrations.' });
+  res.json({ ok: true, config: publicConfig(saved), message: 'API settings saved. Blank secret fields kept old values.' });
+});
+
+app.get('/api/config/download', (req, res) => {
+  const env = readEnvFile();
+  const text = configBackupText(env);
+  const stamp = new Date().toISOString().slice(0, 10);
+  res.setHeader('Content-Type', 'text/plain; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="tiny-shiny-api-settings-${stamp}.txt"`);
+  res.send(text);
 });
 app.post('/api/test-whatsapp', async (req, res) => {
   try {

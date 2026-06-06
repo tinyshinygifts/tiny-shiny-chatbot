@@ -27,6 +27,16 @@ async function saveAppearance(){
   if($('appearanceResult')) show($('appearanceResult'), data.ok ? {ok:true,message:'Chatbot appearance saved. Refresh website. If old widget remains, use widget.js?v=19 in Shopify.'} : data);
   return data;
 }
+
+function downloadConfigBackup(){
+  const a = document.createElement('a');
+  a.href = '/api/config/download?t=' + Date.now();
+  a.download = '';
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
 async function saveConfig(){
   const body = {};
   keys.forEach(k => { if($(k)) body[k] = $(k).value.trim(); });
@@ -44,6 +54,7 @@ document.addEventListener('click', async (e)=>{
   if(e.target.id === 'saveAppearance') return saveAppearance();
   if(e.target.closest('#logoutBtn')) { e.preventDefault(); return logout(); }
   if(e.target.id === 'saveConfig') saveConfig();
+  if(e.target.id === 'downloadConfig' || e.target.id === 'downloadConfig2') downloadConfigBackup();
   if(e.target.id === 'connectShopify') {
     const saved = await saveConfig();
     if(!saved.ok) return show($('shopifyResult'), saved);
