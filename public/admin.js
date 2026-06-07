@@ -9,6 +9,11 @@ let whatsappInboxMessages = [];
 let selectedWhatsappInboxId = "";
 let selectedPromoProductId = '';
 let googleSheetUrl = '';
+let adminAutoRefreshTimer = null;
+let adminAutoRefreshBusy = false;
+let whatsappInboxInitialized = false;
+let knownInboundUnreadIds = new Set();
+let lastNotificationAt = 0;
 const colorOptions = ['#d63384','#9b35ff','#0ea5e9','#16a34a','#f97316','#111827'];
 const colorNames = {'#d63384':'Tiny Shiny Pink','#9b35ff':'Premium Purple','#0ea5e9':'Sky Blue','#16a34a':'Fresh Green','#f97316':'Festive Orange','#111827':'Luxury Black'};
 function $(id){ return document.getElementById(id); }
@@ -26,8 +31,106 @@ function showTab(id){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
   localStorage.setItem('tsgAdminActiveTab', id);
 }
+
+function activeTabId(){ return localStorage.getItem('tsgAdminActiveTab') || 'basicPanel'; }
+function initAutoRefreshControls(){
+  const sel = $('autoRefreshInterval');
+  if(!sel) return;
+  const saved = localStorage.getItem('tsgAdminAutoRefreshSec') || '30';
+  sel.value = ['0','10','20','30','60','120','600'].includes(saved) ? saved : '30';
+  sel.onchange = () => { localStorage.setItem('tsgAdminAutoRefreshSec', sel.value); scheduleAdminAutoRefresh(); };
+  scheduleAdminAutoRefresh();
+}
+function scheduleAdminAutoRefresh(){
+  if(adminAutoRefreshTimer) clearInterval(adminAutoRefreshTimer);
+  adminAutoRefreshTimer = null;
+  const sec = Number($('autoRefreshInterval')?.value || localStorage.getItem('tsgAdminAutoRefreshSec') || 30);
+  if(!sec) return;
+  adminAutoRefreshTimer = setInterval(refreshAdminDataAuto, sec * 1000);
+}
+async function refreshAdminDataAuto(){
+  if(adminAutoRefreshBusy) return;
+  adminAutoRefreshBusy = true;
+  try{
+    const active = activeTabId();
+    await loadWhatsappInbox(true);
+    await loadLeads().catch(()=>{});
+    await loadEvents().catch(()=>{});
+    await loadMessages().catch(()=>{});
+    if(active === 'crmPanel') await loadCrm().catch(()=>{});
+    if(active === 'shopifyCustomersPanel') await loadShopifyCustomers().catch(()=>{});
+    if(active === 'imagePanel') await loadMediaCustomers().catch(()=>{});
+  } finally { adminAutoRefreshBusy = false; }
+}
+function initDesktopNotificationButton(){
+  const btn = $('enableDesktopNotifications');
+  if(!btn) return;
+  const update = () => {
+    if(!('Notification' in window)) btn.textContent = 'Notifications Not Supported';
+    else if(Notification.permission === 'granted') btn.textContent = 'Notifications ON';
+    else btn.textContent = 'Enable Notifications';
+  };
+  btn.onclick = async () => {
+    if(!('Notification' in window)) return alert('Desktop notifications are not supported in this browser.');
+    const perm = await Notification.requestPermission();
+    update();
+    if(perm === 'granted') showAdminToast({ title:'Desktop notifications enabled', body:'New WhatsApp message par popup aayega.' });
+  };
+  update();
+}
+function showAdminToast({title='New WhatsApp Message', body='', phone='', onOpenPhone=''}){
+  const t=$('adminNotificationToast');
+  if(!t) return;
+  t.className='admin-toast';
+  t.innerHTML=`<div><b>${esc(title)}</b><span>${esc(body)}</span>${phone?`<small>${esc(phone)}</small>`:''}</div><div class="toast-actions"><button type="button" data-toast-open="${esc(onOpenPhone||phone)}">Open Chat</button><button type="button" data-toast-close="1">Close</button></div>`;
+  setTimeout(()=>{ if(t) t.classList.add('hidden'); }, 12000);
+}
+function playNotifySound(){
+  try{
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if(!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type='sine'; osc.frequency.value=880; gain.gain.value=0.06;
+    osc.connect(gain); gain.connect(ctx.destination); osc.start();
+    setTimeout(()=>{ osc.stop(); ctx.close(); }, 180);
+  }catch(e){}
+}
+function notifyNewWhatsappMessage(m){
+  const now=Date.now();
+  if(now-lastNotificationAt<1000) return;
+  lastNotificationAt=now;
+  const phone=inboxPhone(m);
+  const body=messageText(m) || 'New customer message';
+  const name=m.customerName||m.profileName||phone||'Customer';
+  showAdminToast({ title:'New WhatsApp Message', body:`${name}: ${body}`, phone, onOpenPhone:phone });
+  playNotifySound();
+  if('Notification' in window && Notification.permission==='granted'){
+    const n = new Notification('New WhatsApp Message', { body:`${phone}: ${body}`.slice(0,180), icon:'/tiny-shiny-logo.jpg', tag:'wa-'+phone });
+    n.onclick = () => { window.focus(); selectedWhatsappInboxId=phone; showTab('whatsappInboxPanel'); renderWhatsappInbox(); n.close(); };
+  }
+}
+function checkNewInboundNotifications(messages=[]){
+  const inbound = messages.filter(m=>m.direction==='inbound' && (m.status==='unread' || !m.status));
+  if(!whatsappInboxInitialized){
+    knownInboundUnreadIds = new Set(inbound.map(m=>String(m.id || m.raw?.id || m.createdAt || inboxPhone(m)+messageText(m))));
+    whatsappInboxInitialized = true;
+    return;
+  }
+  for(const m of inbound){
+    const id=String(m.id || m.raw?.id || m.createdAt || inboxPhone(m)+messageText(m));
+    if(!knownInboundUnreadIds.has(id)){
+      knownInboundUnreadIds.add(id);
+      notifyNewWhatsappMessage(m);
+    }
+  }
+}
+
 async function load(){
   setThemeColor(localStorage.getItem('tsgAdminThemeColor') || '#d63384');
+  initAutoRefreshControls();
+  initDesktopNotificationButton();
   const [s,f,cfg] = await Promise.all([
     fetch('/api/settings',{credentials:'include',cache:'no-store'}).then(r=>r.json()),
     fetch('/api/faqs',{credentials:'include'}).then(r=>r.json()),
@@ -129,7 +232,7 @@ function renderChatList(groups){
 function renderActiveChat(group){
   const pane=$('whatsappActiveChat');
   if(!pane) return;
-  if(!group){ pane.className='wa-active-chat empty-state'; pane.innerHTML='Select a customer chat from the left side.'; return; }
+  if(!group){ pane.className='wa-active-chat empty-state'; pane.innerHTML='Select a customer chat from the left side.'; const action=$('whatsappShopifyAction'); if(action) action.innerHTML=''; return; }
   const known=shopifyHasPhone(group.phone);
   const name=chatNameForGroup(group);
   const messages=group.messages||[];
@@ -149,13 +252,19 @@ function renderActiveChat(group){
   pane.className='wa-active-chat';
   pane.innerHTML=`<div class="wa-chat-header">
     <div class="wa-avatar big">${esc(initials(name,group.phone))}</div>
-    <div class="wa-header-info"><b>${esc(name)}</b><span>${esc(group.phone)} ${known?'• Shopify Customer':'• Not in Shopify'}</span></div>
+    <div class="wa-header-info"><b>${esc(name)}</b><span>${esc(group.phone)} <em class="wa-shopify-badge ${known?'ok':'missing'}">${known?'Shopify Customer':'Not in Shopify'}</em></span></div>
     <div class="wa-header-actions">
       ${known?'':`<button class="primary-btn" type="button" data-add-shopify-phone="${esc(group.phone)}" data-add-shopify-name="${esc(name)}">Add to Shopify Customer</button>`}
       <button class="ghost-btn" type="button" data-mark-thread-read="${esc(group.phone)}">Mark Read</button>
     </div>
   </div>
   <div class="wa-message-area">${bubbles || '<div class="wa-date-sep">No messages</div>'}</div>`;
+  const action=$('whatsappShopifyAction');
+  if(action){
+    action.innerHTML = known
+      ? `<span class="wa-shopify-inline ok">Shopify Customer</span>`
+      : `<span class="wa-shopify-inline missing">Not in Shopify</span><button class="primary-btn" type="button" data-add-shopify-phone="${esc(group.phone)}" data-add-shopify-name="${esc(name)}">Add to Shopify Customer</button>`;
+  }
   setTimeout(()=>{ const area=pane.querySelector('.wa-message-area'); if(area) area.scrollTop=area.scrollHeight; },0);
 }
 function renderWhatsappInbox(){
@@ -170,12 +279,13 @@ function renderWhatsappInbox(){
   renderActiveChat(group);
   if(group && $('whatsappReplyPhone')) whatsappReplyPhone.value=group.phone;
 }
-async function loadWhatsappInbox(){
+async function loadWhatsappInbox(silent=false){
   const days=$('whatsappInboxDays')?.value||localStorage.getItem('tsgWhatsappInboxDays')||'7';
   const d=await fetch('/api/whatsapp-inbox?days='+encodeURIComponent(days),{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,messages:[]}));
   if($('whatsappInboxDays')) whatsappInboxDays.value=String(d.days||days);
   whatsappInboxMessages=d.messages||[];
-  if($('whatsappInboxResult') && !d.ok) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
+  checkNewInboundNotifications(whatsappInboxMessages);
+  if($('whatsappInboxResult') && !d.ok && !silent) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
   renderWhatsappInbox();
 }
 async function markWhatsappInboxRead(id){
@@ -347,8 +457,11 @@ async function sendNewProductPromo(){
 }
 
 document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } });
+document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } });
 document.addEventListener('click',async e=>{
+
+  if(e.target.dataset.toastClose){ const t=$('adminNotificationToast'); if(t) t.classList.add('hidden'); }
+  if(e.target.dataset.toastOpen){ selectedWhatsappInboxId=e.target.dataset.toastOpen; showTab('whatsappInboxPanel'); renderWhatsappInbox(); const t=$('adminNotificationToast'); if(t) t.classList.add('hidden'); }
   if(e.target.closest('#logoutBtn')){ e.preventDefault(); return logout(); }
   if(e.target.classList.contains('tab-btn')){ e.preventDefault(); if(e.target.id==='openGoogleSheetTab'){ if(googleSheetUrl){ window.open(googleSheetUrl,'_blank','noopener'); } else { alert('Google Sheet link not configured. Please add it in API Settings.'); } return showTab(e.target.dataset.tab); } return showTab(e.target.dataset.tab); }
   if(e.target.id==='addFaq'){faqs.push({keywords:['new keyword'],answer:'New answer'});renderFaqs();}

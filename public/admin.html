@@ -16,7 +16,19 @@
         <h1>Chatbot Admin</h1>
         <p>Manage replies, FAQs, leads, order requests and product activity.</p>
       </div>
-      <div class="top-actions">
+      <div class="top-actions admin-live-actions">
+        <label class="auto-refresh-control">Auto Refresh
+          <select id="autoRefreshInterval">
+            <option value="0">Off</option>
+            <option value="10">10 sec</option>
+            <option value="20">20 sec</option>
+            <option value="30">30 sec</option>
+            <option value="60">60 sec</option>
+            <option value="120">120 sec</option>
+            <option value="600">600 sec</option>
+          </select>
+        </label>
+        <button id="enableDesktopNotifications" type="button" class="ghost-btn">Enable Notifications</button>
         <a class="pill-link" href="/api-settings.html">API Settings</a>
         <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
       </div>
@@ -128,6 +140,7 @@
             Select a customer chat from the left side.
           </div>
           <div class="wa-reply-dock">
+            <div id="whatsappShopifyAction" class="wa-shopify-action"></div>
             <div class="form-grid two compact-reply-grid">
               <label>Reply To Number <input id="whatsappReplyPhone" placeholder="91XXXXXXXXXX"/></label>
               <label>Attach Image Optional
@@ -242,6 +255,7 @@
     <section class="panel tab-panel" id="activityPanel"><h2>Visitor / Product Activity</h2><button id="refreshEvents" class="ghost-btn">Refresh Activity</button><div id="eventList"></div></section>
     <section class="panel tab-panel" id="messagePanel"><h2>Generated Buy Messages</h2><button id="refreshMsgs" class="ghost-btn">Refresh Messages</button><div id="messageList"></div></section>
     <section class="panel tab-panel" id="googleSheetPanel"><h2>Google Sheet</h2><p id="googleSheetHelp">Google Sheet link not configured. Please add it in API Settings.</p><a id="googleSheetOpenLink" class="primary-btn" target="_blank" rel="noopener" href="#">Open Google Sheet</a></section>
+    <div id="adminNotificationToast" class="admin-toast hidden" role="status" aria-live="polite"></div>
   </main>
   <script src="/admin.js"></script>
 </body>
