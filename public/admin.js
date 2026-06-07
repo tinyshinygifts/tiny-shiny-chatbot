@@ -75,36 +75,100 @@ function renderWhatsappReplyImages(){
   sel.innerHTML='<option value="">No image / Text only</option>' + (mediaImages||[]).map(img=>`<option value="${esc(img.id)}">${esc(img.title||img.filename||img.category||'Image')}</option>`).join('');
   if(current && [...sel.options].some(o=>o.value===current)) sel.value=current;
 }
+function messageText(m){ return m.text || m.caption || m.statusType || m.status || ''; }
+function chatNameForGroup(g){
+  const named=(g.messages||[]).map(m=>m.customerName||m.profileName||m.name||'').find(Boolean);
+  return named || g.customerName || g.phone || 'WhatsApp Customer';
+}
+function statusLabel(m){
+  const st=m.status || m.statusType || '';
+  const dir=m.direction || '';
+  if(dir==='status') return st ? `Status: ${st}` : 'Status';
+  if(dir==='outbound') return st ? `You • ${st}` : 'You';
+  return st ? `Customer • ${st}` : 'Customer';
+}
+function initials(name, phone){
+  const n=String(name||'').trim();
+  if(n && !/^91\d+/.test(n)) return n.split(/\s+/).slice(0,2).map(x=>x[0]).join('').toUpperCase();
+  return String(phone||'WA').slice(-2);
+}
+function timeShort(v){
+  if(!v) return '';
+  const d=new Date(v); if(isNaN(d)) return String(v).slice(0,16);
+  return d.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'});
+}
+function dateLabel(v){
+  if(!v) return '';
+  const d=new Date(v); if(isNaN(d)) return String(v).slice(0,10);
+  const today=new Date();
+  const yday=new Date(); yday.setDate(today.getDate()-1);
+  if(d.toDateString()===today.toDateString()) return 'Today';
+  if(d.toDateString()===yday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString();
+}
+function renderChatList(groups){
+  const list=$('whatsappChatList') || $('whatsappInboxList');
+  if(!list) return;
+  list.innerHTML=groups.map(g=>{
+    const selected=String(selectedWhatsappInboxId)===String(g.phone);
+    const name=chatNameForGroup(g);
+    const last=g.messages[g.messages.length-1]||{};
+    const preview=messageText(last) || last.status || '';
+    const known=shopifyHasPhone(g.phone);
+    return `<button type="button" class="wa-chat-item ${selected?'active':''} ${g.unread?'unread':''}" data-inbox-phone="${esc(g.phone)}">
+      <span class="wa-avatar">${esc(initials(name,g.phone))}</span>
+      <span class="wa-chat-meta">
+        <span class="wa-chat-title"><b>${esc(name)}</b>${g.unread?`<em>${g.unread}</em>`:''}</span>
+        <span class="wa-chat-preview">${esc(preview || 'No message')}</span>
+        <span class="wa-chat-sub">${esc(g.phone)} • ${known?'Shopify':'Not in Shopify'}</span>
+      </span>
+      <span class="wa-chat-time">${esc(timeShort(last.createdAt||g.lastAt))}</span>
+    </button>`;
+  }).join('') || '<div class="wa-empty-list">No WhatsApp replies yet.</div>';
+}
+function renderActiveChat(group){
+  const pane=$('whatsappActiveChat');
+  if(!pane) return;
+  if(!group){ pane.className='wa-active-chat empty-state'; pane.innerHTML='Select a customer chat from the left side.'; return; }
+  const known=shopifyHasPhone(group.phone);
+  const name=chatNameForGroup(group);
+  const messages=group.messages||[];
+  let lastDate='';
+  const bubbles=messages.map(m=>{
+    const dlab=dateLabel(m.createdAt);
+    const dateSep=dlab && dlab!==lastDate ? (lastDate=dlab, `<div class="wa-date-sep">${esc(dlab)}</div>`) : '';
+    const dir=m.direction==='inbound'?'inbound':(m.direction==='outbound'?'outbound':'status');
+    const txt=messageText(m);
+    const extra=m.imageUrl||m.image||m.productImage||'';
+    return `${dateSep}<div class="wa-bubble ${dir}">
+      ${extra?`<img src="${esc(extra)}" alt="" class="wa-bubble-img"/>`:''}
+      <div>${esc(txt || statusLabel(m))}</div>
+      <small>${esc(statusLabel(m))} • ${esc(timeShort(m.createdAt))}</small>
+    </div>`;
+  }).join('');
+  pane.className='wa-active-chat';
+  pane.innerHTML=`<div class="wa-chat-header">
+    <div class="wa-avatar big">${esc(initials(name,group.phone))}</div>
+    <div class="wa-header-info"><b>${esc(name)}</b><span>${esc(group.phone)} ${known?'• Shopify Customer':'• Not in Shopify'}</span></div>
+    <div class="wa-header-actions">
+      ${known?'':`<button class="primary-btn" type="button" data-add-shopify-phone="${esc(group.phone)}" data-add-shopify-name="${esc(name)}">Add to Shopify Customer</button>`}
+      <button class="ghost-btn" type="button" data-mark-thread-read="${esc(group.phone)}">Mark Read</button>
+    </div>
+  </div>
+  <div class="wa-message-area">${bubbles || '<div class="wa-date-sep">No messages</div>'}</div>`;
+  setTimeout(()=>{ const area=pane.querySelector('.wa-message-area'); if(area) area.scrollTop=area.scrollHeight; },0);
+}
 function renderWhatsappInbox(){
   const q=($('whatsappInboxSearch')?.value||'').toLowerCase().trim();
   const all=(whatsappInboxMessages||[]).filter(m=>m.direction==='inbound' || m.direction==='outbound' || m.direction==='status');
-  const groups=groupInboxMessages(all).filter(g=>!q || [g.customerName,g.phone,...g.messages.map(m=>m.text||m.statusType||m.status||'')].join(' ').toLowerCase().includes(q));
+  const groups=groupInboxMessages(all).filter(g=>!q || [g.customerName,g.phone,...g.messages.map(m=>messageText(m))].join(' ').toLowerCase().includes(q));
+  if(!selectedWhatsappInboxId && groups[0]) selectedWhatsappInboxId=groups[0].phone;
+  if(selectedWhatsappInboxId && !groups.some(g=>String(g.phone)===String(selectedWhatsappInboxId)) && groups[0]) selectedWhatsappInboxId=groups[0].phone;
   if($('whatsappInboxCount')) whatsappInboxCount.textContent=groups.length;
-  if(!$('whatsappInboxList')) return;
-  whatsappInboxList.innerHTML = groups.slice(0,200).map(g=>{
-    const isSelected=String(selectedWhatsappInboxId)===String(g.phone);
-    const known=shopifyHasPhone(g.phone);
-    const last=g.messages[g.messages.length-1]||{};
-    const title=g.customerName||g.phone||'WhatsApp';
-    const lines=g.messages.slice(-40).map(m=>{
-      const dir=m.direction==='inbound'?'Customer':(m.direction==='outbound'?'You':'Status');
-      const txt=m.text||m.statusType||m.status||'';
-      const st=m.status||m.statusType||'';
-      return `<div class="chat-line ${esc(m.direction||'')}"><small>${esc(dir)} • ${esc((m.createdAt||'').replace('T',' ').slice(0,19))} ${st?('• '+esc(st)):''}</small><div>${esc(txt)}</div></div>`;
-    }).join('');
-    return `<div class="inbox-row conversation ${isSelected?'selected':''} ${g.unread?'unread':''}">
-      <label><input type="radio" name="inboxSelect" data-inbox-phone="${esc(g.phone)}" ${isSelected?'checked':''}/>
-      <b>${esc(title)}</b> ${g.unread?`<span class="status-chip">${g.unread} unread</span>`:''} <span class="status-chip">${known?'Shopify customer':'Not in Shopify'}</span></label>
-      <small>Last: ${esc(last.createdAt||'')}</small>
-      <div><b>Phone:</b> ${esc(g.phone)}</div>
-      <div class="conversation-lines">${lines}</div>
-      <div class="inline-actions">
-        <button class="ghost-btn" type="button" data-reply-phone="${esc(g.phone)}">Reply</button>
-        <button class="ghost-btn" type="button" data-mark-thread-read="${esc(g.phone)}">Mark Read</button>
-        ${known?'':`<button class="primary-btn" type="button" data-add-shopify-phone="${esc(g.phone)}" data-add-shopify-name="${esc(title)}">Add to Shopify Customer</button>`}
-      </div>
-    </div>`;
-  }).join('') || '<p>No WhatsApp replies yet. Configure Meta webhook first.</p>';
+  renderChatList(groups);
+  const group=groups.find(g=>String(g.phone)===String(selectedWhatsappInboxId));
+  renderActiveChat(group);
+  if(group && $('whatsappReplyPhone')) whatsappReplyPhone.value=group.phone;
 }
 async function loadWhatsappInbox(){
   const days=$('whatsappInboxDays')?.value||localStorage.getItem('tsgWhatsappInboxDays')||'7';
@@ -310,6 +374,7 @@ document.addEventListener('click',async e=>{
   if(e.target.dataset.removeSelectedMedia){ const id=e.target.dataset.removeSelectedMedia; selectedMediaIds=selectedMediaIds.filter(x=>x!==id); selectedMediaId=selectedMediaIds[0]||''; loadMedia(); }
   if(e.target.dataset.fillMediaPhone){ const c=shopifyCustomers.find(x=>String(x.id)===String(e.target.dataset.fillMediaPhone)); if(c && $('mediaPhone')){ mediaPhone.value=c.phone||''; if($('mediaSendTo')) mediaSendTo.value='custom'; } }
   if(e.target.dataset.deleteMedia){ if(confirm('Delete this image from library?')){ await fetch('/api/media-images/'+encodeURIComponent(e.target.dataset.deleteMedia),{method:'DELETE',credentials:'include'}); selectedMediaIds=selectedMediaIds.filter(x=>x!==e.target.dataset.deleteMedia); if(selectedMediaId===e.target.dataset.deleteMedia) selectedMediaId=selectedMediaIds[0]||''; loadMedia(); } }
+  if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); }
   if(e.target.id==='refreshWhatsappInbox') loadWhatsappInbox();
   if(e.target.id==='sendWhatsappInboxReply') sendWhatsappInboxReply();
   if(e.target.id==='markWhatsappInboxRead') selectedWhatsappInboxId && selectedWhatsappInboxId.length>20 ? markWhatsappInboxRead(selectedWhatsappInboxId) : markWhatsappThreadRead(selectedWhatsappInboxId);

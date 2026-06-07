@@ -96,32 +96,54 @@
     </section>
 
 
-    <section class="panel tab-panel compact-inbox" id="whatsappInboxPanel">
-      <div class="section-head">
+    <section class="panel tab-panel compact-inbox whatsapp-web-panel" id="whatsappInboxPanel">
+      <div class="section-head whatsapp-inbox-head">
         <div>
           <h2>WhatsApp Inbox / Customer Replies</h2>
-          <p>Customer ne WhatsApp par jo reply kiya hai, wo yaha webhook se show hoga. Yahi se reply bhi bhej sakte ho.</p>
+          <p>WhatsApp Web style inbox: left me customers, right me selected customer ki full chat.</p>
         </div>
         <div class="inline-actions"><button id="refreshWhatsappInbox" class="ghost-btn">Refresh Inbox</button></div>
       </div>
-      <div class="form-grid four inbox-toolbar">
-        <label>Search Reply <input id="whatsappInboxSearch" placeholder="Name, phone, message"/></label>
-        <label>Keep / Show Data
-          <select id="whatsappInboxDays"><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="4">4 days</option><option value="5">5 days</option><option value="6">6 days</option><option value="7" selected>7 days</option><option value="8">8 days</option><option value="9">9 days</option><option value="10">10 days</option></select>
-        </label>
-        <label>Reply To Number <input id="whatsappReplyPhone" placeholder="91XXXXXXXXXX"/></label>
-        <label>Attach Image Optional
-          <select id="whatsappReplyImage"><option value="">No image / Text only</option></select>
-        </label>
+
+      <div class="wa-web-shell">
+        <aside class="wa-chat-sidebar">
+          <div class="wa-sidebar-top">
+            <label>Search
+              <input id="whatsappInboxSearch" placeholder="Name, phone, message"/>
+            </label>
+            <label>Keep / Show
+              <select id="whatsappInboxDays"><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="4">4 days</option><option value="5">5 days</option><option value="6">6 days</option><option value="7" selected>7 days</option><option value="8">8 days</option><option value="9">9 days</option><option value="10">10 days</option></select>
+            </label>
+            <div class="wa-clear-actions">
+              <button id="clearWhatsappInboxRange" class="ghost-btn danger-outline" type="button">Clear Selected Days</button>
+              <button id="clearWhatsappInboxAll" class="ghost-btn danger-outline" type="button">Clear All</button>
+            </div>
+          </div>
+          <div class="wa-chat-count"><b id="whatsappInboxCount">0</b> chats</div>
+          <div id="whatsappChatList" class="wa-chat-list"></div>
+        </aside>
+
+        <main class="wa-chat-main">
+          <div id="whatsappActiveChat" class="wa-active-chat empty-state">
+            Select a customer chat from the left side.
+          </div>
+          <div class="wa-reply-dock">
+            <div class="form-grid two compact-reply-grid">
+              <label>Reply To Number <input id="whatsappReplyPhone" placeholder="91XXXXXXXXXX"/></label>
+              <label>Attach Image Optional
+                <select id="whatsappReplyImage"><option value="">No image / Text only</option></select>
+              </label>
+            </div>
+            <label>Reply Message <textarea id="whatsappReplyText" placeholder="Write reply to customer"></textarea></label>
+            <div class="inline-actions wa-reply-actions">
+              <button id="sendWhatsappInboxReply" class="primary-btn">Send Reply</button>
+              <button id="markWhatsappInboxRead" class="ghost-btn">Mark Selected Read</button>
+            </div>
+            <pre id="whatsappInboxResult"></pre>
+          </div>
+        </main>
       </div>
-      <div class="inline-actions"><button id="clearWhatsappInboxRange" class="ghost-btn danger-outline" type="button">Clear Selected Days Data</button><button id="clearWhatsappInboxAll" class="ghost-btn danger-outline" type="button">Clear All Inbox Data</button></div>
-      <label>Reply Message <textarea id="whatsappReplyText" placeholder="Write reply to customer"></textarea></label>
-      <div class="inline-actions">
-        <button id="sendWhatsappInboxReply" class="primary-btn">Send Reply</button>
-        <button id="markWhatsappInboxRead" class="ghost-btn">Mark Selected Read</button>
-      </div>
-      <pre id="whatsappInboxResult"></pre>
-      <div id="whatsappInboxList" class="inbox-list"></div>
+      <div id="whatsappInboxList" class="inbox-list legacy-hidden"></div>
     </section>
 
     <section class="panel tab-panel" id="newProductsPanel">
