@@ -13,6 +13,9 @@ const colorOptions = ['#d63384','#9b35ff','#0ea5e9','#16a34a','#f97316','#111827
 const colorNames = {'#d63384':'Tiny Shiny Pink','#9b35ff':'Premium Purple','#0ea5e9':'Sky Blue','#16a34a':'Fresh Green','#f97316':'Festive Orange','#111827':'Luxury Black'};
 function $(id){ return document.getElementById(id); }
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
+function digitsOnly(v){ return String(v||'').replace(/[^0-9]/g,''); }
+function last10(v){ const d=digitsOnly(v); return d.length>=10 ? d.slice(-10) : ''; }
+function formatWaPhone(v){ const l=last10(v); return l ? '91'+l : ''; }
 function normalizeColor(value){ const v=String(value||'').trim().toLowerCase(); return /^#[0-9a-f]{6}$/.test(v)?v:'#d63384'; }
 function tint(hex, amount){ hex=normalizeColor(hex).slice(1); const n=parseInt(hex,16); let r=(n>>16)&255,g=(n>>8)&255,b=n&255; if(amount>=0){r+=(255-r)*amount;g+=(255-g)*amount;b+=(255-b)*amount}else{r*=(1+amount);g*=(1+amount);b*=(1+amount)} return '#'+[r,g,b].map(x=>Math.max(0,Math.min(255,Math.round(x))).toString(16).padStart(2,'0')).join(''); }
 function applyThemeColor(value){ const color=normalizeColor(value); document.documentElement.style.setProperty('--pink', color); document.documentElement.style.setProperty('--pink2', tint(color,.28)); document.documentElement.style.setProperty('--purple', tint(color,-.12)); document.documentElement.style.setProperty('--line', tint(color,.76)); localStorage.setItem('tsgAdminThemeColor', color); }
@@ -36,7 +39,7 @@ async function load(){
   if(googleSheetUrl === '********') googleSheetUrl = '';
   updateGoogleSheetTab();
   faqs=f.faqs||[]; renderFaqs();
-  await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages(), loadWhatsappInbox()]);
+  await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages(), loadShopifyCustomers().catch(()=>{}), loadWhatsappInbox()]);
   const active = localStorage.getItem('tsgAdminActiveTab') || 'basicPanel';
   showTab($(active) ? active : 'basicPanel');
 }
@@ -50,7 +53,22 @@ function renderFaqs(){ if(!$('faqList')) return; faqList.innerHTML=''; faqs.forE
 async function loadLeads(){ const d=await fetch('/api/leads',{credentials:'include'}).then(r=>r.json()).catch(()=>({leads:[]})); if($('leadCount')) leadCount.textContent=(d.leads||[]).length; if($('leadList')) leadList.innerHTML=(d.leads||[]).slice(0,100).map(l=>`<div class="log-row"><b>${esc(l.type)}</b> <small>${esc(l.createdAt)}</small><br/>Phone: ${esc(l.phone)} | Order: ${esc(l.orderId||l.orderName)}<br/>Product: ${esc(l.productTitle||l.product||l?.product?.title)}<br/>Image: ${esc(l.productImage||l.image||l?.product?.image)}<br/>Page: ${esc(l.pageUrl||l?.product?.url)}<br/>Message: ${esc(l.message||l.note)}</div>`).join('') || 'No leads yet.'; }
 async function loadEvents(){ const d=await fetch('/api/visitor-events',{credentials:'include'}).then(r=>r.json()).catch(()=>({events:[]})); if($('eventCount')) eventCount.textContent=(d.events||[]).length; if($('eventList')) eventList.innerHTML=(d.events||[]).slice(0,120).map(e=>`<div class="log-row"><b>${esc(e.eventType)}</b> <small>${esc(e.createdAt)}</small><br/>Product: ${esc(e.productTitle)}<br/>Price: ${esc(e.productPrice)} | Discount: ${esc(e.discountText)}<br/>Image: ${esc(e.productImage)}<br/>Page: ${esc(e.pageUrl)}</div>`).join('') || 'No activity yet.'; }
 async function loadMessages(){ const d=await fetch('/api/lead-messages',{credentials:'include'}).then(r=>r.json()).catch(()=>({messages:[]})); if($('messageCount')) messageCount.textContent=(d.messages||[]).length; if($('messageList')) messageList.innerHTML=(d.messages||[]).slice(0,80).map(m=>`<div class="log-row"><b>${esc(m.type)}</b> <small>${esc(m.createdAt)}</small><br/><pre>${esc(m.message)}</pre></div>`).join('') || 'No messages yet.'; }
-function inboxValue(m){ return [m.customerName,m.from,m.to,m.text,m.type,m.status,m.createdAt].join(' ').toLowerCase(); }
+function inboxValue(m){ return [m.customerName,m.from,m.to,m.text,m.type,m.status,m.statusType,m.createdAt].join(' ').toLowerCase(); }
+function shopifyHasPhone(phone){ const l=last10(phone); return !!l && (shopifyCustomers||[]).some(c=>last10(c.phone)===l); }
+function inboxPhone(m){ return formatWaPhone(m.from||m.to||m.phone||m.raw?.recipient_id||''); }
+function groupInboxMessages(messages){
+  const map=new Map();
+  for(const m of messages||[]){
+    const phone=inboxPhone(m); if(!phone) continue;
+    if(!map.has(phone)) map.set(phone,{phone,customerName:'',lastAt:'',unread:0,messages:[]});
+    const g=map.get(phone);
+    if(m.customerName&&!g.customerName) g.customerName=m.customerName;
+    if(m.direction==='inbound'&&m.status==='unread') g.unread++;
+    g.messages.push(m);
+    if(!g.lastAt||new Date(m.createdAt||0)>new Date(g.lastAt||0)) g.lastAt=m.createdAt||'';
+  }
+  return [...map.values()].map(g=>({...g,messages:g.messages.sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0))})).sort((a,b)=>new Date(b.lastAt||0)-new Date(a.lastAt||0));
+}
 function renderWhatsappReplyImages(){
   const sel=$('whatsappReplyImage'); if(!sel) return;
   const current=sel.value;
@@ -59,26 +77,39 @@ function renderWhatsappReplyImages(){
 }
 function renderWhatsappInbox(){
   const q=($('whatsappInboxSearch')?.value||'').toLowerCase().trim();
-  const msgs=(whatsappInboxMessages||[]).filter(m=>m.direction==='inbound' || m.direction==='outbound' || m.direction==='status').filter(m=>!q||inboxValue(m).includes(q));
-  if($('whatsappInboxCount')) whatsappInboxCount.textContent=(whatsappInboxMessages||[]).filter(m=>m.direction==='inbound').length;
+  const all=(whatsappInboxMessages||[]).filter(m=>m.direction==='inbound' || m.direction==='outbound' || m.direction==='status');
+  const groups=groupInboxMessages(all).filter(g=>!q || [g.customerName,g.phone,...g.messages.map(m=>m.text||m.statusType||m.status||'')].join(' ').toLowerCase().includes(q));
+  if($('whatsappInboxCount')) whatsappInboxCount.textContent=groups.length;
   if(!$('whatsappInboxList')) return;
-  whatsappInboxList.innerHTML = msgs.slice(0,300).map(m=>{
-    const isSelected=String(selectedWhatsappInboxId)===String(m.id);
-    const phone=m.from||m.to||'';
-    const dir=m.direction||'inbound';
-    return `<div class="inbox-row ${isSelected?'selected':''} ${m.status==='unread'?'unread':''}">
-      <label><input type="radio" name="inboxSelect" data-inbox-select="${esc(m.id)}" ${isSelected?'checked':''}/>
-      <b>${esc(m.customerName||phone||'WhatsApp')}</b> <span class="status-chip">${esc(dir)}</span> <span class="status-chip">${esc(m.status||m.statusType||'')}</span></label>
-      <small>${esc(m.createdAt||'')}</small>
-      <div><b>Phone:</b> ${esc(phone)}</div>
-      <div class="inbox-text">${esc(m.text||m.statusType||'')}</div>
-      ${m.media?`<small>Media: ${esc(m.media.type||'')} ${esc(m.media.filename||m.media.id||'')}</small>`:''}
-      <div class="inline-actions"><button class="ghost-btn" type="button" data-reply-phone="${esc(phone)}">Reply</button><button class="ghost-btn" type="button" data-mark-inbox-read="${esc(m.id)}">Mark Read</button></div>
+  whatsappInboxList.innerHTML = groups.slice(0,200).map(g=>{
+    const isSelected=String(selectedWhatsappInboxId)===String(g.phone);
+    const known=shopifyHasPhone(g.phone);
+    const last=g.messages[g.messages.length-1]||{};
+    const title=g.customerName||g.phone||'WhatsApp';
+    const lines=g.messages.slice(-40).map(m=>{
+      const dir=m.direction==='inbound'?'Customer':(m.direction==='outbound'?'You':'Status');
+      const txt=m.text||m.statusType||m.status||'';
+      const st=m.status||m.statusType||'';
+      return `<div class="chat-line ${esc(m.direction||'')}"><small>${esc(dir)} • ${esc((m.createdAt||'').replace('T',' ').slice(0,19))} ${st?('• '+esc(st)):''}</small><div>${esc(txt)}</div></div>`;
+    }).join('');
+    return `<div class="inbox-row conversation ${isSelected?'selected':''} ${g.unread?'unread':''}">
+      <label><input type="radio" name="inboxSelect" data-inbox-phone="${esc(g.phone)}" ${isSelected?'checked':''}/>
+      <b>${esc(title)}</b> ${g.unread?`<span class="status-chip">${g.unread} unread</span>`:''} <span class="status-chip">${known?'Shopify customer':'Not in Shopify'}</span></label>
+      <small>Last: ${esc(last.createdAt||'')}</small>
+      <div><b>Phone:</b> ${esc(g.phone)}</div>
+      <div class="conversation-lines">${lines}</div>
+      <div class="inline-actions">
+        <button class="ghost-btn" type="button" data-reply-phone="${esc(g.phone)}">Reply</button>
+        <button class="ghost-btn" type="button" data-mark-thread-read="${esc(g.phone)}">Mark Read</button>
+        ${known?'':`<button class="primary-btn" type="button" data-add-shopify-phone="${esc(g.phone)}" data-add-shopify-name="${esc(title)}">Add to Shopify Customer</button>`}
+      </div>
     </div>`;
   }).join('') || '<p>No WhatsApp replies yet. Configure Meta webhook first.</p>';
 }
 async function loadWhatsappInbox(){
-  const d=await fetch('/api/whatsapp-inbox',{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,messages:[]}));
+  const days=$('whatsappInboxDays')?.value||localStorage.getItem('tsgWhatsappInboxDays')||'7';
+  const d=await fetch('/api/whatsapp-inbox?days='+encodeURIComponent(days),{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,messages:[]}));
+  if($('whatsappInboxDays')) whatsappInboxDays.value=String(d.days||days);
   whatsappInboxMessages=d.messages||[];
   if($('whatsappInboxResult') && !d.ok) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
   renderWhatsappInbox();
@@ -88,6 +119,26 @@ async function markWhatsappInboxRead(id){
   const d=await fetch('/api/whatsapp-inbox/'+encodeURIComponent(id)+'/read',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
   await loadWhatsappInbox();
+}
+async function markWhatsappThreadRead(phone){
+  if(!phone) return;
+  const d=await fetch('/api/whatsapp-inbox/thread/'+encodeURIComponent(phone)+'/read',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
+  await loadWhatsappInbox();
+}
+async function clearWhatsappInbox(all=false){
+  const days=$('whatsappInboxDays')?.value||'7';
+  const msg=all?'Clear all WhatsApp inbox data?':`Clear WhatsApp inbox data from last ${days} day(s)?`;
+  if(!confirm(msg)) return;
+  const d=await fetch('/api/whatsapp-inbox/clear',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({days:Number(days),all})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
+  await loadWhatsappInbox();
+}
+async function addWhatsappCustomerToShopify(phone,name){
+  const d=await fetch('/api/shopify/customers/create-from-whatsapp',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,name})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
+  await loadShopifyCustomers().catch(()=>{});
+  renderWhatsappInbox();
 }
 async function sendWhatsappInboxReply(){
   const phone=($('whatsappReplyPhone')?.value||'').trim();
@@ -232,7 +283,7 @@ async function sendNewProductPromo(){
 }
 
 document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=m.from||m.to||''; renderWhatsappInbox(); } });
+document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } });
 document.addEventListener('click',async e=>{
   if(e.target.closest('#logoutBtn')){ e.preventDefault(); return logout(); }
   if(e.target.classList.contains('tab-btn')){ e.preventDefault(); if(e.target.id==='openGoogleSheetTab'){ if(googleSheetUrl){ window.open(googleSheetUrl,'_blank','noopener'); } else { alert('Google Sheet link not configured. Please add it in API Settings.'); } return showTab(e.target.dataset.tab); } return showTab(e.target.dataset.tab); }
@@ -261,9 +312,13 @@ document.addEventListener('click',async e=>{
   if(e.target.dataset.deleteMedia){ if(confirm('Delete this image from library?')){ await fetch('/api/media-images/'+encodeURIComponent(e.target.dataset.deleteMedia),{method:'DELETE',credentials:'include'}); selectedMediaIds=selectedMediaIds.filter(x=>x!==e.target.dataset.deleteMedia); if(selectedMediaId===e.target.dataset.deleteMedia) selectedMediaId=selectedMediaIds[0]||''; loadMedia(); } }
   if(e.target.id==='refreshWhatsappInbox') loadWhatsappInbox();
   if(e.target.id==='sendWhatsappInboxReply') sendWhatsappInboxReply();
-  if(e.target.id==='markWhatsappInboxRead') markWhatsappInboxRead(selectedWhatsappInboxId);
+  if(e.target.id==='markWhatsappInboxRead') selectedWhatsappInboxId && selectedWhatsappInboxId.length>20 ? markWhatsappInboxRead(selectedWhatsappInboxId) : markWhatsappThreadRead(selectedWhatsappInboxId);
   if(e.target.dataset.replyPhone){ if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.replyPhone; showTab('whatsappInboxPanel'); }
   if(e.target.dataset.markInboxRead) markWhatsappInboxRead(e.target.dataset.markInboxRead);
+  if(e.target.dataset.markThreadRead) markWhatsappThreadRead(e.target.dataset.markThreadRead);
+  if(e.target.id==='clearWhatsappInboxRange') clearWhatsappInbox(false);
+  if(e.target.id==='clearWhatsappInboxAll') clearWhatsappInbox(true);
+  if(e.target.dataset.addShopifyPhone) addWhatsappCustomerToShopify(e.target.dataset.addShopifyPhone, e.target.dataset.addShopifyName || 'WhatsApp Customer');
   if(e.target.id==='refreshLeads') loadLeads(); if(e.target.id==='refreshEvents') loadEvents(); if(e.target.id==='refreshMsgs') loadMessages();
 });
 load().catch(err=>{console.error(err); if(String(err).includes('401')) location.href='/login.html';});

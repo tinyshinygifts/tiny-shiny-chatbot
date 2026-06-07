@@ -159,3 +159,17 @@ pre[id$="Result"],#templateResult,#appearanceResult,#whatsappResult,#shopifyResu
 .inbox-row input[type="radio"]{width:auto!important}.inbox-row b{overflow-wrap:anywhere}.inbox-row small{color:#766a78;font-weight:750}.inbox-text{background:#160b18;color:#fff;border-radius:14px;padding:10px;white-space:pre-wrap;word-break:break-word;max-height:150px;overflow:auto}
 #whatsappInboxResult{max-height:260px!important;overflow:auto!important;white-space:pre-wrap!important;word-break:break-word!important;background:#061a36;color:#fff;border-radius:16px;padding:14px}
 @media(max-width:760px){.inbox-list{grid-template-columns:1fr}.inbox-row .inline-actions{align-items:flex-start}}
+
+/* v25 WhatsApp conversation grouping + inbox retention */
+.form-grid.four{display:grid;grid-template-columns:repeat(4,minmax(180px,1fr));gap:14px}
+.inbox-toolbar{align-items:end}
+.inbox-row.conversation{min-height:0}
+.conversation-lines{display:flex;flex-direction:column;gap:8px;max-height:260px;overflow:auto;border-radius:14px;background:#fff7fc;border:1px solid var(--line);padding:10px}
+.chat-line{border-radius:14px;padding:8px 10px;white-space:pre-wrap;word-break:break-word;background:#160b18;color:#fff}
+.chat-line.inbound{background:#fff;border:1px solid var(--line);color:#2b1729;margin-right:20px}
+.chat-line.outbound{background:linear-gradient(135deg,var(--pink),var(--purple));color:#fff;margin-left:20px}
+.chat-line.status{background:#f6eef8;color:#5b4659;border:1px dashed var(--line)}
+.chat-line small{display:block;margin-bottom:4px;color:inherit;opacity:.72;font-weight:800}
+.inbox-row.conversation .primary-btn{padding:9px 12px;font-size:12px}
+@media(max-width:1100px){.form-grid.four{grid-template-columns:repeat(2,minmax(180px,1fr))}}
+@media(max-width:760px){.form-grid.four{grid-template-columns:1fr}.conversation-lines{max-height:320px}.chat-line.inbound,.chat-line.outbound{margin-left:0;margin-right:0}}

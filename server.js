@@ -169,7 +169,7 @@ function writeEnvFile(next) {
     'SHOPIFY_CLIENT_ID=' + (merged.SHOPIFY_CLIENT_ID || ''),
     'SHOPIFY_CLIENT_SECRET=' + (merged.SHOPIFY_CLIENT_SECRET || ''),
     'SHOPIFY_APP_URL=' + (merged.SHOPIFY_APP_URL || merged.WEBSITE_URL || 'https://chat.tinyshinygifts.com'),
-    'SHOPIFY_OAUTH_SCOPES=' + (merged.SHOPIFY_OAUTH_SCOPES || 'read_orders,write_orders,read_products,read_customers,read_draft_orders,write_draft_orders'),
+    'SHOPIFY_OAUTH_SCOPES=' + (merged.SHOPIFY_OAUTH_SCOPES || 'read_orders,read_products,read_customers,read_draft_orders,write_draft_orders'),
     'SHOPIFY_OAUTH_REDIRECT_URI=' + (merged.SHOPIFY_OAUTH_REDIRECT_URI || ''),
     '',
     '# WhatsApp Cloud API - required for owner/team notification from chatbot',
@@ -382,12 +382,19 @@ function appendJson(filePath, item) {
 function nowIso() { return new Date().toISOString(); }
 function cleanPhone(phone) { return String(phone || '').replace(/[^0-9]/g, ''); }
 function normalizeWhatsAppPhone(phone, defaultCountryCode = '91') {
+  // Shopify/customer phones can arrive as 9001727446, 09001727446, +91 9001727446, etc.
+  // For WhatsApp India sending, always use country code + last 10 digits.
   let digits = cleanPhone(phone);
   if (!digits) return '';
   if (digits.startsWith('00')) digits = digits.slice(2);
-  if (digits.length === 10) return String(defaultCountryCode || '91') + digits;
-  if (digits.length === 11 && digits.startsWith('0')) return String(defaultCountryCode || '91') + digits.slice(1);
-  return digits;
+  if (digits.length < 10) return '';
+  const last10 = digits.slice(-10);
+  if (!/^\d{10}$/.test(last10)) return '';
+  return String(defaultCountryCode || '91') + last10;
+}
+function phoneLast10(phone) {
+  const digits = cleanPhone(phone);
+  return digits.length >= 10 ? digits.slice(-10) : '';
 }
 function money(v){ return v === undefined || v === null || v === '' ? '' : String(v); }
 
@@ -404,7 +411,7 @@ function flattenForSheet(obj, prefix = '', out = {}) {
   return out;
 }
 function crmKey(record = {}) {
-  const phone = cleanPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || record.raw?.phone || record.raw?.customer?.phone);
+  const phone = normalizeWhatsAppPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || record.raw?.phone || record.raw?.customer?.phone);
   const email = cleanText(record.email || record.customerEmail || record.customer?.email || record.raw?.email || record.raw?.customer?.email).toLowerCase();
   const visitor = cleanText(record.visitorId);
   return phone ? `phone:${phone}` : email ? `email:${email}` : visitor ? `visitor:${visitor}` : `lead:${record.id || crypto.randomUUID()}`;
@@ -413,7 +420,7 @@ function upsertCrm(record = {}, source = 'lead') {
   const key = crmKey(record);
   const all = readJson(crmPath, []);
   const idx = all.findIndex(x => x.crmKey === key);
-  const phone = cleanPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || record.raw?.phone || record.raw?.customer?.phone);
+  const phone = normalizeWhatsAppPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || record.raw?.phone || record.raw?.customer?.phone);
   const name = cleanText(record.name || record.customerName || record.raw?.customer?.first_name || record.raw?.customer?.last_name || record.customer?.name);
   const email = cleanText(record.email || record.customerEmail || record.customer?.email || record.raw?.email || record.raw?.customer?.email);
   const productTitle = cleanText(record.productTitle || record.product || record.product?.title || record.raw?.line_items?.[0]?.title);
@@ -451,7 +458,24 @@ function googleSheetsEnabled() {
 async function sendToGoogleSheets(type, record) {
   const url = String(process.env.GOOGLE_SHEETS_WEBHOOK_URL || '').trim();
   if (!googleSheetsEnabled()) return { ok: false, skipped: true, reason: 'Google Sheets auto-save disabled or webhook URL missing.' };
-  const payload = { type, secret: process.env.GOOGLE_SHEETS_SECRET || '', createdAt: nowIso(), record, flat: flattenForSheet(record) };
+  const flat = flattenForSheet(record);
+  const row = {
+    dateTime: record.createdAt || flat.createdAt || nowIso(),
+    source: type,
+    customerName: record.customerName || record.name || flat['customer.name'] || '',
+    phone: normalizeWhatsAppPhone(record.phone || record.from || record.to || record.customerPhone || flat.phone || ''),
+    email: record.email || record.customerEmail || flat.email || '',
+    orderNumber: record.orderName || record.orderId || record.orderNumber || flat.orderName || flat.orderId || '',
+    product: record.productTitle || record.product || flat.productTitle || '',
+    amount: record.total || record.amount || flat.total || '',
+    paymentMethod: record.paymentMethod || flat.paymentMethod || '',
+    orderStatus: record.status || record.orderStatus || flat.status || '',
+    whatsappStatus: record.whatsappStatus || record.statusType || record.status || '',
+    message: record.message || record.text || record.note || '',
+    notes: record.note || record.details || ''
+  };
+  const uniqueKey = record.id || record.messageId || record.orderId || record.orderName || `${type}:${row.phone}:${row.dateTime}`;
+  const payload = { type, action: 'append', appendOnly: true, noClear: true, uniqueKey, secret: process.env.GOOGLE_SHEETS_SECRET || '', createdAt: nowIso(), columns: Object.keys(row), row, record, flat };
   const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
   const text = await response.text().catch(() => '');
   return { ok: response.ok, status: response.status, text: text.slice(0, 500) };
@@ -465,6 +489,10 @@ function afterDataAppend(filePath, item) {
   if (filePath === eventsPath) {
     upsertCrm(item, 'activity');
     sendToGoogleSheets('Visitor Activity', item).catch(err => console.error('Google Sheets activity error:', err.message));
+    return;
+  }
+  if (filePath === whatsappInboxPath) {
+    sendToGoogleSheets('WhatsApp Inbox', item).catch(err => console.error('Google Sheets WhatsApp inbox error:', err.message));
     return;
   }
   if (filePath === leadMessagesPath) {
@@ -744,15 +772,8 @@ async function shopifyFetch(pathAndQuery, options = {}) {
     headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
     body: options.body ? JSON.stringify(options.body) : undefined
   });
-  const text = await response.text().catch(() => '');
-  let json = {};
-  try { json = text ? JSON.parse(text) : {}; } catch (_) { json = { raw: text }; }
-  const out = { ok: response.ok, status: response.status, json };
-  if (!response.ok) {
-    out.error = json?.errors || json?.error || json?.message || text || `Shopify request failed with status ${response.status}`;
-    if (response.status === 401 || response.status === 403) out.hint = 'Shopify Admin Access Token needs required permission. For auto-cancel, enable/write_orders permission and save a new token.';
-  }
-  return out;
+  const json = await response.json().catch(() => ({}));
+  return { ok: response.ok, status: response.status, json };
 }
 function simplifyOrder(order = {}) {
   const fulfillments = order.fulfillments || [];
@@ -1152,9 +1173,40 @@ app.post('/api/whatsapp-templates/unuse', (req, res) => {
 });
 
 
+function whatsappInboxPhone(m = {}) { return normalizeWhatsAppPhone(m.from || m.to || m.phone || m.recipient_id || m.raw?.recipient_id || ''); }
+function retentionDays(value) {
+  const n = Number(value || readJson(settingsPath, {}).whatsappInboxRetentionDays || 7);
+  return Math.max(1, Math.min(10, Number.isFinite(n) ? Math.round(n) : 7));
+}
+function pruneWhatsappInbox(days) {
+  const keepDays = retentionDays(days);
+  const cutoff = Date.now() - keepDays * 24 * 60 * 60 * 1000;
+  const all = readJson(whatsappInboxPath, []);
+  const kept = all.filter(m => new Date(m.createdAt || 0).getTime() >= cutoff);
+  if (kept.length !== all.length) writeJson(whatsappInboxPath, kept);
+  return kept;
+}
+function groupWhatsappConversations(messages = []) {
+  const map = new Map();
+  for (const m of messages) {
+    const phone = whatsappInboxPhone(m);
+    if (!phone) continue;
+    const key = phone;
+    if (!map.has(key)) map.set(key, { phone, customerName: '', lastAt: '', unread: 0, messages: [] });
+    const g = map.get(key);
+    if (m.customerName && !g.customerName) g.customerName = m.customerName;
+    if (m.status === 'unread' && m.direction === 'inbound') g.unread += 1;
+    g.messages.push(m);
+    if (!g.lastAt || new Date(m.createdAt || 0) > new Date(g.lastAt || 0)) g.lastAt = m.createdAt || '';
+  }
+  return [...map.values()].map(g => ({ ...g, messages: g.messages.sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0)) })).sort((a,b)=>new Date(b.lastAt||0)-new Date(a.lastAt||0));
+}
 app.get('/api/whatsapp-inbox', (req, res) => {
-  const messages = readJson(whatsappInboxPath, []);
-  res.json({ ok: true, messages });
+  const days = retentionDays(req.query.days);
+  const settings = readJson(settingsPath, {});
+  if (Number(settings.whatsappInboxRetentionDays || 0) !== days) writeJson(settingsPath, { ...settings, whatsappInboxRetentionDays: days });
+  const messages = pruneWhatsappInbox(days);
+  res.json({ ok: true, days, messages, conversations: groupWhatsappConversations(messages) });
 });
 
 app.post('/api/whatsapp-inbox/:id/read', (req, res) => {
@@ -1164,12 +1216,31 @@ app.post('/api/whatsapp-inbox/:id/read', (req, res) => {
   writeJson(whatsappInboxPath, messages);
   res.json({ ok: true, message: idx >= 0 ? messages[idx] : null });
 });
+app.post('/api/whatsapp-inbox/thread/:phone/read', (req, res) => {
+  const phone = normalizeWhatsAppPhone(req.params.phone);
+  const messages = readJson(whatsappInboxPath, []);
+  let count = 0;
+  for (const m of messages) if (whatsappInboxPhone(m) === phone && m.direction === 'inbound') { m.status = 'read'; count++; }
+  writeJson(whatsappInboxPath, messages);
+  res.json({ ok: true, phone, count });
+});
+app.post('/api/whatsapp-inbox/clear', (req, res) => {
+  const { days = 1, all = false } = req.body || {};
+  const messages = readJson(whatsappInboxPath, []);
+  if (all) { writeJson(whatsappInboxPath, []); return res.json({ ok:true, removed: messages.length, messages: [] }); }
+  const d = retentionDays(days);
+  const cutoff = Date.now() - d * 24 * 60 * 60 * 1000;
+  const kept = messages.filter(m => new Date(m.createdAt || 0).getTime() < cutoff);
+  const removed = messages.length - kept.length;
+  writeJson(whatsappInboxPath, kept);
+  res.json({ ok:true, days:d, removed, messages: kept, conversations: groupWhatsappConversations(kept) });
+});
 
 app.post('/api/whatsapp-inbox/reply', async (req, res) => {
   try {
     const { phone = '', message = '', imageIds = [] } = req.body || {};
-    const to = cleanPhone(phone);
-    if (!to) return res.status(400).json({ ok: false, error: 'Customer phone required' });
+    const to = normalizeWhatsAppPhone(phone);
+    if (!to) return res.status(400).json({ ok: false, error: 'Valid customer WhatsApp phone required' });
     const text = String(message || '').trim();
     const images = readJson(mediaImagesPath, []);
     const selectedImages = (Array.isArray(imageIds) ? imageIds : []).map(id => images.find(x => String(x.id) === String(id))).filter(Boolean);
@@ -1210,7 +1281,7 @@ app.get('/shopify/install', requireAdmin, (req, res) => {
   const env = readEnvFile();
   const shop = normalizeShopDomain(req.query.shop || env.SHOPIFY_STORE_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN);
   const clientId = String(process.env.SHOPIFY_CLIENT_ID || env.SHOPIFY_CLIENT_ID || '').trim();
-  const scopes = String(process.env.SHOPIFY_OAUTH_SCOPES || env.SHOPIFY_OAUTH_SCOPES || 'read_orders,write_orders,read_products,read_customers,read_draft_orders,write_draft_orders').replace(/\s+/g, '');
+  const scopes = String(process.env.SHOPIFY_OAUTH_SCOPES || env.SHOPIFY_OAUTH_SCOPES || 'read_orders,read_products,read_customers,read_draft_orders,write_draft_orders').replace(/\s+/g, '');
   if (!shop) return res.status(400).send('Shopify store domain missing. Use tinyshinygifts.myshopify.com.');
   if (!clientId) return res.status(400).send('SHOPIFY_CLIENT_ID missing. Add Client ID in API Settings or Render Environment.');
   const redirectUri = getShopifyRedirectUri(req);
@@ -1445,7 +1516,7 @@ function simplifyShopifyCustomer(c = {}) {
     id: c.id,
     name: [c.first_name, c.last_name].filter(Boolean).join(' ') || c.email || c.phone || 'Customer',
     email: c.email || '',
-    phone: cleanPhone(c.phone || addr.phone),
+    phone: normalizeWhatsAppPhone(c.phone || addr.phone),
     city: addr.city || '',
     ordersCount: c.orders_count || 0,
     totalSpent: c.total_spent ? `₹${c.total_spent}` : '₹0',
@@ -1556,6 +1627,26 @@ app.post('/api/shopify/customers/bulk-message', async (req, res) => {
     sendToGoogleSheets('Bulk Customer Message', { count: results.length, message, results }).catch(()=>{});
     res.json({ ok: true, count: results.length, results });
   } catch (e) { res.status(500).json({ ok:false, error:e.message }); }
+});
+
+
+app.post('/api/shopify/customers/create-from-whatsapp', async (req, res) => {
+  try {
+    const phone = normalizeWhatsAppPhone(req.body?.phone || '');
+    if (!phone) return res.status(400).json({ ok:false, error:'Valid WhatsApp phone required' });
+    const nameRaw = cleanText(req.body?.name || req.body?.customerName || 'WhatsApp Customer');
+    const parts = nameRaw.split(/\s+/).filter(Boolean);
+    const first_name = parts[0] || 'WhatsApp';
+    const last_name = parts.slice(1).join(' ') || 'Customer';
+    const existing = await shopifyFetch(`customers/search.json?query=${encodeURIComponent(phoneLast10(phone))}&limit=10`).catch(e => ({ ok:false, error:e.message }));
+    const found = (existing?.json?.customers || []).find(c => phoneLast10(c.phone || c.default_address?.phone) === phoneLast10(phone));
+    if (found) return res.json({ ok:true, alreadyExists:true, customer:simplifyShopifyCustomer(found) });
+    const create = await shopifyFetch('customers.json', { method:'POST', body:{ customer:{ first_name, last_name, phone:'+' + phone, tags:'WhatsApp Inbox, Added from WhatsApp Inbox', note:`Added from WhatsApp Inbox on ${nowIso()}. Phone: ${phone}` } } });
+    if (!create.ok) return res.status(400).json({ ok:false, error:create.message || 'Shopify customer create failed', detail:create.json || create });
+    const customer = simplifyShopifyCustomer(create.json.customer || {});
+    sendToGoogleSheets('Shopify Customer Created From WhatsApp', { phone, name:nameRaw, customer }).catch(()=>{});
+    res.json({ ok:true, created:true, customer });
+  } catch(e) { res.status(500).json({ ok:false, error:e.message }); }
 });
 
 app.post('/api/faqs', (req, res) => { const { faqs } = req.body || {}; if (!Array.isArray(faqs)) return res.status(400).json({ ok: false, error: 'faqs array required' }); writeJson(faqPath, faqs); res.json({ ok: true, faqs }); });
@@ -1792,23 +1883,10 @@ async function updateShopifyOrderNoteAndTags(orderId, addTag, noteLine) {
 }
 async function cancelShopifyOrder(orderId) {
   if (!orderId) return { ok:false, skipped:true, reason:'Shopify order id missing.' };
-  const before = await shopifyFetch(`orders/${orderId}.json?fields=id,name,cancelled_at,financial_status,total_price,currency`);
-  if (!before.ok) return { ok:false, step:'read_order_before_cancel', ...before };
-  if (before.json?.order?.cancelled_at) return { ok:true, alreadyCancelled:true, order: before.json.order };
-  const cancel = await shopifyFetch(`orders/${orderId}/cancel.json`, {
+  return shopifyFetch(`orders/${orderId}/cancel.json`, {
     method:'POST',
     body:{ reason:'customer', email:false, restock:true, refund:false }
   });
-  if (!cancel.ok) {
-    return {
-      ok:false,
-      step:'cancel_order',
-      status: cancel.status,
-      error: cancel.error || cancel.json,
-      hint: cancel.hint || 'Check Shopify Admin API permission: write_orders is required to cancel orders.'
-    };
-  }
-  return { ok:true, status:cancel.status, json:cancel.json };
 }
 function isCodConfirmText(text) { return /^(confirm|yes|yes confirm|confirm order|order confirm|haan|ha|ha ji|ok|okay)$/i.test(String(text || '').trim()); }
 function isCodCancelText(text) { return /^(cancel|no|no cancel|cancel order|nahi|nahin|mat bhejo)$/i.test(String(text || '').trim()); }
@@ -1832,20 +1910,11 @@ async function handleCodConfirmationReply(item = {}) {
   const env = readEnvFile();
   const autoCancel = String(process.env.COD_AUTO_CANCEL_ENABLED || env.COD_AUTO_CANCEL_ENABLED || 'true').toLowerCase() === 'true';
   const cancelResult = autoCancel ? await cancelShopifyOrder(orderId).catch(e => ({ ok:false, error:e.message })) : { ok:false, skipped:true, reason:'COD auto cancel disabled.' };
-  const cancelledOk = Boolean(cancelResult && cancelResult.ok);
-  const shopifyUpdate = await updateShopifyOrderNoteAndTags(orderId, cancelledOk ? 'COD Cancelled by Customer' : 'COD Cancellation Requested', `COD cancellation ${cancelledOk ? 'completed' : 'requested'} by customer via WhatsApp on ${nowIso()}. Phone: ${item.from}. Cancel result: ${JSON.stringify(cancelResult).slice(0, 600)}`).catch(e => ({ ok:false, error:e.message }));
-  const finalStatus = cancelledOk ? 'COD Cancelled by Customer' : 'COD Cancellation Failed - Check Shopify Permission';
-  updateLeadById(lead.id, { codCustomerResponse:'cancelled', codCancelledAt: nowIso(), status: finalStatus, cancelResult, shopifyUpdate });
-  const replyText = cancelledOk
-    ? `Your COD order ${orderName} has been cancelled. Team Tiny Shiny Gifts`
-    : `Your COD order ${orderName} cancellation request has been received. Our team will update it shortly. Team Tiny Shiny Gifts`;
-  const reply = await sendWhatsAppTextManual({ to:item.from, message:replyText }).catch(e => ({ ok:false, error:e.message }));
-  await sendOwnerWhatsApp(`COD order cancellation request
-Order: ${orderName}
-Phone: ${item.from}
-Shopify cancel: ${cancelledOk ? 'success' : 'failed'}
-${cancelResult?.hint || cancelResult?.error || ''}`).catch(()=>{});
-  return appendJson(leadsPath, { id: crypto.randomUUID(), type:'cod_order_cancelled', createdAt: nowIso(), phone:item.from, orderName, status:finalStatus, message: cancelledOk ? 'Shopify order cancelled successfully.' : `Shopify cancel failed: ${cancelResult?.hint || JSON.stringify(cancelResult).slice(0, 500)}`, cancelResult, shopifyUpdate, customerReply:reply, raw:item });
+  const shopifyUpdate = await updateShopifyOrderNoteAndTags(orderId, 'COD Cancelled by Customer', `COD Cancelled by customer via WhatsApp on ${nowIso()}. Phone: ${item.from}`).catch(e => ({ ok:false, error:e.message }));
+  updateLeadById(lead.id, { codCustomerResponse:'cancelled', codCancelledAt: nowIso(), status: autoCancel ? 'COD Cancelled by Customer' : 'COD Cancellation Requested', cancelResult, shopifyUpdate });
+  const reply = await sendWhatsAppTextManual({ to:item.from, message:`Your COD order ${orderName} cancellation request has been received.${autoCancel ? ' The order has been cancelled.' : ''} Team Tiny Shiny Gifts` }).catch(e => ({ ok:false, error:e.message }));
+  await sendOwnerWhatsApp(`COD order cancelled by customer\nOrder: ${orderName}\nPhone: ${item.from}\nAuto cancel: ${autoCancel ? 'yes' : 'no'}`).catch(()=>{});
+  return appendJson(leadsPath, { id: crypto.randomUUID(), type:'cod_order_cancelled', createdAt: nowIso(), phone:item.from, orderName, status:autoCancel ? 'COD Cancelled' : 'COD Cancellation Requested', cancelResult, shopifyUpdate, customerReply:reply, raw:item });
 }
 
 async function sendOrderConfirmationToCustomer(order = {}) {

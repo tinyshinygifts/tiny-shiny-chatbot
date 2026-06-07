@@ -104,13 +104,17 @@
         </div>
         <div class="inline-actions"><button id="refreshWhatsappInbox" class="ghost-btn">Refresh Inbox</button></div>
       </div>
-      <div class="form-grid three">
+      <div class="form-grid four inbox-toolbar">
         <label>Search Reply <input id="whatsappInboxSearch" placeholder="Name, phone, message"/></label>
+        <label>Keep / Show Data
+          <select id="whatsappInboxDays"><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="4">4 days</option><option value="5">5 days</option><option value="6">6 days</option><option value="7" selected>7 days</option><option value="8">8 days</option><option value="9">9 days</option><option value="10">10 days</option></select>
+        </label>
         <label>Reply To Number <input id="whatsappReplyPhone" placeholder="91XXXXXXXXXX"/></label>
         <label>Attach Image Optional
           <select id="whatsappReplyImage"><option value="">No image / Text only</option></select>
         </label>
       </div>
+      <div class="inline-actions"><button id="clearWhatsappInboxRange" class="ghost-btn danger-outline" type="button">Clear Selected Days Data</button><button id="clearWhatsappInboxAll" class="ghost-btn danger-outline" type="button">Clear All Inbox Data</button></div>
       <label>Reply Message <textarea id="whatsappReplyText" placeholder="Write reply to customer"></textarea></label>
       <div class="inline-actions">
         <button id="sendWhatsappInboxReply" class="primary-btn">Send Reply</button>
