@@ -5,6 +5,10 @@ let selectedMediaIds = [];
 let crmCustomers = [];
 let shopifyCustomers = [];
 let shopifyProducts = [];
+let broadcastContacts = [];
+let broadcastCampaigns = [];
+let broadcastTemplates = [];
+let waBotSettings = {};
 let whatsappInboxMessages = [];
 let selectedWhatsappInboxId = "";
 let selectedPromoProductId = '';
@@ -142,7 +146,7 @@ async function load(){
   if(googleSheetUrl === '********') googleSheetUrl = '';
   updateGoogleSheetTab();
   faqs=f.faqs||[]; renderFaqs();
-  await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages(), loadShopifyCustomers().catch(()=>{}), loadWhatsappInbox()]);
+  await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages(), loadShopifyCustomers().catch(()=>{}), loadWhatsappInbox(), loadBroadcasts().catch(()=>{}), loadWhatsappChatbotSettings().catch(()=>{})]);
   const active = localStorage.getItem('tsgAdminActiveTab') || 'basicPanel';
   showTab($(active) ? active : 'basicPanel');
 }
@@ -456,8 +460,69 @@ async function sendNewProductPromo(){
   if($('newProductsResult')) newProductsResult.textContent = JSON.stringify(res,null,2);
 }
 
-document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } });
+
+function parseContactText(text=''){
+  const lines=String(text||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  const out=[];
+  for(const line of lines){
+    const parts=line.split(/,|\t/).map(x=>x.trim());
+    if(!parts.length) continue;
+    if(/phone|mobile|number/i.test(parts.join(' ')) && /name/i.test(parts.join(' '))) continue;
+    const [name,phone,email,category]=parts.length>=4?parts:[parts[0]||'',parts[1]||parts[0]||'',parts[2]||'',parts[3]||''];
+    const p=formatWaPhone(phone||line);
+    if(!p) continue;
+    out.push({id:p,name:name && !digitsOnly(name) ? name : 'Customer',phone:p,email:email||'',category:category||'',source:'sheet'});
+  }
+  return out;
+}
+function dedupeBroadcastContacts(list){ const seen=new Set(); const out=[]; for(const c of list){ const phone=formatWaPhone(c.phone); if(!phone||seen.has(phone)) continue; seen.add(phone); out.push({...c,phone,id:c.id||phone}); } return out; }
+function renderBroadcastTemplates(){ const sel=$('broadcastTemplate'); if(!sel) return; const current=sel.value; sel.innerHTML='<option value="">Select template</option>'+broadcastTemplates.map(t=>`<option value="${esc(t.name)}" data-lang="${esc(t.language||'en')}">${esc(t.name)} (${esc(t.category||'')})</option>`).join(''); if(current) sel.value=current; }
+function categoryMatch(c,cat){ if(!cat) return true; const hay=[c.category,c.name,c.email,c.city,c.orderStatus,c.raw?.tags].join(' ').toLowerCase(); const key=cat.toLowerCase().replace('é','e'); return hay.includes(key) || (cat==='Home Décor' && /home|decor|décor/.test(hay)); }
+function renderBroadcastContacts(){
+  const cat=$('broadcastCategory')?.value||'';
+  const filtered=broadcastContacts.filter(c=>categoryMatch(c,cat));
+  if($('broadcastSummary')) broadcastSummary.textContent=`${filtered.length} contacts available / ${document.querySelectorAll('.broadcast-check:checked').length} selected`;
+  if(!$('broadcastContactsList')) return;
+  broadcastContactsList.innerHTML=filtered.map(c=>`<label class="mini-customer-row broadcast-row"><input class="broadcast-check" type="checkbox" data-phone="${esc(c.phone)}" checked/> <span><b>${esc(c.name||'Customer')}</b><small>${esc(c.phone)}${c.email?' • '+esc(c.email):''}${c.category?' • '+esc(c.category):''}</small></span></label>`).join('') || '<p>No contacts imported.</p>';
+}
+async function loadBroadcasts(){
+  const d=await fetch('/api/broadcast/campaigns',{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,campaigns:[],templates:[]}));
+  broadcastCampaigns=d.campaigns||[]; broadcastTemplates=d.templates||[]; renderBroadcastTemplates(); renderBroadcastCampaigns();
+}
+function renderBroadcastCampaigns(){
+  if(!$('broadcastCampaignsList')) return;
+  broadcastCampaignsList.innerHTML=(broadcastCampaigns||[]).slice(0,50).map(c=>`<div class="log-row broadcast-campaign"><b>${esc(c.name)}</b> <small>${esc(c.createdAt)}</small><br/>Template: ${esc(c.templateName)} | Status: ${esc(c.status)}<br/>Sent: ${esc(c.sentCount||0)} | Failed: ${esc(c.failedCount||0)} | Skipped: ${esc(c.skippedCount||0)} | Contacts: ${esc((c.contacts||[]).length)}</div>`).join('') || 'No campaigns yet.';
+}
+async function importShopifyToBroadcast(){ if(!shopifyCustomers.length) await loadShopifyCustomers(); broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(shopifyCustomers.map(c=>({id:c.id,name:c.name,phone:c.phone,email:c.email,category:c.raw?.tags||'',source:'shopify',raw:c.raw})))); renderBroadcastContacts(); }
+async function importBroadcastPaste(){ const contacts=parseContactText($('broadcastPasteContacts')?.value||''); broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(contacts)); renderBroadcastContacts(); }
+async function readBroadcastCsvFile(file){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(String(r.result||'')); r.onerror=reject; r.readAsText(file); }); }
+function selectedBroadcastContacts(){ const checked=[...document.querySelectorAll('.broadcast-check:checked')].map(x=>x.dataset.phone); return broadcastContacts.filter(c=>checked.includes(c.phone)); }
+async function createBroadcast(){
+  const contacts=selectedBroadcastContacts(); if(!contacts.length) return alert('Please import/select contacts first.');
+  const templateName=$('broadcastTemplate')?.value||''; if(!templateName) return alert('Please select approved template.');
+  const variables=String($('broadcastVariables')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  const body={ name:$('broadcastName')?.value||'WhatsApp Broadcast', category:$('broadcastCategory')?.value||'All', templateName, templateLang:$('broadcastTemplateLang')?.value||'en', imageUrl:$('broadcastImageUrl')?.value||'', productLink:$('broadcastProductLink')?.value||'', couponCode:$('broadcastCouponCode')?.value||'', dailyLimit:Number($('broadcastDailyLimit')?.value||500), scheduleAt:$('broadcastScheduleAt')?.value||'', variables, contacts };
+  const res=await fetch('/api/broadcast/campaigns',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('broadcastResult')) broadcastResult.textContent=JSON.stringify(res,null,2);
+  await loadBroadcasts();
+}
+async function loadWhatsappChatbotSettings(){
+  const d=await fetch('/api/whatsapp-chatbot/settings',{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,settings:{}}));
+  waBotSettings=d.settings||{};
+  if($('waBotEnabled')) waBotEnabled.checked=!!waBotSettings.enabled;
+  if($('waBotMenuEnabled')) waBotMenuEnabled.checked=waBotSettings.menuEnabled!==false;
+  if($('waBotCatalogEnabled')) waBotCatalogEnabled.checked=waBotSettings.catalogEnabled!==false;
+  const map={waBotMenuText:'menuText',waBotAfterHours:'afterHoursMessage',waBotMainCatalog:'mainCatalogLink',waBotRakhiCatalog:'rakhiCatalogLink',waBotHomeCatalog:'homeDecorCatalogLink',waBotDivineCatalog:'divineCatalogLink',waBotCandlesCatalog:'candlesCatalogLink',waBotNewCatalog:'newArrivalsLink'};
+  for(const [id,key] of Object.entries(map)) if($(id)) $(id).value=waBotSettings[key]||'';
+}
+async function saveWhatsappChatbotSettings(){
+  const body={ enabled:!!$('waBotEnabled')?.checked, menuEnabled:!!$('waBotMenuEnabled')?.checked, catalogEnabled:!!$('waBotCatalogEnabled')?.checked, menuText:$('waBotMenuText')?.value||'', afterHoursMessage:$('waBotAfterHours')?.value||'', mainCatalogLink:$('waBotMainCatalog')?.value||'', rakhiCatalogLink:$('waBotRakhiCatalog')?.value||'', homeDecorCatalogLink:$('waBotHomeCatalog')?.value||'', divineCatalogLink:$('waBotDivineCatalog')?.value||'', candlesCatalogLink:$('waBotCandlesCatalog')?.value||'', newArrivalsLink:$('waBotNewCatalog')?.value||'' };
+  const res=await fetch('/api/whatsapp-chatbot/settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('waBotResult')) waBotResult.textContent=JSON.stringify(res,null,2);
+}
+
+document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); if(e.target.id==='broadcastCategory') renderBroadcastContacts(); const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
+document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; } if(e.target.id==='broadcastSelectAll'){ document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=e.target.checked); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); renderBroadcastContacts(); }); } });
 document.addEventListener('click',async e=>{
 
   if(e.target.dataset.toastClose){ const t=$('adminNotificationToast'); if(t) t.classList.add('hidden'); }
@@ -497,6 +562,12 @@ document.addEventListener('click',async e=>{
   if(e.target.id==='clearWhatsappInboxRange') clearWhatsappInbox(false);
   if(e.target.id==='clearWhatsappInboxAll') clearWhatsappInbox(true);
   if(e.target.dataset.addShopifyPhone) addWhatsappCustomerToShopify(e.target.dataset.addShopifyPhone, e.target.dataset.addShopifyName || 'WhatsApp Customer');
+  if(e.target.id==='loadBroadcastContacts') importShopifyToBroadcast();
+  if(e.target.id==='importBroadcastPaste') importBroadcastPaste();
+  if(e.target.id==='clearBroadcastContacts'){ broadcastContacts=[]; renderBroadcastContacts(); }
+  if(e.target.id==='sendBroadcastNow') createBroadcast();
+  if(e.target.id==='refreshBroadcasts') loadBroadcasts();
+  if(e.target.id==='saveWhatsappChatbot') saveWhatsappChatbotSettings();
   if(e.target.id==='refreshLeads') loadLeads(); if(e.target.id==='refreshEvents') loadEvents(); if(e.target.id==='refreshMsgs') loadMessages();
 });
 load().catch(err=>{console.error(err); if(String(err).includes('401')) location.href='/login.html';});

@@ -46,6 +46,8 @@
       <button class="tab-btn active" data-tab="basicPanel">Basic Settings</button>
       <button class="tab-btn" data-tab="crmPanel">CRM Dashboard</button>
       <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
+      <button class="tab-btn" data-tab="bulkBroadcastPanel">Bulk WhatsApp Broadcast</button>
+      <button class="tab-btn" data-tab="whatsappChatbotPanel">WhatsApp Chatbot</button>
       <button class="tab-btn" data-tab="whatsappInboxPanel">WhatsApp Inbox</button>
       <button class="tab-btn" data-tab="newProductsPanel">New Products</button>
       <button class="tab-btn" data-tab="leadPanel">Leads</button>
@@ -105,6 +107,80 @@
       </div>
       <pre id="shopifyCustomersResult"></pre>
       <div id="shopifyCustomersList" class="customer-table-wrap"></div>
+    </section>
+
+
+    <section class="panel tab-panel" id="bulkBroadcastPanel">
+      <div class="section-head">
+        <div><h2>Bulk WhatsApp Broadcast</h2><p>Approved template se Shopify / Google Sheet contacts ko campaign bhejein.</p></div>
+        <div class="inline-actions"><button id="loadBroadcastContacts" class="ghost-btn">Import Shopify Customers</button><button id="refreshBroadcasts" class="ghost-btn">Refresh Campaigns</button></div>
+      </div>
+      <div class="form-grid four">
+        <label>Campaign Name <input id="broadcastName" placeholder="Rakhi offer broadcast"/></label>
+        <label>Category Filter
+          <select id="broadcastCategory"><option value="">All</option><option>Rakhi</option><option>Home Décor</option><option>Divine</option><option>Candles</option></select>
+        </label>
+        <label>Approved Template <select id="broadcastTemplate"><option value="">Select template</option></select></label>
+        <label>Template Language <input id="broadcastTemplateLang" value="en"/></label>
+      </div>
+      <div class="form-grid four">
+        <label>Image URL Optional <input id="broadcastImageUrl" placeholder="https://cdn.shopify.com/...jpg"/></label>
+        <label>Product / Collection Link <input id="broadcastProductLink" placeholder="https://tinyshinygifts.com/collections/..."/></label>
+        <label>Coupon Code <input id="broadcastCouponCode" placeholder="RAKHI10"/></label>
+        <label>Daily Sending Limit <select id="broadcastDailyLimit"><option>500</option><option>1000</option><option>5000</option></select></label>
+      </div>
+      <div class="form-grid two">
+        <label>Template Variables <textarea id="broadcastVariables" placeholder="One variable per line. Example:
+{{name}}
+{{link}}
+{{coupon}}"></textarea></label>
+        <label>Schedule Message <input id="broadcastScheduleAt" type="datetime-local"/><span class="hint">Blank rakhenge to abhi send/queue hoga.</span></label>
+      </div>
+      <div class="form-grid two">
+        <label>Google Sheet / CSV contacts paste karo <textarea id="broadcastPasteContacts" placeholder="name,phone,email,category
+Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
+        <label>Import CSV File <input id="broadcastCsvFile" type="file" accept=".csv,text/csv,text/plain"/><span class="hint">Columns: name, phone, email, category</span></label>
+      </div>
+      <div class="inline-actions">
+        <label class="select-all-line"><input id="broadcastSelectAll" type="checkbox"/> Select All</label>
+        <button id="importBroadcastPaste" class="ghost-btn">Import Pasted Contacts</button>
+        <button id="clearBroadcastContacts" class="ghost-btn danger-outline">Clear Contacts</button>
+        <button id="sendBroadcastNow" class="primary-btn">Create / Send Broadcast</button>
+      </div>
+      <div class="broadcast-summary" id="broadcastSummary">0 contacts selected</div>
+      <div id="broadcastContactsList" class="broadcast-contacts-list"></div>
+      <h3>Campaign History / Delivery Status</h3>
+      <pre id="broadcastResult"></pre>
+      <div id="broadcastCampaignsList" class="broadcast-campaigns-list"></div>
+    </section>
+
+    <section class="panel tab-panel" id="whatsappChatbotPanel">
+      <div class="section-head">
+        <div><h2>WhatsApp Chatbot</h2><p>Incoming WhatsApp replies ke liye auto replies, FAQ aur catalog automation.</p></div>
+        <div class="inline-actions"><button id="saveWhatsappChatbot" class="primary-btn">Save Chatbot</button></div>
+      </div>
+      <div class="form-grid three">
+        <label class="checkline"><input id="waBotEnabled" type="checkbox"/> Enable WhatsApp Chatbot</label>
+        <label class="checkline"><input id="waBotMenuEnabled" type="checkbox"/> Enable Customer Menu</label>
+        <label class="checkline"><input id="waBotCatalogEnabled" type="checkbox"/> Enable Catalog Keywords</label>
+      </div>
+      <div class="form-grid two">
+        <label>Customer Menu Message <textarea id="waBotMenuText" placeholder="1. Track Order
+2. Catalog
+3. Talk to Support"></textarea></label>
+        <label>After-hours / Support Message <textarea id="waBotAfterHours" placeholder="Our team will reply shortly."></textarea></label>
+      </div>
+      <h3>Catalog Links</h3>
+      <div class="form-grid three">
+        <label>Main Catalog <input id="waBotMainCatalog" placeholder="https://www.tinyshinygifts.com/collections/all"/></label>
+        <label>Rakhi <input id="waBotRakhiCatalog" placeholder="Rakhi collection link"/></label>
+        <label>Home Décor <input id="waBotHomeCatalog" placeholder="Home decor collection link"/></label>
+        <label>Divine <input id="waBotDivineCatalog" placeholder="Divine collection link"/></label>
+        <label>Candles <input id="waBotCandlesCatalog" placeholder="Candles collection link"/></label>
+        <label>New Arrivals <input id="waBotNewCatalog" placeholder="New arrivals link"/></label>
+      </div>
+      <p class="hint">Keywords: catalog, catalogue, products, collection, price list. STOP/UNSUBSCRIBE reply se customer broadcast opt-out ho jayega.</p>
+      <pre id="waBotResult"></pre>
     </section>
 
 

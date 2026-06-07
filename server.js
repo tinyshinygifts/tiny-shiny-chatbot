@@ -78,6 +78,8 @@ const crmPath = path.join(dataDir, 'crm.json');
 const whatsappTemplatesPath = path.join(dataDir, 'whatsapp-templates.json');
 const whatsappInboxPath = path.join(dataDir, 'whatsapp-inbox.json');
 const shopifyOAuthStatePath = path.join(dataDir, 'shopify-oauth-state.json');
+const broadcastCampaignsPath = path.join(dataDir, 'broadcast-campaigns.json');
+const whatsappOptoutsPath = path.join(dataDir, 'whatsapp-optouts.json');
 
 // MongoDB persistent storage (Render-safe). When MONGODB_URI is set, JSON data and API settings are loaded from MongoDB and kept synced.
 const mongoUri = process.env.MONGODB_URI || '';
@@ -91,7 +93,7 @@ const mongoJsonCache = new Map();
 function deepClone(value) { return value === undefined ? value : JSON.parse(JSON.stringify(value)); }
 function mongoKeyFromPath(filePath) { return 'json:' + path.basename(String(filePath || 'unknown.json')); }
 function readLocalJson(filePath, fallback) { try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; } }
-function mongoKnownPaths() { return [faqPath, settingsPath, leadsPath, eventsPath, leadMessagesPath, mediaImagesPath, crmPath, whatsappTemplatesPath, whatsappInboxPath, shopifyOAuthStatePath]; }
+function mongoKnownPaths() { return [faqPath, settingsPath, leadsPath, eventsPath, leadMessagesPath, mediaImagesPath, crmPath, whatsappTemplatesPath, whatsappInboxPath, shopifyOAuthStatePath, broadcastCampaignsPath, whatsappOptoutsPath]; }
 async function mongoSave(key, value) {
   if (!mongoReady || !mongoCollection) return;
   try { await mongoCollection.updateOne({ key }, { $set: { key, value, updatedAt: new Date() } }, { upsert: true }); }
@@ -992,7 +994,14 @@ app.post('/webhooks/whatsapp', async (req, res) => {
           appendJson(whatsappInboxPath, item);
           upsertCrm({ name: item.customerName, phone: item.from, message: item.text, note: 'WhatsApp reply: ' + item.text }, 'whatsapp_reply');
           sendToGoogleSheets('WhatsApp Reply', item).catch(()=>{});
-          await handleCodConfirmationReply(item).catch(err => console.error('COD reply handler error:', err.message));
+          if (isStopText(item.text)) {
+            addOptout(item.from, 'whatsapp', 'STOP reply');
+            appendJson(leadsPath, { id: crypto.randomUUID(), type:'whatsapp_unsubscribe', createdAt: nowIso(), phone:item.from, message:item.text, status:'Unsubscribed/STOP' });
+            await sendWhatsAppTextManual({ to:item.from, message:'You have been unsubscribed from Tiny Shiny Gifts broadcast messages. Reply HELP anytime for support.' }).catch(()=>{});
+          } else {
+            await handleCodConfirmationReply(item).catch(err => console.error('COD reply handler error:', err.message));
+            await handleWhatsappChatbotMessage(item).catch(err => console.error('WhatsApp chatbot error:', err.message));
+          }
           saved.push(item);
         }
         for (const st of (value.statuses || [])) {
@@ -1017,6 +1026,8 @@ app.get('/api/settings', (req, res) => { res.set('Cache-Control','no-store'); re
 app.use(['/api/config','/api/test-whatsapp','/api/test-shopify','/api/leads','/api/visitor-events','/api/lead-messages','/api/media-images','/api/send-image-message','/api/faqs','/api/crm','/api/test-google-sheets','/api/sync-google-sheets','/api/shopify/customers','/api/shopify/products'], requireAdmin);
 app.use('/api/whatsapp-templates', requireAdmin);
 app.use('/api/whatsapp-inbox', requireAdmin);
+app.use('/api/broadcast', requireAdmin);
+app.use('/api/whatsapp-chatbot', requireAdmin);
 app.post('/api/settings', requireAdmin);
 
 app.get('/api/config', (req, res) => {
@@ -1257,6 +1268,153 @@ app.post('/api/whatsapp-inbox/reply', async (req, res) => {
     res.json({ ok, message: out, results });
   } catch (e) { res.status(500).json({ ok:false, error:e.message }); }
 });
+
+
+
+function isStopText(text='') {
+  return /^(stop|unsubscribe|unsub|band|band karo|nahi chahiye|do not send|opt out)$/i.test(String(text||'').trim());
+}
+function readOptouts(){ return readJson(whatsappOptoutsPath, []); }
+function isOptedOut(phone){ const p=normalizeWhatsAppPhone(phone); return !!p && readOptouts().some(x=>normalizeWhatsAppPhone(x.phone)===p); }
+function addOptout(phone, source='whatsapp', reason='STOP') {
+  const p=normalizeWhatsAppPhone(phone);
+  if(!p) return null;
+  const list=readOptouts();
+  const existing=list.find(x=>normalizeWhatsAppPhone(x.phone)===p);
+  if(existing){ existing.updatedAt=nowIso(); existing.reason=reason; writeJson(whatsappOptoutsPath,list); return existing; }
+  const item={ id:crypto.randomUUID(), phone:p, source, reason, createdAt:nowIso(), updatedAt:nowIso() };
+  list.unshift(item); writeJson(whatsappOptoutsPath,list.slice(0,10000)); return item;
+}
+function replaceBroadcastVars(value, contact={}, campaign={}) {
+  return String(value||'')
+    .replace(/\{\{?name\}?\}/gi, contact.name || 'Customer')
+    .replace(/\{\{?phone\}?\}/gi, contact.phone || '')
+    .replace(/\{\{?email\}?\}/gi, contact.email || '')
+    .replace(/\{\{?link\}?\}/gi, campaign.productLink || campaign.link || '')
+    .replace(/\{\{?product_link\}?\}/gi, campaign.productLink || '')
+    .replace(/\{\{?coupon\}?\}/gi, campaign.couponCode || '')
+    .replace(/\{\{?coupon_code\}?\}/gi, campaign.couponCode || '')
+    .replace(/\{\{?category\}?\}/gi, campaign.category || '')
+    .replace(/\{\{?product\}?\}/gi, campaign.productTitle || campaign.category || 'Product');
+}
+function normalizeBroadcastContact(c={}) {
+  const phone=normalizeWhatsAppPhone(c.phone || c.mobile || c.whatsapp || c.number || '');
+  return { id:String(c.id || phone || crypto.randomUUID()), name:String(c.name || c.customerName || [c.first_name,c.last_name].filter(Boolean).join(' ') || 'Customer').trim(), phone, email:String(c.email||'').trim(), category:String(c.category||c.tags||c.productType||'').trim(), source:String(c.source||'manual'), raw:c };
+}
+function broadcastVariables(campaign={}, contact={}) {
+  let vars=[];
+  if(Array.isArray(campaign.variables)) vars=campaign.variables;
+  else vars=String(campaign.variablesText || '').split(/\r?\n|,/).map(x=>x.trim()).filter(Boolean);
+  if(!vars.length) vars=['{{name}}','{{link}}','{{coupon}}'].filter((v,i)=> i===0 || campaign.productLink || campaign.couponCode);
+  return vars.map(v=>replaceBroadcastVars(v, contact, campaign));
+}
+function broadcastTemplateComponents(campaign={}, contact={}) {
+  const components=[];
+  const imageUrl=String(campaign.imageUrl||'').trim();
+  if(imageUrl) components.push({ type:'header', parameters:[{ type:'image', image:{ link:absoluteImageUrl(imageUrl) } }] });
+  const vars=broadcastVariables(campaign, contact);
+  if(vars.length) components.push({ type:'body', parameters:vars.map(textParam) });
+  return components;
+}
+async function sendBroadcastTemplate(contact={}, campaign={}) {
+  const c=normalizeBroadcastContact(contact);
+  if(!c.phone) return { ok:false, skipped:true, reason:'Invalid phone number', contact:c };
+  if(isOptedOut(c.phone)) return { ok:false, skipped:true, reason:'Customer unsubscribed/STOP', contact:c };
+  const template=String(campaign.templateName||'').trim();
+  const lang=String(campaign.templateLang||'en').trim();
+  if(!template) return { ok:false, skipped:true, reason:'Approved template missing', contact:c };
+  const components=broadcastTemplateComponents(campaign,c);
+  const result=await postWhatsApp(whatsappTemplateBody(c.phone, template, lang, components));
+  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:c.phone, customerName:c.name, type:'template', text:`Broadcast: ${template}`, createdAt:nowIso(), status:result.ok?'sent':'failed', raw:{ campaignId:campaign.id, result } });
+  return { ...result, contact:c };
+}
+async function processBroadcastCampaign(campaignId) {
+  const campaigns=readJson(broadcastCampaignsPath, []);
+  const idx=campaigns.findIndex(c=>String(c.id)===String(campaignId));
+  if(idx<0) return { ok:false, error:'Campaign not found' };
+  const campaign=campaigns[idx];
+  if(campaign.status==='completed') return { ok:true, skipped:true, campaign };
+  const limit=Math.max(1, Math.min(Number(campaign.dailyLimit||500)||500, 5000));
+  const contacts=(campaign.contacts||[]).map(normalizeBroadcastContact).filter(c=>c.phone);
+  const sentSoFar=(campaign.results||[]).filter(r=>r.result?.ok).length;
+  const pending=contacts.filter(c=>!(campaign.results||[]).some(r=>normalizeWhatsAppPhone(r.phone)===c.phone));
+  const batch=pending.slice(0, Math.max(0, limit-sentSoFar));
+  const results=campaign.results||[];
+  for(const c of batch){
+    const result=await sendBroadcastTemplate(c, campaign).catch(e=>({ ok:false, error:e.message, contact:c }));
+    results.push({ phone:c.phone, name:c.name, status:result.ok?'sent':(result.skipped?'skipped':'failed'), result, at:nowIso() });
+  }
+  campaign.results=results;
+  campaign.sentCount=results.filter(r=>r.status==='sent').length;
+  campaign.failedCount=results.filter(r=>r.status==='failed').length;
+  campaign.skippedCount=results.filter(r=>r.status==='skipped').length;
+  campaign.status=pending.length<=batch.length ? 'completed' : 'partially_sent';
+  campaign.updatedAt=nowIso();
+  campaigns[idx]=campaign; writeJson(broadcastCampaignsPath,campaigns);
+  sendToGoogleSheets('Bulk WhatsApp Broadcast', { campaignName:campaign.name, template:campaign.templateName, sent:campaign.sentCount, failed:campaign.failedCount, skipped:campaign.skippedCount, updatedAt:campaign.updatedAt }).catch(()=>{});
+  return { ok:true, campaign };
+}
+function processDueBroadcasts(){
+  const campaigns=readJson(broadcastCampaignsPath, []);
+  const now=Date.now();
+  campaigns.filter(c=>c.status==='scheduled' && c.scheduleAt && new Date(c.scheduleAt).getTime()<=now).slice(0,3).forEach(c=>processBroadcastCampaign(c.id).catch(e=>console.error('Broadcast scheduler error:',e.message)));
+}
+setInterval(processDueBroadcasts, 30000);
+
+app.get('/api/broadcast/campaigns', (req,res)=>{
+  res.json({ ok:true, campaigns:readJson(broadcastCampaignsPath, []), optouts:readOptouts(), templates:readWhatsAppTemplates() });
+});
+app.post('/api/broadcast/campaigns', async (req,res)=>{
+  try{
+    const body=req.body||{};
+    const contacts=(Array.isArray(body.contacts)?body.contacts:[]).map(normalizeBroadcastContact).filter(c=>c.phone);
+    const unique=[]; const seen=new Set();
+    for(const c of contacts){ if(!seen.has(c.phone)){ seen.add(c.phone); unique.push(c); } }
+    if(!unique.length) return res.status(400).json({ ok:false, error:'No valid contacts found.' });
+    const campaign={ id:crypto.randomUUID(), name:String(body.name||'WhatsApp Broadcast').trim(), category:String(body.category||'All').trim(), templateName:String(body.templateName||'').trim(), templateLang:String(body.templateLang||'en').trim(), imageUrl:String(body.imageUrl||'').trim(), productLink:String(body.productLink||'').trim(), couponCode:String(body.couponCode||'').trim(), variables:Array.isArray(body.variables)?body.variables:[], dailyLimit:Number(body.dailyLimit||500)||500, scheduleAt:body.scheduleAt||'', contacts:unique, results:[], status:body.scheduleAt && new Date(body.scheduleAt).getTime()>Date.now()?'scheduled':'queued', createdAt:nowIso(), updatedAt:nowIso() };
+    const campaigns=readJson(broadcastCampaignsPath, []); campaigns.unshift(campaign); writeJson(broadcastCampaignsPath,campaigns.slice(0,500));
+    if(campaign.status==='queued') await processBroadcastCampaign(campaign.id);
+    const saved=readJson(broadcastCampaignsPath, []).find(c=>c.id===campaign.id) || campaign;
+    res.json({ ok:true, campaign:saved });
+  }catch(e){ res.status(500).json({ ok:false, error:e.message }); }
+});
+app.post('/api/broadcast/optout', (req,res)=>{ const item=addOptout(req.body?.phone || '', 'admin', req.body?.reason || 'Manual opt-out'); res.json({ ok:!!item, item, optouts:readOptouts() }); });
+
+function defaultChatbotSettings(){ return { enabled:true, businessHours:false, menuEnabled:true, catalogEnabled:true, mainCatalogLink:'https://www.tinyshinygifts.com/collections/all', rakhiCatalogLink:'https://www.tinyshinygifts.com/collections/rakhi', homeDecorCatalogLink:'https://www.tinyshinygifts.com/collections/home-decor', divineCatalogLink:'https://www.tinyshinygifts.com/collections/divine', candlesCatalogLink:'https://www.tinyshinygifts.com/collections/candles', newArrivalsLink:'https://www.tinyshinygifts.com/collections/new-arrivals', afterHoursMessage:'Thanks for your message. Our team will reply soon.', menuText:'Please choose:\n1. Track Order\n2. Catalog\n3. Shipping Charges\n4. Return Policy\n5. Talk to Support' }; }
+function getChatbotSettings(){ const s=readJson(settingsPath,{}); return { ...defaultChatbotSettings(), ...(s.whatsappChatbot||{}) }; }
+app.get('/api/whatsapp-chatbot/settings',(req,res)=>res.json({ ok:true, settings:getChatbotSettings() }));
+app.post('/api/whatsapp-chatbot/settings',(req,res)=>{ const current=readJson(settingsPath,{}); const next={ ...defaultChatbotSettings(), ...(req.body||{}) }; writeJson(settingsPath,{ ...current, whatsappChatbot:next }); res.json({ ok:true, settings:next }); });
+function faqAnswerFor(text=''){
+  const raw=String(text||'').toLowerCase();
+  const faqs=readJson(faqPath,[]);
+  return (faqs||[]).find(f=>(f.keywords||[]).some(k=>k && raw.includes(String(k).toLowerCase())))?.answer || '';
+}
+async function handleWhatsappChatbotMessage(item={}){
+  if(!item || item.direction!=='inbound') return { ok:false, skipped:true };
+  const cfg=getChatbotSettings();
+  if(!cfg.enabled) return { ok:false, skipped:true, reason:'WhatsApp chatbot disabled' };
+  const text=String(item.text||'').trim();
+  const low=text.toLowerCase();
+  let reply='';
+  if(/\b(catalog|catalogue|products?|collection|price list)\b/i.test(low)){
+    reply=`Please check our latest Tiny Shiny Gifts catalog:\n${cfg.mainCatalogLink}\n\nCategories:\n1. Rakhi: ${cfg.rakhiCatalogLink}\n2. Home Decor: ${cfg.homeDecorCatalogLink}\n3. Divine: ${cfg.divineCatalogLink}\n4. Candles: ${cfg.candlesCatalogLink}\n5. New Arrivals: ${cfg.newArrivalsLink}`;
+  } else if(/^(hi|hello|hey|namaste|menu|help)$/i.test(low)) {
+    reply=cfg.menuText;
+  } else if(/\b(support|agent|human|call me|help me)\b/i.test(low)) {
+    appendJson(leadsPath,{ id:crypto.randomUUID(), type:'human_support_required', createdAt:nowIso(), phone:item.from, message:text, status:'Human Support Required' });
+    reply='Our support team has been notified. We will reply shortly.';
+  } else if(/\b(shipping|delivery charge|cod charge)\b/i.test(low)) {
+    reply=faqAnswerFor('shipping') || 'Shipping charges depend on order value and payment mode. Please share your product/order details for exact charges.';
+  } else if(/\b(return|refund|exchange)\b/i.test(low)) {
+    reply=faqAnswerFor('return') || 'Please share your order number. Our team will help you with return/exchange details.';
+  } else {
+    reply=faqAnswerFor(text);
+  }
+  if(!reply) return { ok:false, skipped:true, reason:'No chatbot rule matched' };
+  const send=await sendWhatsAppTextManual({ to:item.from, message:reply }).catch(e=>({ ok:false, error:e.message }));
+  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:item.from, customerName:item.customerName, type:'text', text:reply, createdAt:nowIso(), status:send.ok?'sent':'failed', raw:{ source:'whatsapp_chatbot', result:send } });
+  return { ok:!!send.ok, reply, result:send };
+}
 
 app.post('/api/test-whatsapp', async (req, res) => {
   try {
