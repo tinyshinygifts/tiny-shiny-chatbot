@@ -507,12 +507,12 @@ function buildLeadMessage({ type, product = {}, cart = {}, customer = {}, pageUr
 
 
 const defaultWhatsAppTemplates = [
-  { id:'order_confirmation', name:'order_confirmation', category:'Utility', language:'en', useCase:'Shopify order create par customer ko product image ke saath order confirmation bhejna', enabled:true, headerType:'Image', body:'Hi {{1}}, thank you for your order with Tiny Shiny Gifts.\n\nYour order {{2}} has been received successfully.\n\nOrder Total: ₹{{3}}\n\nWe will notify you once your order is shipped.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Order Number','Order Amount'], buttons:[{type:'URL', text:'Visit Website', url:'https://www.tinyshinygifts.com'}] },
+  { id:'order_confirmation', name:'order_confirmation', category:'Utility', language:'en', useCase:'Shopify order create par customer ko product image ke saath order confirmation bhejna', enabled:true, headerType:'Image', body:'Hi {{1}}, thank you for your order with Tiny Shiny Gifts.\n\nProduct: {{2}}\n\nYour order {{3}} has been received successfully.\n\nOrder Total: ₹{{4}}\n\nWe will notify you once your order is shipped.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Product Name','Order Number','Order Amount'], buttons:[{type:'URL', text:'Visit Website', url:'https://www.tinyshinygifts.com'}] },
   { id:'product_followup', name:'product_followup', category:'Marketing', language:'en', useCase:'Product/cart interest ke baad customer follow-up', enabled:true, headerType:'None', body:'Hi {{1}}, you recently showed interest in {{2}} on Tiny Shiny Gifts.\n\nComplete your purchase today and explore our beautiful gifts, home decor and festive collections.\n\nProduct link: {{3}}\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Product Name','Product Link'], buttons:[{type:'Quick Reply', text:'Interested'}, {type:'Quick Reply', text:'Need Help'}, {type:'Quick Reply', text:'Not Now'}] },
   { id:'abandoned_cart_reminder', name:'abandoned_cart_reminder', category:'Marketing', language:'en', useCase:'Cart abandon reminder', enabled:true, headerType:'None', body:'Hi {{1}}, you left some beautiful items in your cart at Tiny Shiny Gifts.\n\nYour cart is waiting for you. Complete your order before the items go out of stock.\n\nCart link: {{2}}\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Cart Link'], buttons:[{type:'URL', text:'Complete Order', url:'{{2}}'}] },
   { id:'order_shipped', name:'order_shipped', category:'Utility', language:'en', useCase:'Order shipped/tracking update', enabled:true, headerType:'None', body:'Hi {{1}}, your Tiny Shiny Gifts order {{2}} has been shipped.\n\nCourier Partner: {{3}}\nTracking ID: {{4}}\n\nTrack your order here: {{5}}\n\nThank you for shopping with us.', variables:['Customer Name','Order Number','Courier Name','AWB / Tracking ID','Tracking Link'], buttons:[{type:'URL', text:'Track Order', url:'{{5}}'}] },
   { id:'order_delivered', name:'order_delivered', category:'Utility', language:'en', useCase:'Delivery ke baad feedback/shop again', enabled:true, headerType:'None', body:'Hi {{1}}, your Tiny Shiny Gifts order {{2}} has been delivered.\n\nWe hope you loved your product.\n\nPlease share your feedback with us and visit again for more gifts and home decor collections.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Order Number'], buttons:[{type:'Quick Reply', text:'Loved It'}, {type:'Quick Reply', text:'Need Support'}, {type:'Quick Reply', text:'Shop Again'}] },
-  { id:'cod_order_confirmation', name:'cod_order_confirmation', category:'Utility', language:'en', useCase:'COD order confirmation with product image and Yes/No customer approval', enabled:true, headerType:'Image', body:'Hi {{1}}, thank you for placing your COD order with Tiny Shiny Gifts.\n\nOrder Number: {{2}}\nOrder Amount: ₹{{3}}\n\nPlease confirm your COD order.\n\nIf you want to receive this order, tap Confirm.\nIf you do not want this order, tap Cancel.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Order Number','COD Amount'], buttons:[{type:'Quick Reply', text:'Confirm'}, {type:'Quick Reply', text:'Cancel'}, {type:'Quick Reply', text:'Help'}] },
+  { id:'cod_order_confirmation', name:'cod_order_confirmation', category:'Utility', language:'en', useCase:'COD order confirmation with product image and Yes/No customer approval', enabled:true, headerType:'Image', body:'Hi {{1}}, thank you for placing your COD order with Tiny Shiny Gifts.\n\nProduct: {{2}}\n\nOrder Number: {{3}}\nOrder Amount: ₹{{4}}\n\nPlease confirm your COD order.\n\nIf you want to receive this order, tap Confirm.\nIf you do not want this order, tap Cancel.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Product Name','Order Number','COD Amount'], buttons:[{type:'Quick Reply', text:'Confirm'}, {type:'Quick Reply', text:'Cancel'}, {type:'Quick Reply', text:'Help'}] },
   { id:'payment_pending', name:'payment_pending', category:'Utility', language:'en', useCase:'Payment pending reminder', enabled:true, headerType:'None', body:'Hi {{1}}, your order {{2}} at Tiny Shiny Gifts is pending because payment is not completed.\n\nPlease complete your payment to confirm the order.\n\nPayment link: {{3}}', variables:['Customer Name','Order Number','Payment Link'], buttons:[{type:'URL', text:'Complete Payment', url:'{{3}}'}] },
   { id:'customer_support_reply', name:'customer_support_reply', category:'Utility', language:'en', useCase:'Support query acknowledgement', enabled:true, headerType:'None', body:'Hi {{1}}, thank you for contacting Tiny Shiny Gifts.\n\nOur support team has received your query regarding {{2}}.\n\nWe will get back to you shortly.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Query / Order Number'], buttons:[] },
   { id:'new_product_broadcast', name:'new_product_broadcast', category:'Marketing', language:'en', useCase:'New product broadcast', enabled:true, headerType:'None', body:'Hi {{1}}, new arrivals are now live at Tiny Shiny Gifts.\n\nExplore beautiful gifts, home decor, pooja items and festive collections for your loved ones.\n\nShop now: {{2}}', variables:['Customer Name','Collection / Product Link'], buttons:[{type:'URL', text:'Shop Now', url:'{{2}}'}] },
@@ -1632,24 +1632,85 @@ async function getOrderProductImage(order = {}) {
   }
   return '';
 }
-function orderBodyParameters(order = {}) {
-  return [
-    textParam(orderCustomerName(order)),
-    textParam(order.name || order.order_number || order.id || '-'),
-    textParam(String(order.total_price || order.current_total_price || order.subtotal_price || '0'))
-  ];
+function templateParameterCountFromBody(body = '') {
+  const nums = Array.from(String(body || '').matchAll(/{{\s*(\d+)\s*}}/g)).map(m => Number(m[1])).filter(Boolean);
+  return nums.length ? Math.max(...nums) : 0;
+}
+function findWhatsAppTemplate(name) {
+  const n = String(name || '').trim().toLowerCase();
+  if (!n) return null;
+  return readWhatsAppTemplates().find(t => String(t.name || '').toLowerCase() === n) || null;
+}
+function orderTemplateValueForVariable(order = {}, variableName = '', fallbackIndex = 0) {
+  const v = String(variableName || '').toLowerCase();
+  const orderNo = order.name || order.order_number || order.id || '-';
+  const amount = String(order.total_price || order.current_total_price || order.subtotal_price || '0');
+  const product = orderFirstProductTitle(order);
+  const customer = orderCustomerName(order);
+  if (/product|item|sku/.test(v)) return product;
+  if (/amount|total|cod|price|payment/.test(v)) return amount;
+  if (/order/.test(v)) return orderNo;
+  if (/customer|name/.test(v)) return customer;
+  const fallback4 = [customer, product, orderNo, amount];
+  const fallback3 = [customer, orderNo, amount];
+  return (fallbackIndex < 4 ? fallback4[fallbackIndex] : fallback3[fallbackIndex]) || '-';
+}
+function orderBodyParameters(order = {}, options = {}) {
+  const tpl = options.template || null;
+  const explicitCount = Number(options.variableCount || 0);
+  const variableCount = explicitCount || (Array.isArray(tpl?.variables) && tpl.variables.length ? tpl.variables.length : templateParameterCountFromBody(tpl?.body || '')) || 3;
+  const params = [];
+  for (let i = 0; i < variableCount; i += 1) {
+    const variableName = Array.isArray(tpl?.variables) ? tpl.variables[i] : '';
+    params.push(textParam(orderTemplateValueForVariable(order, variableName, i)));
+  }
+  return params;
 }
 async function orderTemplateComponents(order = {}, options = {}) {
   const components = [];
+  const template = options.template || findWhatsAppTemplate(options.templateName || '');
   const imageUrl = options.imageUrl || await getOrderProductImage(order).catch(() => '');
-  if (imageUrl) {
+  const wantsImageHeader = !options.noHeader && imageUrl && String(template?.headerType || 'Image').toLowerCase() === 'image';
+  if (wantsImageHeader) {
     components.push({
       type: 'header',
       parameters: [{ type: 'image', image: { link: imageUrl } }]
     });
   }
-  components.push({ type: 'body', parameters: orderBodyParameters(order) });
+  components.push({ type: 'body', parameters: orderBodyParameters(order, { template, variableCount: options.variableCount }) });
   return components;
+}
+function isWhatsAppParamMismatch(result = {}) {
+  const code = result?.json?.error?.code;
+  const msg = String(result?.json?.error?.message || result?.json?.error?.error_data?.details || '').toLowerCase();
+  return code === 132000 || (code === 100 && /parameter|param/.test(msg));
+}
+async function sendTemplateWithOrderFallback(phone, templateName, lang, order = {}, productImage = '') {
+  const template = findWhatsAppTemplate(templateName);
+  const attempts = [];
+  const attempt = async (label, opts = {}) => {
+    const components = await orderTemplateComponents(order, { templateName, template, imageUrl: productImage, ...opts });
+    const result = await postWhatsApp(whatsappTemplateBody(phone, templateName, lang, components));
+    attempts.push({ label, ok: result.ok, status: result.status, error: result.json?.error?.message || result.reason || result.error || '', request: result.request });
+    return result;
+  };
+
+  let result = await attempt('library-template');
+  if (result.ok || !isWhatsAppParamMismatch(result)) return { ...result, attempts };
+
+  // Fallbacks: useful when Meta template has not yet been updated exactly like the local library.
+  const counts = [];
+  const localCount = Array.isArray(template?.variables) && template.variables.length ? template.variables.length : templateParameterCountFromBody(template?.body || '');
+  for (const c of [localCount, 4, 3]) if (c && !counts.includes(c)) counts.push(c);
+  for (const c of counts) {
+    result = await attempt(`no-image-${c}-body-vars`, { noHeader: true, variableCount: c });
+    if (result.ok || !isWhatsAppParamMismatch(result)) return { ...result, attempts };
+    if (productImage) {
+      result = await attempt(`image-${c}-body-vars`, { variableCount: c });
+      if (result.ok || !isWhatsAppParamMismatch(result)) return { ...result, attempts };
+    }
+  }
+  return { ...result, attempts };
 }
 
 function isCodOrder(order = {}) {
@@ -1680,9 +1741,8 @@ async function sendCodConfirmationToCustomer(order = {}) {
   if (!template) return { ok:false, skipped:true, reason:'COD confirmation template name missing.' };
   
   const productImage = await getOrderProductImage(order).catch(() => '');
-  const components = await codTemplateComponents(order, { imageUrl: productImage });
-  const result = await postWhatsApp(whatsappTemplateBody(phone, template, lang, components));
-  return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage) };
+  const result = await sendTemplateWithOrderFallback(phone, template, lang, order, productImage);
+  return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage && (result.request?.components || []).some(c => c.type === 'header')) };
 }
 function findLatestCodPendingLead(phone) {
   const p = normalizeWhatsAppPhone(phone);
@@ -1769,9 +1829,8 @@ async function sendOrderConfirmationToCustomer(order = {}) {
   if (!template) return { ok:false, skipped:true, reason:'Order confirmation template name missing.' };
   
   const productImage = await getOrderProductImage(order).catch(() => '');
-  const components = await orderTemplateComponents(order, { imageUrl: productImage });
-  const result = await postWhatsApp(whatsappTemplateBody(phone, template, lang, components));
-  return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage) };
+  const result = await sendTemplateWithOrderFallback(phone, template, lang, order, productImage);
+  return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage && (result.request?.components || []).some(c => c.type === 'header')) };
 }
 
 app.post('/webhooks/shopify/orders/create', async (req, res) => {

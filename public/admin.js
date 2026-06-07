@@ -267,35 +267,3 @@ document.addEventListener('click',async e=>{
   if(e.target.id==='refreshLeads') loadLeads(); if(e.target.id==='refreshEvents') loadEvents(); if(e.target.id==='refreshMsgs') loadMessages();
 });
 load().catch(err=>{console.error(err); if(String(err).includes('401')) location.href='/login.html';});
-
-
-// PWA install + service worker
-let tinyShinyPwaPrompt = null;
-if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/service-worker.js').catch(err => console.warn('Service worker registration failed:', err));
-  });
-}
-window.addEventListener('beforeinstallprompt', (event) => {
-  event.preventDefault();
-  tinyShinyPwaPrompt = event;
-  const btn = document.getElementById('installPwaBtn');
-  if (btn) btn.hidden = false;
-});
-window.addEventListener('appinstalled', () => {
-  tinyShinyPwaPrompt = null;
-  const btn = document.getElementById('installPwaBtn');
-  if (btn) btn.hidden = true;
-});
-document.addEventListener('click', async (event) => {
-  if (!event.target.closest('#installPwaBtn')) return;
-  if (!tinyShinyPwaPrompt) {
-    alert('Install option browser menu me available hai: Chrome menu → Add to Home Screen / Install App.');
-    return;
-  }
-  tinyShinyPwaPrompt.prompt();
-  await tinyShinyPwaPrompt.userChoice.catch(() => null);
-  tinyShinyPwaPrompt = null;
-  const btn = document.getElementById('installPwaBtn');
-  if (btn) btn.hidden = true;
-});
