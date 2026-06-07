@@ -1796,17 +1796,35 @@ async function sendTemplateWithOrderFallback(phone, templateName, lang, order = 
   let result = await attempt('library-template');
   if (result.ok || !isWhatsAppParamMismatch(result)) return { ...result, attempts };
 
-  // Fallbacks: useful when Meta template has not yet been updated exactly like the local library.
+  // If a product image is available and the local template is marked as Image header,
+  // never fall back to a text-header/no-image send first. Some old Meta templates had
+  // a TEXT header that literally says "Image"; sending without a media header makes
+  // customers see the word "Image" instead of the actual product image.
+  const requiresImageHeader = Boolean(productImage && String(template?.headerType || 'Image').toLowerCase() === 'image');
+
+  // Fallbacks: useful when Meta template variable count is not yet updated exactly like the local library.
   const counts = [];
   const localCount = Array.isArray(template?.variables) && template.variables.length ? template.variables.length : templateParameterCountFromBody(template?.body || '');
   for (const c of [localCount, 4, 3]) if (c && !counts.includes(c)) counts.push(c);
+
   for (const c of counts) {
-    result = await attempt(`no-image-${c}-body-vars`, { noHeader: true, variableCount: c });
-    if (result.ok || !isWhatsAppParamMismatch(result)) return { ...result, attempts };
     if (productImage) {
       result = await attempt(`image-${c}-body-vars`, { variableCount: c });
       if (result.ok || !isWhatsAppParamMismatch(result)) return { ...result, attempts };
     }
+    if (!requiresImageHeader) {
+      result = await attempt(`no-image-${c}-body-vars`, { noHeader: true, variableCount: c });
+      if (result.ok || !isWhatsAppParamMismatch(result)) return { ...result, attempts };
+    }
+  }
+
+  if (requiresImageHeader) {
+    return {
+      ...result,
+      ok: false,
+      attempts,
+      reason: 'Product image is available but Meta template did not accept image header. Please approve this template in Meta with Header Type = Image. Text/no-image fallback was skipped so customer does not receive an "Image" text header.'
+    };
   }
   return { ...result, attempts };
 }

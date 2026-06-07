@@ -173,3 +173,22 @@ pre[id$="Result"],#templateResult,#appearanceResult,#whatsappResult,#shopifyResu
 .inbox-row.conversation .primary-btn{padding:9px 12px;font-size:12px}
 @media(max-width:1100px){.form-grid.four{grid-template-columns:repeat(2,minmax(180px,1fr))}}
 @media(max-width:760px){.form-grid.four{grid-template-columns:1fr}.conversation-lines{max-height:320px}.chat-line.inbound,.chat-line.outbound{margin-left:0;margin-right:0}}
+
+
+/* v26 compact WhatsApp Inbox + one conversation per phone */
+.compact-inbox{padding-top:16px!important}
+.compact-inbox .section-head{margin-bottom:10px!important;gap:10px!important}
+.compact-inbox .section-head h2{margin-bottom:4px!important}
+.compact-inbox .section-head p{margin:0!important;font-size:13px!important}
+.compact-inbox .form-grid.four{grid-template-columns:1.25fr .75fr 1fr 1fr!important;gap:10px!important;margin:8px 0 10px!important}
+.compact-inbox label{margin-bottom:8px!important}
+.compact-inbox .inline-actions{gap:8px!important;margin:6px 0!important}
+.compact-inbox .ghost-btn,.compact-inbox .primary-btn{padding:9px 14px!important}
+.compact-inbox #whatsappReplyText{min-height:90px!important}
+.compact-inbox #whatsappInboxResult{max-height:120px!important;margin-top:8px!important;margin-bottom:8px!important}
+.compact-inbox .inbox-list{grid-template-columns:repeat(auto-fill,minmax(380px,1fr))!important;gap:10px!important;margin-top:10px!important}
+.compact-inbox .inbox-row{padding:10px!important;gap:6px!important}
+.compact-inbox .conversation-lines{max-height:240px!important;padding:8px!important;gap:6px!important}
+.compact-inbox .chat-line{padding:7px 9px!important}
+@media(max-width:1200px){.compact-inbox .form-grid.four{grid-template-columns:repeat(2,minmax(180px,1fr))!important}.compact-inbox .inbox-list{grid-template-columns:repeat(auto-fill,minmax(320px,1fr))!important}}
+@media(max-width:760px){.compact-inbox .form-grid.four{grid-template-columns:1fr!important}.compact-inbox .inbox-list{grid-template-columns:1fr!important}.compact-inbox #whatsappReplyText{min-height:110px!important}}
