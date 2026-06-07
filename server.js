@@ -169,7 +169,7 @@ function writeEnvFile(next) {
     'SHOPIFY_CLIENT_ID=' + (merged.SHOPIFY_CLIENT_ID || ''),
     'SHOPIFY_CLIENT_SECRET=' + (merged.SHOPIFY_CLIENT_SECRET || ''),
     'SHOPIFY_APP_URL=' + (merged.SHOPIFY_APP_URL || merged.WEBSITE_URL || 'https://chat.tinyshinygifts.com'),
-    'SHOPIFY_OAUTH_SCOPES=' + (merged.SHOPIFY_OAUTH_SCOPES || 'read_orders,read_products,read_customers,read_draft_orders,write_draft_orders'),
+    'SHOPIFY_OAUTH_SCOPES=' + (merged.SHOPIFY_OAUTH_SCOPES || 'read_orders,write_orders,read_products,read_customers,read_draft_orders,write_draft_orders'),
     'SHOPIFY_OAUTH_REDIRECT_URI=' + (merged.SHOPIFY_OAUTH_REDIRECT_URI || ''),
     '',
     '# WhatsApp Cloud API - required for owner/team notification from chatbot',
@@ -744,8 +744,15 @@ async function shopifyFetch(pathAndQuery, options = {}) {
     headers: { 'X-Shopify-Access-Token': token, 'Content-Type': 'application/json' },
     body: options.body ? JSON.stringify(options.body) : undefined
   });
-  const json = await response.json().catch(() => ({}));
-  return { ok: response.ok, status: response.status, json };
+  const text = await response.text().catch(() => '');
+  let json = {};
+  try { json = text ? JSON.parse(text) : {}; } catch (_) { json = { raw: text }; }
+  const out = { ok: response.ok, status: response.status, json };
+  if (!response.ok) {
+    out.error = json?.errors || json?.error || json?.message || text || `Shopify request failed with status ${response.status}`;
+    if (response.status === 401 || response.status === 403) out.hint = 'Shopify Admin Access Token needs required permission. For auto-cancel, enable/write_orders permission and save a new token.';
+  }
+  return out;
 }
 function simplifyOrder(order = {}) {
   const fulfillments = order.fulfillments || [];
@@ -1203,7 +1210,7 @@ app.get('/shopify/install', requireAdmin, (req, res) => {
   const env = readEnvFile();
   const shop = normalizeShopDomain(req.query.shop || env.SHOPIFY_STORE_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN);
   const clientId = String(process.env.SHOPIFY_CLIENT_ID || env.SHOPIFY_CLIENT_ID || '').trim();
-  const scopes = String(process.env.SHOPIFY_OAUTH_SCOPES || env.SHOPIFY_OAUTH_SCOPES || 'read_orders,read_products,read_customers,read_draft_orders,write_draft_orders').replace(/\s+/g, '');
+  const scopes = String(process.env.SHOPIFY_OAUTH_SCOPES || env.SHOPIFY_OAUTH_SCOPES || 'read_orders,write_orders,read_products,read_customers,read_draft_orders,write_draft_orders').replace(/\s+/g, '');
   if (!shop) return res.status(400).send('Shopify store domain missing. Use tinyshinygifts.myshopify.com.');
   if (!clientId) return res.status(400).send('SHOPIFY_CLIENT_ID missing. Add Client ID in API Settings or Render Environment.');
   const redirectUri = getShopifyRedirectUri(req);
@@ -1785,10 +1792,23 @@ async function updateShopifyOrderNoteAndTags(orderId, addTag, noteLine) {
 }
 async function cancelShopifyOrder(orderId) {
   if (!orderId) return { ok:false, skipped:true, reason:'Shopify order id missing.' };
-  return shopifyFetch(`orders/${orderId}/cancel.json`, {
+  const before = await shopifyFetch(`orders/${orderId}.json?fields=id,name,cancelled_at,financial_status,total_price,currency`);
+  if (!before.ok) return { ok:false, step:'read_order_before_cancel', ...before };
+  if (before.json?.order?.cancelled_at) return { ok:true, alreadyCancelled:true, order: before.json.order };
+  const cancel = await shopifyFetch(`orders/${orderId}/cancel.json`, {
     method:'POST',
     body:{ reason:'customer', email:false, restock:true, refund:false }
   });
+  if (!cancel.ok) {
+    return {
+      ok:false,
+      step:'cancel_order',
+      status: cancel.status,
+      error: cancel.error || cancel.json,
+      hint: cancel.hint || 'Check Shopify Admin API permission: write_orders is required to cancel orders.'
+    };
+  }
+  return { ok:true, status:cancel.status, json:cancel.json };
 }
 function isCodConfirmText(text) { return /^(confirm|yes|yes confirm|confirm order|order confirm|haan|ha|ha ji|ok|okay)$/i.test(String(text || '').trim()); }
 function isCodCancelText(text) { return /^(cancel|no|no cancel|cancel order|nahi|nahin|mat bhejo)$/i.test(String(text || '').trim()); }
@@ -1812,11 +1832,20 @@ async function handleCodConfirmationReply(item = {}) {
   const env = readEnvFile();
   const autoCancel = String(process.env.COD_AUTO_CANCEL_ENABLED || env.COD_AUTO_CANCEL_ENABLED || 'true').toLowerCase() === 'true';
   const cancelResult = autoCancel ? await cancelShopifyOrder(orderId).catch(e => ({ ok:false, error:e.message })) : { ok:false, skipped:true, reason:'COD auto cancel disabled.' };
-  const shopifyUpdate = await updateShopifyOrderNoteAndTags(orderId, 'COD Cancelled by Customer', `COD Cancelled by customer via WhatsApp on ${nowIso()}. Phone: ${item.from}`).catch(e => ({ ok:false, error:e.message }));
-  updateLeadById(lead.id, { codCustomerResponse:'cancelled', codCancelledAt: nowIso(), status: autoCancel ? 'COD Cancelled by Customer' : 'COD Cancellation Requested', cancelResult, shopifyUpdate });
-  const reply = await sendWhatsAppTextManual({ to:item.from, message:`Your COD order ${orderName} cancellation request has been received.${autoCancel ? ' The order has been cancelled.' : ''} Team Tiny Shiny Gifts` }).catch(e => ({ ok:false, error:e.message }));
-  await sendOwnerWhatsApp(`COD order cancelled by customer\nOrder: ${orderName}\nPhone: ${item.from}\nAuto cancel: ${autoCancel ? 'yes' : 'no'}`).catch(()=>{});
-  return appendJson(leadsPath, { id: crypto.randomUUID(), type:'cod_order_cancelled', createdAt: nowIso(), phone:item.from, orderName, status:autoCancel ? 'COD Cancelled' : 'COD Cancellation Requested', cancelResult, shopifyUpdate, customerReply:reply, raw:item });
+  const cancelledOk = Boolean(cancelResult && cancelResult.ok);
+  const shopifyUpdate = await updateShopifyOrderNoteAndTags(orderId, cancelledOk ? 'COD Cancelled by Customer' : 'COD Cancellation Requested', `COD cancellation ${cancelledOk ? 'completed' : 'requested'} by customer via WhatsApp on ${nowIso()}. Phone: ${item.from}. Cancel result: ${JSON.stringify(cancelResult).slice(0, 600)}`).catch(e => ({ ok:false, error:e.message }));
+  const finalStatus = cancelledOk ? 'COD Cancelled by Customer' : 'COD Cancellation Failed - Check Shopify Permission';
+  updateLeadById(lead.id, { codCustomerResponse:'cancelled', codCancelledAt: nowIso(), status: finalStatus, cancelResult, shopifyUpdate });
+  const replyText = cancelledOk
+    ? `Your COD order ${orderName} has been cancelled. Team Tiny Shiny Gifts`
+    : `Your COD order ${orderName} cancellation request has been received. Our team will update it shortly. Team Tiny Shiny Gifts`;
+  const reply = await sendWhatsAppTextManual({ to:item.from, message:replyText }).catch(e => ({ ok:false, error:e.message }));
+  await sendOwnerWhatsApp(`COD order cancellation request
+Order: ${orderName}
+Phone: ${item.from}
+Shopify cancel: ${cancelledOk ? 'success' : 'failed'}
+${cancelResult?.hint || cancelResult?.error || ''}`).catch(()=>{});
+  return appendJson(leadsPath, { id: crypto.randomUUID(), type:'cod_order_cancelled', createdAt: nowIso(), phone:item.from, orderName, status:finalStatus, message: cancelledOk ? 'Shopify order cancelled successfully.' : `Shopify cancel failed: ${cancelResult?.hint || JSON.stringify(cancelResult).slice(0, 500)}`, cancelResult, shopifyUpdate, customerReply:reply, raw:item });
 }
 
 async function sendOrderConfirmationToCustomer(order = {}) {
