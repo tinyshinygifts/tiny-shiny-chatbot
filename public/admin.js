@@ -162,6 +162,11 @@ async function loadEvents(){ const d=await fetch('/api/visitor-events',{credenti
 async function loadMessages(){ const d=await fetch('/api/lead-messages',{credentials:'include'}).then(r=>r.json()).catch(()=>({messages:[]})); if($('messageCount')) messageCount.textContent=(d.messages||[]).length; if($('messageList')) messageList.innerHTML=(d.messages||[]).slice(0,80).map(m=>`<div class="log-row"><b>${esc(m.type)}</b> <small>${esc(m.createdAt)}</small><br/><pre>${esc(m.message)}</pre></div>`).join('') || 'No messages yet.'; }
 function inboxValue(m){ return [m.customerName,m.from,m.to,m.text,m.type,m.status,m.statusType,m.createdAt].join(' ').toLowerCase(); }
 function shopifyHasPhone(phone){ const l=last10(phone); return !!l && (shopifyCustomers||[]).some(c=>last10(c.phone)===l); }
+function shopifyCustomerByPhone(phone){ const l=last10(phone); return l ? (shopifyCustomers||[]).find(c=>last10(c.phone)===l) : null; }
+function shopifyCustomerToInboxGroup(c){
+  const phone=formatWaPhone(c.phone||c.default_address?.phone||'');
+  return {phone,customerName:c.name||[c.first_name,c.last_name].filter(Boolean).join(' ')||'Shopify Customer',lastAt:c.lastOrderDate||c.updated_at||'',unread:0,messages:[],shopifyOnly:true,shopifyCustomer:c};
+}
 function inboxPhone(m){ return formatWaPhone(m.from||m.to||m.phone||m.raw?.recipient_id||''); }
 function groupInboxMessages(messages){
   const map=new Map();
@@ -220,16 +225,16 @@ function renderChatList(groups){
     const selected=String(selectedWhatsappInboxId)===String(g.phone);
     const name=chatNameForGroup(g);
     const last=g.messages[g.messages.length-1]||{};
-    const preview=messageText(last) || last.status || '';
-    const known=shopifyHasPhone(g.phone);
-    return `<button type="button" class="wa-chat-item ${selected?'active':''} ${g.unread?'unread':''}" data-inbox-phone="${esc(g.phone)}">
+    const preview=g.shopifyOnly ? 'Shopify customer - no WhatsApp chat yet' : (messageText(last) || last.status || '');
+    const known=shopifyHasPhone(g.phone) || !!g.shopifyOnly;
+    return `<button type="button" class="wa-chat-item ${selected?'active':''} ${g.unread?'unread':''} ${g.shopifyOnly?'shopify-only':''}" data-inbox-phone="${esc(g.phone)}">
       <span class="wa-avatar">${esc(initials(name,g.phone))}</span>
       <span class="wa-chat-meta">
         <span class="wa-chat-title"><b>${esc(name)}</b>${g.unread?`<em>${g.unread}</em>`:''}</span>
         <span class="wa-chat-preview">${esc(preview || 'No message')}</span>
         <span class="wa-chat-sub">${esc(g.phone)} • ${known?'Shopify':'Not in Shopify'}</span>
       </span>
-      <span class="wa-chat-time">${esc(timeShort(last.createdAt||g.lastAt))}</span>
+      <span class="wa-chat-time">${esc(g.shopifyOnly ? 'Shopify' : timeShort(last.createdAt||g.lastAt))}</span>
     </button>`;
   }).join('') || '<div class="wa-empty-list">No WhatsApp replies yet.</div>';
 }
@@ -237,8 +242,9 @@ function renderActiveChat(group){
   const pane=$('whatsappActiveChat');
   if(!pane) return;
   if(!group){ pane.className='wa-active-chat empty-state'; pane.innerHTML='Select a customer chat from the left side.'; const action=$('whatsappShopifyAction'); if(action) action.innerHTML=''; return; }
-  const known=shopifyHasPhone(group.phone);
-  const name=chatNameForGroup(group);
+  const linkedCustomer=shopifyCustomerByPhone(group.phone) || group.shopifyCustomer || null;
+  const known=!!linkedCustomer || shopifyHasPhone(group.phone);
+  const name=linkedCustomer?.name || chatNameForGroup(group);
   const messages=group.messages||[];
   let lastDate='';
   const bubbles=messages.map(m=>{
@@ -262,7 +268,7 @@ function renderActiveChat(group){
       <button class="ghost-btn" type="button" data-mark-thread-read="${esc(group.phone)}">Mark Read</button>
     </div>
   </div>
-  <div class="wa-message-area">${bubbles || '<div class="wa-date-sep">No messages</div>'}</div>`;
+  <div class="wa-message-area">${bubbles || `<div class="wa-date-sep">No WhatsApp messages yet</div>${linkedCustomer?`<div class="wa-customer-info-card"><b>Shopify Customer Data</b><span>${esc(linkedCustomer.email||'No email')}</span><span>Orders: ${esc(linkedCustomer.ordersCount||0)} • Last Order: ${esc(linkedCustomer.lastOrderDate||'-')}</span><span>Status: ${esc(linkedCustomer.orderStatus||'-')}</span></div>`:''}`}</div>`;
   const action=$('whatsappShopifyAction');
   if(action){
     action.innerHTML = known
@@ -274,10 +280,28 @@ function renderActiveChat(group){
 function renderWhatsappInbox(){
   const q=($('whatsappInboxSearch')?.value||'').toLowerCase().trim();
   const all=(whatsappInboxMessages||[]).filter(m=>m.direction==='inbound' || m.direction==='outbound' || m.direction==='status');
-  const groups=groupInboxMessages(all).filter(g=>!q || [g.customerName,g.phone,...g.messages.map(m=>messageText(m))].join(' ').toLowerCase().includes(q));
+  let groups=groupInboxMessages(all);
+  const byPhone=new Map(groups.map(g=>[last10(g.phone),g]));
+  if(q && Array.isArray(shopifyCustomers)){
+    for(const c of shopifyCustomers){
+      const value=customerValue(c);
+      const phone=formatWaPhone(c.phone||'');
+      const key=last10(phone);
+      if(!phone || !value.includes(q) || byPhone.has(key)) continue;
+      const g=shopifyCustomerToInboxGroup(c);
+      groups.push(g); byPhone.set(key,g);
+    }
+  }
+  groups=groups.filter(g=>!q || [g.customerName,g.phone,g.shopifyCustomer?.name,g.shopifyCustomer?.email,...(g.messages||[]).map(m=>messageText(m))].join(' ').toLowerCase().includes(q));
+  groups=groups.sort((a,b)=>{
+    if(a.shopifyOnly && !b.shopifyOnly) return 1;
+    if(!a.shopifyOnly && b.shopifyOnly) return -1;
+    return new Date(b.lastAt||0)-new Date(a.lastAt||0);
+  });
   if(!selectedWhatsappInboxId && groups[0]) selectedWhatsappInboxId=groups[0].phone;
   if(selectedWhatsappInboxId && !groups.some(g=>String(g.phone)===String(selectedWhatsappInboxId)) && groups[0]) selectedWhatsappInboxId=groups[0].phone;
   if($('whatsappInboxCount')) whatsappInboxCount.textContent=groups.length;
+  if($('whatsappInboxThreadCount')) whatsappInboxThreadCount.textContent=groups.length;
   renderChatList(groups);
   const group=groups.find(g=>String(g.phone)===String(selectedWhatsappInboxId));
   renderActiveChat(group);
@@ -288,6 +312,7 @@ async function loadWhatsappInbox(silent=false){
   const d=await fetch('/api/whatsapp-inbox?days='+encodeURIComponent(days),{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,messages:[]}));
   if($('whatsappInboxDays')) whatsappInboxDays.value=String(d.days||days);
   whatsappInboxMessages=d.messages||[];
+  if(!shopifyCustomers.length) await loadShopifyCustomers().catch(()=>{});
   checkNewInboundNotifications(whatsappInboxMessages);
   if($('whatsappInboxResult') && !d.ok && !silent) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
   renderWhatsappInbox();
