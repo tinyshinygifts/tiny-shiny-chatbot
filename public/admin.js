@@ -129,7 +129,7 @@ function notifyNewWhatsappMessage(m){
   showAdminToast({ title:'New WhatsApp Message', body:`${name}: ${body}`, phone, onOpenPhone:phone });
   playNotifySound();
   if('Notification' in window && Notification.permission==='granted'){
-    const n = new Notification('New WhatsApp Message', { body:`${phone}: ${body}`.slice(0,180), icon:'/tiny-shiny-logo.jpg', tag:'wa-'+phone });
+    const n = new Notification('New WhatsApp Message', { body:`${name} (${phone}): ${body}`.slice(0,220), icon:'/tiny-shiny-logo.jpg', tag:'wa-'+phone, renotify:true, requireInteraction:true });
     n.onclick = () => { window.focus(); selectedWhatsappInboxId=phone; showTab('whatsappInboxPanel'); renderWhatsappInbox(); n.close(); };
   }
 }
@@ -212,7 +212,16 @@ function renderWhatsappReplyImages(){
   sel.innerHTML='<option value="">No image / Text only</option>' + (mediaImages||[]).map(img=>`<option value="${esc(img.id)}">${esc(img.title||img.filename||img.category||'Image')}</option>`).join('');
   if(current && [...sel.options].some(o=>o.value===current)) sel.value=current;
 }
-function messageText(m){ return m.text || m.caption || m.statusType || m.status || ''; }
+function messageText(m={}){
+  const rawMsg = m.raw?.message || m.raw?.messages?.[0] || m.message || {};
+  const direct = m.text || m.caption || m.body || m.messageText || m.content || '';
+  const nested = rawMsg.text?.body || rawMsg.button?.text || rawMsg.button?.payload || rawMsg.image?.caption || rawMsg.document?.caption || rawMsg.document?.filename || rawMsg.video?.caption || rawMsg.interactive?.button_reply?.title || rawMsg.interactive?.list_reply?.title || '';
+  if(direct || nested) return direct || nested;
+  if(m.media?.type) return '[' + String(m.media.type).toUpperCase() + ' received]';
+  if(rawMsg.type) return '[' + String(rawMsg.type).toUpperCase() + ' received]';
+  if(m.direction==='status') return '';
+  return m.statusType || m.status || '';
+}
 function chatNameForGroup(g){
   const named=(g.messages||[]).map(m=>m.customerName||m.profileName||m.name||'').find(Boolean);
   return named || g.customerName || g.phone || 'WhatsApp Customer';
@@ -279,10 +288,14 @@ function renderActiveChat(group){
     const dir=m.direction==='inbound'?'inbound':(m.direction==='outbound'?'outbound':'status');
     const txt=messageText(m);
     const extra=m.imageUrl||m.image||m.productImage||'';
+    if(dir==='status'){
+      const label = statusLabel(m).replace(/^Status:\s*/,'') || 'status';
+      return `${dateSep}<div class="wa-status-line">${esc(label)} • ${esc(timeShort(m.createdAt))}</div>`;
+    }
     return `${dateSep}<div class="wa-bubble ${dir}">
       ${extra?`<img src="${esc(extra)}" alt="" class="wa-bubble-img"/>`:''}
-      <div>${esc(txt || statusLabel(m))}</div>
-      <small>${esc(statusLabel(m))} • ${esc(timeShort(m.createdAt))}</small>
+      <div>${esc(txt || '[Message]')}</div>
+      <small>${esc(dir==='outbound' ? (m.status||'sent') : 'customer')} • ${esc(timeShort(m.createdAt))}</small>
     </div>`;
   }).join('');
   pane.className='wa-active-chat';
