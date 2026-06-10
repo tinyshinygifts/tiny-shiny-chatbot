@@ -1396,7 +1396,7 @@ app.post('/api/whatsapp-inbox/reply', requireAdmin, async (req, res) => {
       results.push({ type:'text', result: await sendWhatsAppTextManual({ to, message:text }).catch(e => ({ ok:false, error:e.message })) });
     }
     const ok = results.some(r => r.result && r.result.ok);
-    appendJson(whatsappInboxPath, { id:crypto.randomUUID(), direction:'outbound', to, customerName:'Business', type: documentUrl?'document':(imageUrl||imageIds.length?'image':'text'), text, documentUrl, imageUrl, createdAt:nowIso(), status:ok?'sent':'failed', raw:{results} });
+    appendJson(whatsappInboxPath, { id:crypto.randomUUID(), direction:'outbound', to, customerName:'Business', type: documentUrl?'document':(imageUrl||imageIds.length?'image':'text'), text, documentUrl, documentName, imageUrl: imageUrl || (Array.isArray(imageIds)&&imageIds.length ? (readJson(mediaImagesPath,[]).find(x=>String(x.id)===String(imageIds[0]))?.url || '') : ''), createdAt:nowIso(), status:ok?'sent':'failed', raw:{results} });
     res.json({ ok, results });
   } catch(e) { res.status(500).json({ ok:false, error:e.message }); }
 });

@@ -37,6 +37,40 @@ let knownInboundUnreadIds = new Set();
 let lastNotificationAt = 0;
 const colorOptions = ['#d63384','#9b35ff','#0ea5e9','#16a34a','#f97316','#111827'];
 const colorNames = {'#d63384':'Tiny Shiny Pink','#9b35ff':'Premium Purple','#0ea5e9':'Sky Blue','#16a34a':'Fresh Green','#f97316':'Festive Orange','#111827':'Luxury Black'};
+
+let __tsgLoaderCount = 0;
+function ensureGlobalLoader(){
+  let el=document.getElementById('tsgGlobalLoader');
+  if(el) return el;
+  el=document.createElement('div');
+  el.id='tsgGlobalLoader';
+  el.className='tsg-global-loader hidden';
+  el.innerHTML='<div class="tsg-loader-card"><img src="/tiny-shiny-logo.jpg" alt="Tiny Shiny"/><b>Loading data...</b></div>';
+  document.body.appendChild(el);
+  return el;
+}
+function showGlobalLoader(text='Loading data...'){
+  const el=ensureGlobalLoader();
+  const b=el.querySelector('b'); if(b) b.textContent=text;
+  __tsgLoaderCount++;
+  el.classList.remove('hidden');
+}
+function hideGlobalLoader(){
+  __tsgLoaderCount=Math.max(0,__tsgLoaderCount-1);
+  if(__tsgLoaderCount===0){ const el=document.getElementById('tsgGlobalLoader'); if(el) el.classList.add('hidden'); }
+}
+(function patchFetchLoader(){
+  if(window.__tsgFetchLoaderPatched) return; window.__tsgFetchLoaderPatched=true;
+  const originalFetch=window.fetch.bind(window);
+  window.fetch=async function(input, init){
+    const url=typeof input==='string'?input:(input&&input.url)||'';
+    const shouldShow=/\/api\//.test(url) && !/app-version/.test(url);
+    if(shouldShow) showGlobalLoader('Loading data...');
+    try{ return await originalFetch(input, init); }
+    finally{ if(shouldShow) hideGlobalLoader(); }
+  };
+})();
+
 function $(id){ return document.getElementById(id); }
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
 function digitsOnly(v){ return String(v||'').replace(/[^0-9]/g,''); }
@@ -916,7 +950,7 @@ const emojiCategories = {
   review:['⭐','⭐⭐⭐⭐⭐','👍','📸','💬']
 };
 const quickEmojis = Object.values(emojiCategories).flat();
-let teamInboxChannelFilter = localStorage.getItem('tsgTeamInboxChannel') || 'all';
+let teamInboxChannelFilter = 'all'; try{ localStorage.setItem('tsgTeamInboxChannel','all'); }catch(e){}
 function channelOfGroup(g){ return g.channel || (String(g.phone||'').startsWith('instagram:')?'instagram':String(g.phone||'').startsWith('messenger:')?'messenger':'whatsapp'); }
 function channelLabel(ch){ return ch==='instagram'?'Instagram':(ch==='messenger'?'Messenger':'WhatsApp'); }
 function channelBadge(ch){ return `<span class="channel-badge ${esc(ch)}">${esc(channelLabel(ch))}</span>`; }
@@ -943,8 +977,10 @@ async function uploadWhatsappMediaFile(file, type){
   const dataUrl=await fileToDataUrl(file);
   const d=await fetch('/api/whatsapp-inbox/upload-media',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataUrl,filename:file.name,type})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if(!d.ok){ alert(d.error||'Upload failed'); return; }
-  selectedWhatsappAttachment=Object.assign({},d.file,{absoluteUrl:d.url,type});
+  selectedWhatsappAttachment=Object.assign({},d.file,{absoluteUrl:d.url,type, originalName:file.name});
   setAttachmentLabel();
+  const label=$('whatsappAttachmentLabel');
+  if(label && String(d.file.mime||'').startsWith('image/')) label.innerHTML=`Attached image: ${esc(file.name)} <img src="${esc(d.url)}" class="attachment-thumb" alt="">`;
 }
 function insertEmojiToReply(emoji){
   const txt=$('whatsappReplyText'); if(!txt) return;
@@ -1017,7 +1053,7 @@ function renderActiveChat(group){
   if(!pane) return;
   const action=$('whatsappShopifyAction');
   const right=$('waContactPanel');
-  if(!group){ pane.className='wa-active-chat empty-state wati-chat-window'; pane.innerHTML='Select a customer chat from the left side.'; if(action) action.innerHTML=''; if(right) right.innerHTML='<h3>Contact Info</h3><p class="hint">Select chat to view customer details.</p>'; return; }
+  if(!group){ document.body.classList.remove('wa-mobile-chat-open'); pane.className='wa-active-chat empty-state wati-chat-window'; pane.innerHTML='Select a customer chat from the left side.'; if(action) action.innerHTML=''; if(right) right.innerHTML='<h3>Contact Info</h3><p class="hint">Select chat to view customer details.</p>'; return; }
   const ch=channelOfGroup(group);
   const linkedCustomer=ch==='whatsapp' ? (shopifyCustomerByPhone(group.phone) || group.shopifyCustomer || null) : null;
   const meta=teamInboxMeta[group.phone] || group.meta || {status:'open',agent:'',tags:[],note:''};
@@ -1037,7 +1073,7 @@ function renderActiveChat(group){
     return `${dateSep}<div class="wa-bubble ${dir}">${extra?`<img src="${esc(extra)}" alt="" class="wa-bubble-img"/>`:''}<div class="wa-message-text">${esc(txt || '[message]')}</div><div class="wa-msg-time">${esc(timeShort(m.createdAt))}${dir==='outbound'?' ✓✓':''}</div></div>`;
   }).join('');
   pane.className='wa-active-chat wati-chat-window';
-  pane.innerHTML=`<div class="wati-chat-header"><div class="contact-head"><span class="wa-avatar ${esc(ch)}">${esc(initials(name,group.phone))}</span><div><h3>${esc(name)}</h3><span>${channelBadge(ch)} ${esc(String(group.phone).replace(/^instagram:/,'').replace(/^messenger:/,''))}</span></div></div><div class="inline-actions"><button class="ghost-btn compact-btn" type="button" data-mark-thread-read="${esc(group.phone)}">Mark Read</button></div></div><div class="wa-message-area wati-message-area">${bubbles || '<div class="wa-date-sep">No messages yet</div>'}</div>`;
+  pane.innerHTML=`<div class="wati-chat-header"><button type="button" class="ghost-btn compact-btn mobile-chat-back" data-mobile-chat-back>← Chats</button><div class="contact-head"><span class="wa-avatar ${esc(ch)}">${esc(initials(name,group.phone))}</span><div><h3>${esc(name)}</h3><span>${channelBadge(ch)} ${esc(String(group.phone).replace(/^instagram:/,'').replace(/^messenger:/,''))}</span></div></div><div class="inline-actions"><button class="ghost-btn compact-btn" type="button" data-mark-thread-read="${esc(group.phone)}">Mark Read</button><button class="ghost-btn compact-btn mobile-info-btn" type="button" data-mobile-info>Info</button></div></div><div class="wa-message-area wati-message-area">${bubbles || '<div class="wa-date-sep">No messages yet</div>'}</div>`; document.body.classList.add('wa-mobile-chat-open');
   if(action){ action.innerHTML = ch==='whatsapp' ? (known ? `<span class="wa-shopify-inline ok">Shopify Customer</span>` : `<span class="wa-shopify-inline missing">Not in Shopify</span><button class="primary-btn compact-btn" type="button" data-add-shopify-phone="${esc(group.phone)}" data-add-shopify-name="${esc(name)}">Add to Shopify Customer</button>`) : `<span class="wa-shopify-inline ok">${esc(channelLabel(ch))} Lead</span>`; }
   if(right) right.innerHTML=contactPanelHtml(group,name,known,linkedCustomer,meta);
   if($('waThreadStatus')) waThreadStatus.value=meta.status||'open';
@@ -1107,7 +1143,8 @@ async function sendWhatsappInboxReply(){
   if(selected.startsWith('messenger:')){ endpoint='/api/messenger/reply'; body={to:selected.replace('messenger:',''),message}; }
   const d=await fetch(endpoint,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
-  if(d.ok){ if($('whatsappReplyText')) whatsappReplyText.value=''; selectedWhatsappAttachment=null; setAttachmentLabel(); }
+  if($('whatsappReplyResult')){ whatsappReplyResult.classList.remove('hidden'); whatsappReplyResult.textContent=d.ok?'Sent successfully':JSON.stringify(d,null,2); }
+  if(d.ok){ if($('whatsappReplyText')) whatsappReplyText.value=''; selectedWhatsappAttachment=null; setAttachmentLabel(); if($('whatsappReplyResult')) setTimeout(()=>whatsappReplyResult.classList.add('hidden'),2500); }
   await loadWhatsappInbox();
 }
 document.addEventListener('click', e=>{
@@ -1429,3 +1466,17 @@ async function checkAppVersionAndReload(){
 }
 setInterval(checkAppVersionAndReload, 60000);
 setTimeout(checkAppVersionAndReload, 1500);
+
+document.addEventListener('change', e=>{
+  if(e.target.id==='waImageFileInput' && e.target.files?.[0]) uploadWhatsappMediaFile(e.target.files[0],'image');
+  if(e.target.id==='waDocumentFileInput' && e.target.files?.[0]) uploadWhatsappMediaFile(e.target.files[0],'document');
+});
+document.addEventListener('click', e=>{
+  if(e.target && e.target.id==='sendWhatsappReply') sendWhatsappInboxReply();
+  if(e.target.closest('[data-wa-emoji]')) addEmojiToReply();
+});
+
+document.addEventListener('click', e=>{
+  if(e.target.closest('[data-mobile-chat-back]')){ document.body.classList.remove('wa-mobile-chat-open','wa-mobile-info-open'); selectedWhatsappInboxId=''; renderWhatsappInbox(); }
+  if(e.target.closest('[data-mobile-info]')) document.body.classList.toggle('wa-mobile-info-open');
+});
