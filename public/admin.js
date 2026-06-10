@@ -1236,16 +1236,28 @@ function renderMiniBars(items, valueKey='sales', labelKey='date'){
   const max=Math.max(1,...items.map(x=>Number(x[valueKey]||0)));
   return `<div class="bar-chart">${items.map(x=>`<div class="bar-row"><span>${esc(x[labelKey]||'')}</span><div><i style="width:${Math.max(3,Number(x[valueKey]||0)/max*100)}%"></i></div><b>${renderSalesMoney(x[valueKey])}</b></div>`).join('')}</div>`;
 }
+
+function renderCampaignGraphs(campaigns=[]){
+  const top=(campaigns||[]).slice(0,8);
+  if(!top.length) return '<div class="hint">No Meta campaign data available.</div>';
+  return `<div class="campaign-mini-grid">
+    <div><h4>Campaign Spend</h4>${renderMiniBars(top.map(c=>({date:shortText(c.name,24),sales:c.spend})),'sales','date')}</div>
+    <div><h4>Campaign ROAS</h4>${renderMiniBars(top.map(c=>({date:shortText(c.name,24),sales:Number(c.roas||0)*100})),'sales','date')}</div>
+    <div><h4>Cost / Net Order</h4>${renderMiniBars(top.map(c=>({date:shortText(c.name,24),sales:c.costPerNetOrder||0})),'sales','date')}</div>
+  </div>`;
+}
+
 function renderPaymentDonut(d){ const cod=Number(d.codOrders||0), prepaid=Number(d.prepaidOrders||0), total=Math.max(1,cod+prepaid); const codPct=Math.round(cod/total*100); return `<div class="donut" style="--p:${codPct}"><b>${codPct}%</b><span>COD</span></div><div class="donut-legend"><span><i></i> COD: ${cod}</span><span><i></i> Prepaid: ${prepaid}</span></div>`; }
 function renderShopifySalesAnalysis(){
   const d=shopifySalesAnalysis||{}; const s=d.summary||{};
   if($('salesSummary')) salesSummary.innerHTML=[
-    ['Total Sales',renderSalesMoney(s.totalSales)],['Total Orders',s.totalOrders||0],['Cancelled',s.cancelledOrders||0],['Return Orders',s.returnOrders||0],['Net Orders',s.netOrders||0],['Net Sales',renderSalesMoney(s.netSales||s.totalSales)],['Average Order Value',renderSalesMoney(s.averageOrderValue)],['Meta Spend',renderSalesMoney(s.metaSpend)],['Cost / Net Order',renderSalesMoney(s.costPerOrder)],['ROAS',Number(s.roas||0).toFixed(2)+'x'],['Estimated Profit',renderSalesMoney(s.estimatedProfit)]
+    ['Total Sales',renderSalesMoney(s.totalSales)],['Total Orders',s.totalOrders||0],['Return Orders',s.returnOrders||0],['Net Orders',s.netOrders||0],['Net Sales',renderSalesMoney(s.netSales||s.totalSales)],['Average Order Value',renderSalesMoney(s.averageOrderValue)],['Meta Spend',renderSalesMoney(s.metaSpend)],['Meta Cost / Total Order',renderSalesMoney(s.metaCostPerTotalOrder)],['Meta Cost / Net Order',renderSalesMoney(s.metaCostPerNetOrder||s.costPerOrder)],['Meta Cost / Revenue %',salesPercent(s.metaCostRevenuePct)],['ROAS',Number(s.roas||0).toFixed(2)+'x'],['Estimated Profit',renderSalesMoney(s.estimatedProfit)]
   ].map(x=>`<div class="sales-kpi"><span>${esc(x[0])}</span><b>${esc(x[1])}</b></div>`).join('');
   if($('salesDailyChart')) salesDailyChart.innerHTML=renderMiniBars(d.daily||[],'sales','date');
   if($('salesPaymentChart')) salesPaymentChart.innerHTML=renderPaymentDonut(s);
-  if($('salesCampaignTable')) salesCampaignTable.innerHTML=tableHtml(['Campaign','Spend','Orders','Revenue','Cost / Order','ROAS'], (d.campaigns||[]).map(c=>[esc(c.name||'Unknown'),renderSalesMoney(c.spend),esc(c.orders||0),renderSalesMoney(c.revenue),renderSalesMoney(c.costPerOrder),Number(c.roas||0).toFixed(2)+'x']));
-  if($('salesOrderCostTable')) salesOrderCostTable.innerHTML=tableHtml(['Order','Date','Payment','Amount','Shipping','Meta Cost','Net Profit'], (d.orders||[]).slice(0,60).map(o=>[esc(o.name||o.id),esc(o.date||''),esc(o.payment||''),renderSalesMoney(o.amount),renderSalesMoney(o.shippingCost),renderSalesMoney(o.metaCost),renderSalesMoney(o.estimatedProfit)]));
+  if($('salesCampaignTable')){ if(!$('salesCampaignGraphAuto')){ const g=document.createElement('div'); g.id='salesCampaignGraphAuto'; g.className='sales-campaign-graphs'; $('salesCampaignTable').parentNode.insertBefore(g, $('salesCampaignTable')); } salesCampaignGraphAuto.innerHTML=renderCampaignGraphs(d.campaigns||[]); }
+  if($('salesCampaignTable')) salesCampaignTable.innerHTML=tableHtml(['Campaign','Spend','Impr.','Clicks','CTR','CPC','CPM','Orders','Net Orders','Revenue','Net Sales','Cost / Order','Cost / Net Order','ROAS','Profit'], (d.campaigns||[]).map(c=>[esc(shortText(c.name||'Unknown',42)),renderSalesMoney(c.spend),esc(c.impressions||0),esc(c.clicks||0),salesPercent(c.ctr),renderSalesMoney(c.cpc),renderSalesMoney(c.cpm),esc(c.orders||0),esc(c.netOrders||0),renderSalesMoney(c.revenue),renderSalesMoney(c.netSales||c.revenue),renderSalesMoney(c.costPerOrder),renderSalesMoney(c.costPerNetOrder),Number(c.roas||0).toFixed(2)+'x',renderSalesMoney(c.profitEstimate)]));
+  if($('salesOrderCostTable')) salesOrderCostTable.innerHTML=tableHtml(['Order','Date','Payment','Amount','Shipping','Meta Cost','Net Profit'], (d.orders||[]).filter(o=>!String(o.status||'').toLowerCase().includes('cancel')).slice(0,60).map(o=>[esc(o.name||o.id),esc(o.date||''),esc(o.payment||''),renderSalesMoney(o.amount),renderSalesMoney(o.shippingCost),renderSalesMoney(o.metaCost),renderSalesMoney(o.estimatedProfit)]));
   if($('salesProductTable')) salesProductTable.innerHTML=tableHtml(['SKU','Product','Qty','Revenue'], (d.products||[]).slice(0,50).map(p=>[esc(p.sku||'-'),`<span title="${esc(p.title)}">${esc(shortText(p.title,58))}</span>`,esc(p.qty),renderSalesMoney(p.revenue)]));
   if($('salesCityTable')) salesCityTable.innerHTML=tableHtml(['City / State','Orders','Revenue'], (d.cities||[]).slice(0,50).map(c=>[esc(c.name),esc(c.orders),renderSalesMoney(c.revenue)]));
 }

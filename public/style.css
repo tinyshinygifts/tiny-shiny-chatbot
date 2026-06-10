@@ -639,3 +639,20 @@ body:has(.api-top-actions) .brand-logo.small{width:76px!important;height:76px!im
 @media(max-width:760px){.sales-filters.form-grid.four{grid-template-columns:1fr;}}
 .sales-table td:first-child,.sales-table th:first-child{white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;}
 .sales-table td:nth-child(2){max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+
+/* sales/campaign/ui final 20260610131813 */
+.campaign-mini-grid{display:grid;grid-template-columns:repeat(3,minmax(220px,1fr));gap:14px;margin-bottom:14px;}
+.campaign-mini-grid>div{border:1px solid var(--line,#f3cfe1);border-radius:18px;padding:14px;background:#fff;}
+.campaign-mini-grid h4{margin:0 0 10px;color:#2b1830;}
+.sales-campaign-graphs{margin-bottom:12px;}
+#salesCampaignTable .customer-table{font-size:12px;}
+#salesCampaignTable td,#salesCampaignTable th{white-space:nowrap;}
+.whatsapp-only-page .admin-shell.whatsapp-app-shell{width:100vw;max-width:none;margin:0;padding:10px;box-sizing:border-box;}
+.whatsapp-only-page .compact-whatsapp-header{border-radius:0 0 20px 20px;margin:0 0 10px;padding:12px 18px;}
+.whatsapp-only-page .wati-inbox-layout{height:calc(100vh - 118px)!important;min-height:650px!important;grid-template-columns:360px minmax(620px,1fr) 320px!important;overflow:hidden;}
+.whatsapp-only-page .wati-left,.whatsapp-only-page .wati-right,.whatsapp-only-page .wati-center{min-height:0;overflow:hidden;}
+.whatsapp-only-page .wa-chat-list,.whatsapp-only-page .wati-right{overflow:auto;}
+.whatsapp-only-page .wa-message-area{min-height:260px!important;}
+.whatsapp-only-page .wati-composer textarea{height:92px!important;min-height:92px!important;}
+@media(max-width:1100px){.whatsapp-only-page .wati-inbox-layout{grid-template-columns:320px 1fr!important;}.whatsapp-only-page .wati-right{display:none;}}
+@media(max-width:760px){.whatsapp-only-page .wati-inbox-layout{display:block!important;height:auto!important;}.whatsapp-only-page .wati-left,.whatsapp-only-page .wati-center{height:auto;}}

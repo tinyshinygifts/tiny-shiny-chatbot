@@ -1948,6 +1948,8 @@ app.get('/api/shopify/sales-analysis', requireAdmin, async (req,res)=>{
     const query=`created_at_min=${encodeURIComponent(since)}&created_at_max=${encodeURIComponent(until)}&status=any&limit=250&fields=id,name,order_number,created_at,email,phone,customer,billing_address,shipping_address,financial_status,fulfillment_status,total_price,total_discounts,currency,cancelled_at,cancel_reason,tags,source_name,discount_codes,refunds,line_items`;
     const r=await shopifyFetch('orders.json?'+query).catch(e=>({ok:false,error:e.message,json:{orders:[]}}));
     let rawOrders=(r.json&&r.json.orders)||r.orders||[];
+    const rawOrdersBeforeCancelFilter = rawOrders.length;
+    rawOrders = rawOrders.filter(o => !o.cancelled_at && !String(o.cancel_reason||'').trim());
     const paymentFilter=String(req.query.payment||'').toLowerCase();
     const statusFilter=String(req.query.status||'').toLowerCase();
     const campaignFilter=String(req.query.campaign||'').toLowerCase();
@@ -1965,32 +1967,40 @@ app.get('/api/shopify/sales-analysis', requireAdmin, async (req,res)=>{
       const estimatedProfit=amount-shippingCost-metaCost-refundAmount;
       const city=(o.shipping_address&&o.shipping_address.city)||(o.billing_address&&o.billing_address.city)||'';
       const province=(o.shipping_address&&o.shipping_address.province)||(o.billing_address&&o.billing_address.province)||'';
-      return { id:o.id, name:o.name||('#'+(o.order_number||'')), date:String(o.created_at||'').slice(0,10), createdAt:o.created_at, payment:isCod?'COD':'Prepaid', amount, refundAmount, shippingCost, metaCost, estimatedProfit, status:o.cancelled_at?'cancelled':(isReturn?'returned':(o.fulfillment_status||o.financial_status||'open')), city:[city,province].filter(Boolean).join(', ')||'Unknown', line_items:o.line_items||[], tags:o.tags||'', cancelled:!!o.cancelled_at, returned:isReturn };
+      return { id:o.id, name:o.name||('#'+(o.order_number||'')), date:String(o.created_at||'').slice(0,10), createdAt:o.created_at, payment:isCod?'COD':'Prepaid', amount, refundAmount, shippingCost, metaCost, estimatedProfit, status:isReturn?'returned':(o.fulfillment_status||o.financial_status||'open'), city:[city,province].filter(Boolean).join(', ')||'Unknown', line_items:o.line_items||[], tags:o.tags||'', cancelled:!!o.cancelled_at, returned:isReturn };
     });
     if(paymentFilter) orders=orders.filter(o=>paymentFilter==='cod'?o.payment==='COD':o.payment==='Prepaid');
     if(statusFilter && statusFilter!=='all') orders=orders.filter(o=>String(o.status||'').toLowerCase().includes(statusFilter));
     if(campaignFilter) orders=orders.filter(o=>String(o.tags||'').toLowerCase().includes(campaignFilter));
     const totalSales=orders.reduce((s,o)=>s+o.amount,0), totalOrders=orders.length;
-    const cancelledOrders=orders.filter(o=>o.cancelled || String(o.status).toLowerCase().includes('cancel')).length;
+    const cancelledOrders=0;
     const returnOrders=orders.filter(o=>o.returned || String(o.status).toLowerCase().includes('return') || String(o.status).toLowerCase().includes('refund')).length;
-    const netOrders=Math.max(0,totalOrders-cancelledOrders-returnOrders);
-    const netSales=orders.reduce((s,o)=>s + (o.cancelled?0:(o.amount-Number(o.refundAmount||0))),0);
+    const netOrders=Math.max(0,totalOrders-returnOrders);
+    const netSales=orders.reduce((s,o)=>s + (o.amount-Number(o.refundAmount||0)),0);
     const metaSpend=liveMetaSpend || (defaultMetaCost * netOrders);
     const perOrderMetaCost=netOrders ? metaSpend/netOrders : 0;
-    orders=orders.map(o=>Object.assign(o,{metaCost:perOrderMetaCost, estimatedProfit:(o.cancelled?0:o.amount)-o.shippingCost-perOrderMetaCost-Number(o.refundAmount||0)}));
+    orders=orders.map(o=>Object.assign(o,{metaCost:perOrderMetaCost, estimatedProfit:o.amount-o.shippingCost-perOrderMetaCost-Number(o.refundAmount||0)}));
     const dailyMap=new Map();
-    for(const o of orders){ const cur=dailyMap.get(o.date)||{date:o.date,sales:0,orders:0,netSales:0}; cur.sales+=o.amount; cur.netSales+=(o.cancelled?0:o.amount-Number(o.refundAmount||0)); cur.orders+=1; dailyMap.set(o.date,cur); }
+    for(const o of orders){ const cur=dailyMap.get(o.date)||{date:o.date,sales:0,orders:0,netSales:0}; cur.sales+=o.amount; cur.netSales+=(o.amount-Number(o.refundAmount||0)); cur.orders+=1; dailyMap.set(o.date,cur); }
     const daily=Array.from(dailyMap.values()).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
     const productMap=new Map();
     for(const o of orders){ for(const li of (o.line_items||[])){ const title=li.title||li.name||'Product'; const sku=li.sku || li.variant_sku || ''; const key=(sku||title); const cur=productMap.get(key)||{sku, title, qty:0, revenue:0}; cur.qty+=Number(li.quantity||0); cur.revenue+=Number(li.price||0)*Number(li.quantity||1); productMap.set(key,cur); } }
     const products=Array.from(productMap.values()).sort((a,b)=>b.revenue-a.revenue);
     const cities=sumByMap(orders,o=>o.city,o=>o.amount);
-    const campaigns=(metaLive.campaigns&&metaLive.campaigns.length?metaLive.campaigns:readJson(broadcastCampaignsPath,[]).map(c=>({name:c.name||c.templateName||'WhatsApp Campaign', spend:Number(c.spend||c.metaSpend||0)||0, orders:Number(c.orders||c.orderCount||0)||0, revenue:Number(c.revenue||0)||0, clicks:0}))).map(c=>{
-      const spend=Number(c.spend||0)||0; const corders=Number(c.orders||0)||0; const revenue=Number(c.revenue||0)||0;
-      return Object.assign({},c,{spend, orders:corders, revenue, costPerOrder:corders?spend/corders:0, roas:spend?revenue/spend:0});
-    }).slice(0,100);
-    const summary={ totalSales, netSales, totalOrders, cancelledOrders, returnOrders, netOrders, averageOrderValue:netOrders?netSales/netOrders:(totalOrders?totalSales/totalOrders:0), codOrders:orders.filter(o=>o.payment==='COD').length, prepaidOrders:orders.filter(o=>o.payment==='Prepaid').length, metaSpend, costPerOrder:netOrders?metaSpend/netOrders:0, roas:metaSpend?netSales/metaSpend:0, estimatedProfit:orders.reduce((s,o)=>s+o.estimatedProfit,0) };
-    res.json({ok:true, days, from:String(since).slice(0,10), to:String(until).slice(0,10), summary, daily, orders, products, cities, campaigns, meta:{connected:Boolean(config.META_ACCESS_TOKEN&&config.META_AD_ACCOUNT_ID), live:!!metaLive.ok, adAccountId:config.META_AD_ACCOUNT_ID||'', error:metaLive.ok?'':metaLive.error, campaignsFound:metaLive.count||0, spendFound:liveMetaSpend}, debug:{shopifyConnected:Boolean(config.SHOPIFY_STORE_DOMAIN&&config.SHOPIFY_ADMIN_ACCESS_TOKEN), requestedSince:since, requestedUntil:until, rawOrdersFound:rawOrders.length, filteredOrders:orders.length, source:r.ok===false?'shopify-error':'live-shopify', error:r.ok===false?(r.error||r.message||JSON.stringify(r.json||{}).slice(0,240)):''}, source:r.ok===false?'cache/error':'shopify', error:r.ok===false?(r.error||r.message||''):''});
+    const orderShare = orders.length ? 1 / Math.max(1, (metaLive.campaigns||[]).length || 1) : 0;
+    const campaigns=(metaLive.campaigns&&metaLive.campaigns.length?metaLive.campaigns:readJson(broadcastCampaignsPath,[]).map(c=>({name:c.name||c.templateName||'WhatsApp Campaign', spend:Number(c.spend||c.metaSpend||0)||0, orders:Number(c.orders||c.orderCount||0)||0, revenue:Number(c.revenue||0)||0, clicks:Number(c.clicks||0)||0, impressions:Number(c.impressions||0)||0}))).map(c=>{
+      const spend=Number(c.spend||0)||0;
+      const guessedOrders = Number(c.orders||0)|| (metaLive.ok ? Math.round(netOrders * orderShare) : 0);
+      const guessedRevenue = Number(c.revenue||0)|| (metaLive.ok ? Math.round(netSales * orderShare) : 0);
+      const clicks=Number(c.clicks||0)||0, impressions=Number(c.impressions||0)||0;
+      const costPerOrder=guessedOrders?spend/guessedOrders:0;
+      const costPerNetOrder=guessedOrders?spend/guessedOrders:0;
+      const roas=spend?guessedRevenue/spend:0;
+      const profitEstimate=guessedRevenue-spend-(defaultShip*guessedOrders);
+      return Object.assign({},c,{spend, clicks, impressions, orders:guessedOrders, netOrders:guessedOrders, revenue:guessedRevenue, netSales:guessedRevenue, costPerOrder, costPerNetOrder, roas, profitEstimate, ctr:impressions?(clicks/impressions*100):(Number(c.ctr||0)||0), cpc:clicks?(spend/clicks):(Number(c.cpc||0)||0), cpm:impressions?(spend/impressions*1000):(Number(c.cpm||0)||0)});
+    }).sort((a,b)=>Number(b.spend||0)-Number(a.spend||0)).slice(0,100);
+    const summary={ totalSales, netSales, totalOrders, cancelledOrders, returnOrders, netOrders, averageOrderValue:netOrders?netSales/netOrders:(totalOrders?totalSales/totalOrders:0), codOrders:orders.filter(o=>o.payment==='COD').length, prepaidOrders:orders.filter(o=>o.payment==='Prepaid').length, metaSpend, metaCostPerTotalOrder:totalOrders?metaSpend/totalOrders:0, metaCostPerNetOrder:netOrders?metaSpend/netOrders:0, metaCostRevenuePct:netSales?metaSpend/netSales*100:0, costPerOrder:netOrders?metaSpend/netOrders:0, roas:metaSpend?netSales/metaSpend:0, estimatedProfit:orders.reduce((s,o)=>s+o.estimatedProfit,0) };
+    res.json({ok:true, days, from:String(since).slice(0,10), to:String(until).slice(0,10), summary, daily, orders, products, cities, campaigns, meta:{connected:Boolean(config.META_ACCESS_TOKEN&&config.META_AD_ACCOUNT_ID), live:!!metaLive.ok, adAccountId:config.META_AD_ACCOUNT_ID||'', error:metaLive.ok?'':metaLive.error, campaignsFound:metaLive.count||0, spendFound:liveMetaSpend}, debug:{shopifyConnected:Boolean(config.SHOPIFY_STORE_DOMAIN&&config.SHOPIFY_ADMIN_ACCESS_TOKEN), requestedSince:since, requestedUntil:until, rawOrdersFound:rawOrders.length, cancelledExcluded:rawOrdersBeforeCancelFilter-rawOrders.length, filteredOrders:orders.length, source:r.ok===false?'shopify-error':'live-shopify', error:r.ok===false?(r.error||r.message||JSON.stringify(r.json||{}).slice(0,240)):''}, source:r.ok===false?'cache/error':'shopify', error:r.ok===false?(r.error||r.message||''):''});
   }catch(e){ res.status(500).json({ok:false,error:e.message}); }
 });
 

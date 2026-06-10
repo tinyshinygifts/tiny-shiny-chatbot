@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Tiny Shiny WhatsApp Inbox</title>
   <link rel="manifest" href="/manifest.json"/>
-  <link rel="stylesheet" href="/style.css?v=20260610124415"/>
+  <link rel="stylesheet" href="/style.css?v=20260610131813"/>
 </head>
 <body class="whatsapp-only-page">
   <div class="admin-shell whatsapp-app-shell">
@@ -66,12 +66,12 @@
       </section>
     </main>
   </div>
-  <script src="/admin.js?v=20260610124415"></script>
+  <script src="/admin.js?v=20260610131813"></script>
   <script>
     document.addEventListener('DOMContentLoaded', () => {
       document.body.classList.add('whatsapp-only-mode');
       if (typeof showPanel === 'function') showPanel('whatsappInboxPanel');
-      if (typeof loadWhatsappInbox === 'function') loadWhatsappInbox();
+      try{ localStorage.setItem('tsgTeamInboxChannel','all'); teamInboxChannelFilter='all'; }catch(e){} if (typeof loadWhatsappInbox === 'function') loadWhatsappInbox();
     });
   </script>
 </body>
