@@ -1037,6 +1037,8 @@ app.post('/webhooks/whatsapp', async (req, res) => {
 });
 
 app.use(express.static(path.join(__dirname, 'public')));
+app.get('/whatsapp', requireAdmin, (req,res)=>res.sendFile(path.join(__dirname,'public','whatsapp.html')));
+app.get('/whatsapp.html', requireAdmin, (req,res)=>res.sendFile(path.join(__dirname,'public','whatsapp.html')));
 
 app.get('/health', (req, res) => res.json({ ok: true, service: 'Tiny Shiny Chatbot', time: nowIso() }));
 app.get('/api/settings', (req, res) => { res.set('Cache-Control','no-store'); res.json({ ok: true, settings: readJson(settingsPath, {}), business: { name: process.env.BUSINESS_NAME || 'Tiny Shiny Gifts', website: process.env.WEBSITE_URL || 'https://tinyshinygifts.com', whatsapp: process.env.WHATSAPP_NUMBER || '' } }); });
@@ -1896,7 +1898,7 @@ app.get('/api/shopify/sales-analysis', requireAdmin, async (req,res)=>{
     const defaultMetaCost=Number(config.META_DEFAULT_COST_PER_ORDER || settings.metaDefaultCostPerOrder || 0)||0;
     const query=`created_at_min=${encodeURIComponent(since)}&status=any&limit=250&fields=id,name,order_number,created_at,email,phone,customer,billing_address,shipping_address,financial_status,fulfillment_status,total_price,currency,cancelled_at,cancel_reason,tags,source_name,discount_codes,line_items`;
     const r=await shopifyFetch('orders.json?'+query).catch(e=>({ok:false,error:e.message,orders:[]}));
-    let rawOrders=r.orders||[];
+    let rawOrders=(r.json&&r.json.orders)||r.orders||[];
     const paymentFilter=String(req.query.payment||'').toLowerCase();
     const statusFilter=String(req.query.status||'').toLowerCase();
     const campaignFilter=String(req.query.campaign||'').toLowerCase();
@@ -1932,7 +1934,7 @@ app.get('/api/shopify/sales-analysis', requireAdmin, async (req,res)=>{
       return { name:c.name||c.templateName||'WhatsApp Campaign', spend, orders:corders, revenue, costPerOrder:corders?spend/corders:0, roas:spend?revenue/spend:0, clicks:clicks.filter(x=>x.campaignId===c.id).length };
     }).slice(0,100);
     const summary={ totalSales, totalOrders, averageOrderValue:totalOrders?totalSales/totalOrders:0, codOrders:orders.filter(o=>o.payment==='COD').length, prepaidOrders:orders.filter(o=>o.payment==='Prepaid').length, cancelledOrders:orders.filter(o=>String(o.status).toLowerCase().includes('cancel')).length, metaSpend, costPerOrder:totalOrders?metaSpend/totalOrders:0, roas:metaSpend?totalSales/metaSpend:0, estimatedProfit:orders.reduce((s,o)=>s+o.estimatedProfit,0) };
-    res.json({ok:true, days, summary, daily, orders, products, cities, campaigns:campaignStats, meta:{connected:Boolean(config.META_ACCESS_TOKEN&&config.META_AD_ACCOUNT_ID), adAccountId:config.META_AD_ACCOUNT_ID||''}, source:r.ok===false?'cache/error':'shopify', error:r.ok===false?r.error:''});
+    res.json({ok:true, days, summary, daily, orders, products, cities, campaigns:campaignStats, meta:{connected:Boolean(config.META_ACCESS_TOKEN&&config.META_AD_ACCOUNT_ID), adAccountId:config.META_AD_ACCOUNT_ID||''}, debug:{shopifyConnected:Boolean(config.SHOPIFY_STORE_DOMAIN&&config.SHOPIFY_ADMIN_ACCESS_TOKEN), requestedSince:since, rawOrdersFound:rawOrders.length, filteredOrders:orders.length, source:r.ok===false?'shopify-error':'live-shopify', error:r.ok===false?(r.error||r.message||JSON.stringify(r.json||{}).slice(0,240)):''}, source:r.ok===false?'cache/error':'shopify', error:r.ok===false?(r.error||r.message||''):''});
   }catch(e){ res.status(500).json({ok:false,error:e.message}); }
 });
 
@@ -2004,7 +2006,7 @@ async function fetchShiprocketLiveNdr(){
       return {ok:true, endpoint:url, count:rows.length, rows, rawShape:Object.keys(j||{}).slice(0,10)};
     }catch(e){ errors.push(`${url}: ${e.message}`); }
   }
-  return {ok:false,error:'Shiprocket live NDR API failed or returned no readable NDR list.', details:errors, rows:[]};
+  return {ok:false,error:'Shiprocket live NDR API failed or returned no readable NDR list. Shiprocket may not expose NDR list on this token/endpoint, or response format is different.', details:errors, rows:[]};
 }
 
 // ---------- NDR: Shiprocket + WhatsApp automation ----------

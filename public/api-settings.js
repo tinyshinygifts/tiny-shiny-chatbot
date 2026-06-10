@@ -207,21 +207,25 @@ async function logout(){ try{ await fetch('/api/admin/logout',{method:'POST',cre
 
 async function loadConnectionStatus(){
   const grid=$('connectionStatusGrid'); if(!grid) return;
+  grid.innerHTML='<div class="connection-loading">Checking API status...</div>';
   const d=await fetch('/api/connection-status',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,rows:[]}));
   if(!d.ok){ grid.innerHTML=`<div class="connection-item not"><b>Status load failed</b><span>${esc(d.error||'Error')}</span></div>`; return; }
   lastApiConnectionRows = d.rows || [];
   const summary=d.summary||{};
-  const summaryHtml=`<div class="api-status-summary"><b>Total APIs: ${summary.total||0}</b><span class="ok-dot">Connected: ${summary.connected||0}</span><span class="warn-dot">Error: ${summary.error||0}</span><span class="bad-dot">Not Connected: ${summary.notConnected||0}</span></div>`;
-  grid.innerHTML=summaryHtml+lastApiConnectionRows.map(x=>{
+  const summaryHtml=`<div class="api-status-summary compact"><b>Total APIs: ${summary.total||0}</b><span class="ok-dot">Connected: ${summary.connected||0}</span><span class="warn-dot">Error: ${summary.error||0}</span><span class="bad-dot">Not Connected: ${summary.notConnected||0}</span></div>`;
+  grid.innerHTML=summaryHtml+`<div class="connection-card-grid">`+lastApiConnectionRows.map(x=>{
     const status=x.status || (x.connected?'connected':'not_connected');
     const label=status==='connected'?'Connected':(status==='error'?'Connected but Error':'Not Connected');
     const cls=status==='connected'?'ok':(status==='error'?'warn':'not');
     const logs=(x.logs||[]).slice(0,2).map(l=>`<li>${esc(l)}</li>`).join('');
     const clickable=status==='error' || (x.logs||[]).length;
     return `<button type="button" class="connection-item ${cls} ${clickable?'clickable':''}" data-api-log-key="${esc(x.key)}">
-      <div><b><span class="status-light ${cls}"></span>${esc(x.name)}</b><span>${esc(x.details||'')}</span>${logs?`<ul class="api-log-list">${logs}</ul>`:''}<small>${clickable?'Click for full log':''}</small></div><em>${label}</em>
+      <div class="connection-top"><b><span class="status-light ${cls}"></span>${esc(x.name)}</b><em>${label}</em></div>
+      <p>${esc(x.details||'')}</p>
+      ${logs?`<ul class="api-log-list">${logs}</ul>`:''}
+      ${clickable?'<small>Click for full log</small>':''}
     </button>`;
-  }).join('');
+  }).join('')+`</div>`;
   if($('connectionStatusTime')) connectionStatusTime.textContent='Last checked: '+(d.checkedAt||new Date().toISOString());
 }
 
