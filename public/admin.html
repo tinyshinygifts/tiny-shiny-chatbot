@@ -46,7 +46,7 @@
     </section>
 
     <section class="panel quick-nav admin-tabs" id="adminTabs">
-      <button class="tab-btn active" data-tab="basicPanel">Basic Settings</button>
+      <button class="tab-btn active" data-tab="apiSettingsPanel">API Settings</button>
       <button class="tab-btn" data-tab="crmPanel">CRM Dashboard</button>
       <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
       <button class="tab-btn" data-tab="bulkBroadcastPanel">Bulk WhatsApp Broadcast</button>
@@ -54,25 +54,46 @@
       <button class="tab-btn" data-tab="dripPanel">Drip Campaigns</button>
       <button class="tab-btn" data-tab="instagramInboxPanel">Instagram Inbox</button>
       <button class="tab-btn" data-tab="whatsappChatbotPanel">WhatsApp Chatbot</button>
-      <button class="tab-btn" data-tab="whatsappInboxPanel">WhatsApp Inbox</button>
+      <button class="tab-btn" data-tab="whatsappInboxPanel">Team Inbox</button>
       <button class="tab-btn" data-tab="newProductsPanel">New Products</button>
       <button class="tab-btn" data-tab="leadPanel">Leads</button>
       <button class="tab-btn" data-tab="activityPanel">Visitor Activity</button>
       <button class="tab-btn" data-tab="messagePanel">Buy Messages</button>
       <button class="tab-btn" data-tab="imagePanel">Image Messages</button>
-      <button class="tab-btn" data-tab="faqPanel">FAQ Rules</button>
       <button class="tab-btn" id="openGoogleSheetTab" data-tab="googleSheetPanel">Google Sheet</button>
     </section>
 
-    <section class="panel tab-panel active" id="basicPanel">
-      <h2>Basic Settings</h2>
+    <section class="panel tab-panel active" id="apiSettingsPanel">
+      <h2>API Settings</h2>
+      <div class="api-settings-grid">
+        <div class="api-card">
+          <h3>Basic Settings</h3>
       <p class="hint">Chatbot ON/OFF, bot name and theme color are in API Settings → Chatbot Appearance.</p>
       <label>Welcome Message <textarea id="welcomeMessage"></textarea></label>
       <label>Fallback Message <textarea id="fallbackMessage"></textarea></label>
       <label>Product Offer Message <textarea id="leadOfferMessage"></textarea></label>
       <label>Add-to-cart Message <textarea id="cartOfferMessage"></textarea></label>
       <label>Product popup delay seconds <input id="leadPopupDelaySeconds" type="number" min="5"/></label>
-      <button id="saveSettings" class="primary-btn">Save Settings</button>
+      <button id="saveSettings" class="primary-btn">Save Basic Settings</button>
+        </div>
+        <div class="api-card faq-inline-card">
+          <div class="section-head mini"><div><h3>FAQ Rules</h3><p>Keyword based replies. Yahi se FAQ add/modify/save hoga.</p></div><div class="inline-actions"><button id="addFaq" class="ghost-btn">+ Add FAQ</button><button id="saveFaqs" class="primary-btn">Save FAQs</button></div></div>
+          <div id="faqList"></div>
+          <pre id="faqResult"></pre>
+        </div>
+        <div class="api-card messenger-inline-card">
+          <div class="section-head mini"><div><h3>Facebook Messenger Settings</h3><p>Page Messenger inbox/webhook ke liye settings.</p></div><div class="inline-actions"><button id="saveMessengerSettings" class="primary-btn">Save Messenger</button><button id="mockMessengerMessage" class="ghost-btn">Add Test Messenger DM</button></div></div>
+          <div class="form-grid two">
+            <label class="checkline"><input id="msEnabled" type="checkbox"/> Enable Messenger</label>
+            <label class="checkline"><input id="msAutoReply" type="checkbox"/> Auto Reply</label>
+            <label>Facebook Page ID <input id="msPageId" placeholder="Facebook Page ID"/></label>
+            <label>Webhook Verify Token <input id="msVerifyToken" value="tinyshiny_messenger_verify"/></label>
+            <label>Page Access Token <input id="msPageAccessToken" placeholder="Paste Page access token"/></label>
+            <label>Main Catalog Link <input id="msMainCatalog" placeholder="https://www.tinyshinygifts.com/collections/all"/></label>
+          </div>
+          <pre id="messengerResult"></pre>
+        </div>
+      </div>
     </section>
 
     <section class="panel tab-panel crm-panel" id="crmPanel">
@@ -254,18 +275,20 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
 
 
 
-    <section class="panel tab-panel compact-inbox whatsapp-web-panel" id="whatsappInboxPanel">
-      <div class="section-head whatsapp-inbox-head">
-        <div>
-          <h2>WhatsApp Inbox / Customer Replies</h2>
-          <p>WhatsApp Web style inbox: left me customers, right me selected customer ki full chat.</p>
-        </div>
-        <div class="inline-actions"><button id="refreshWhatsappInbox" class="ghost-btn">Refresh Inbox</button></div>
-      </div>
-
-      <div class="wa-web-shell">
-        <aside class="wa-chat-sidebar">
-          <div class="wa-sidebar-top">
+    <section class="panel tab-panel compact-inbox whatsapp-web-panel wati-style-panel" id="whatsappInboxPanel">
+      <div class="team-inbox-shell">
+        <aside class="wati-left">
+          <div class="wati-left-head">
+            <h2>Team Inbox</h2>
+            <button id="refreshWhatsappInbox" class="ghost-btn compact-btn">Refresh</button>
+          </div>
+          <div class="channel-tabs">
+            <button type="button" class="channel-tab active" data-channel-filter="all">All</button>
+            <button type="button" class="channel-tab" data-channel-filter="whatsapp">WhatsApp</button>
+            <button type="button" class="channel-tab" data-channel-filter="instagram">Instagram</button>
+            <button type="button" class="channel-tab" data-channel-filter="messenger">Messenger</button>
+          </div>
+          <div class="wa-sidebar-top compact-search-block">
             <label>Search
               <input id="whatsappInboxSearch" list="whatsappShopifyCustomerList" autocomplete="off" placeholder="Name, phone, message / Shopify customer"/>
               <datalist id="whatsappShopifyCustomerList"></datalist>
@@ -274,41 +297,49 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
               <select id="whatsappInboxDays"><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="4">4 days</option><option value="5">5 days</option><option value="6">6 days</option><option value="7" selected>7 days</option><option value="8">8 days</option><option value="9">9 days</option><option value="10">10 days</option></select>
             </label>
             <div class="wa-clear-actions">
-              <button id="clearWhatsappInboxRange" class="ghost-btn danger-outline" type="button">Clear Selected Days</button>
+              <button id="clearWhatsappInboxRange" class="ghost-btn danger-outline" type="button">Clear Days</button>
               <button id="clearWhatsappInboxAll" class="ghost-btn danger-outline" type="button">Clear All</button>
             </div>
           </div>
-          <div class="wa-chat-count"><b id="whatsappInboxThreadCount">0</b> chats</div>
-          <div id="whatsappChatList" class="wa-chat-list"></div>
+          <div class="wa-chat-count"><b id="whatsappInboxThreadCount">0</b> conversations</div>
+          <div id="whatsappChatList" class="wa-chat-list wati-list"></div>
         </aside>
 
-        <main class="wa-chat-main">
-          <div id="whatsappActiveChat" class="wa-active-chat empty-state">
+        <main class="wati-center">
+          <div id="whatsappActiveChat" class="wa-active-chat empty-state wati-chat-window">
             Select a customer chat from the left side.
           </div>
-          <div class="wa-team-controls">
+          <div class="wa-reply-dock wati-reply-dock">
+            <div class="reply-mini-row">
+              <input id="whatsappReplyPhone" placeholder="91XXXXXXXXXX" title="Reply To Number"/>
+              <select id="whatsappReplyImage" title="Attach Image Optional"><option value="">No image / Text only</option></select>
+            </div>
+            <div class="reply-compose-row">
+              <textarea id="whatsappReplyText" placeholder="Type your message here..."></textarea>
+              <button id="sendWhatsappInboxReply" class="primary-btn">Send</button>
+            </div>
+            <div class="reply-bottom-actions">
+              <button id="enableDesktopNotifications2" type="button" class="ghost-btn compact-btn">Enable Notifications</button>
+              <button id="markWhatsappInboxRead" class="ghost-btn compact-btn">Mark Read</button>
+              <pre id="whatsappInboxResult"></pre>
+            </div>
+          </div>
+        </main>
+
+        <aside class="wati-right">
+          <div id="waContactPanel" class="wa-contact-panel">
+            <h3>Contact Info</h3>
+            <p class="hint">Select chat to view customer details.</p>
+          </div>
+          <div class="wa-team-controls right-controls">
             <label>Status <select id="waThreadStatus"><option value="open">Open</option><option value="pending">Pending</option><option value="resolved">Resolved</option></select></label>
             <label>Assign Agent <input id="waThreadAgent" placeholder="Agent name"/></label>
             <label>Tags <input id="waThreadTags" placeholder="COD, Urgent, Return"/></label>
-            <button id="saveWaThreadMeta" class="ghost-btn">Save Chat Info</button>
+            <button id="saveWaThreadMeta" class="primary-btn compact-btn">Save Chat Info</button>
           </div>
-          <label class="wa-internal-note">Internal Note <textarea id="waThreadNote" placeholder="Private note for team, customer ko nahi jayega"></textarea></label>
-          <div class="wa-reply-dock">
-            <div id="whatsappShopifyAction" class="wa-shopify-action"></div>
-            <div class="form-grid two compact-reply-grid">
-              <label>Reply To Number <input id="whatsappReplyPhone" placeholder="91XXXXXXXXXX"/></label>
-              <label>Attach Image Optional
-                <select id="whatsappReplyImage"><option value="">No image / Text only</option></select>
-              </label>
-            </div>
-            <label>Reply Message <textarea id="whatsappReplyText" placeholder="Write reply to customer"></textarea></label>
-            <div class="inline-actions wa-reply-actions">
-              <button id="sendWhatsappInboxReply" class="primary-btn">Send Reply</button>
-              <button id="markWhatsappInboxRead" class="ghost-btn">Mark Selected Read</button>
-            </div>
-            <pre id="whatsappInboxResult"></pre>
-          </div>
-        </main>
+          <label class="wa-internal-note compact-note">Internal Note <textarea id="waThreadNote" placeholder="Private note for team"></textarea></label>
+          <div id="whatsappShopifyAction" class="wa-shopify-action"></div>
+        </aside>
       </div>
       <div id="whatsappInboxList" class="inbox-list legacy-hidden"></div>
     </section>
@@ -395,14 +426,6 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
       </div>
       <h3>Saved Image Library</h3>
       <div id="mediaList" class="media-grid"></div>
-    </section>
-
-    <section class="panel tab-panel" id="faqPanel">
-      <h2>FAQ Rules</h2>
-      <p>Format: separate keywords with commas.</p>
-      <div id="faqList"></div>
-      <button id="addFaq" class="ghost-btn">+ Add FAQ</button>
-      <button id="saveFaqs" class="primary-btn">Save FAQs</button>
     </section>
 
     <section class="panel tab-panel" id="leadPanel">

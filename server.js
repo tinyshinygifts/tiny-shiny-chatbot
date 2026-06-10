@@ -84,6 +84,8 @@ const whatsappTeamMetaPath = path.join(dataDir, 'whatsapp-team-meta.json');
 const chatbotFlowsPath = path.join(dataDir, 'chatbot-flows.json');
 const instagramInboxPath = path.join(dataDir, 'instagram-inbox.json');
 const instagramSettingsPath = path.join(dataDir, 'instagram-settings.json');
+const messengerInboxPath = path.join(dataDir, 'messenger-inbox.json');
+const messengerSettingsPath = path.join(dataDir, 'messenger-settings.json');
 const advancedCampaignsPath = path.join(dataDir, 'advanced-campaigns.json');
 const customerSegmentsPath = path.join(dataDir, 'customer-segments.json');
 const dripCampaignsPath = path.join(dataDir, 'drip-campaigns.json');
@@ -104,7 +106,7 @@ const mongoJsonCache = new Map();
 function deepClone(value) { return value === undefined ? value : JSON.parse(JSON.stringify(value)); }
 function mongoKeyFromPath(filePath) { return 'json:' + path.basename(String(filePath || 'unknown.json')); }
 function readLocalJson(filePath, fallback) { try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; } }
-function mongoKnownPaths() { return [faqPath, settingsPath, leadsPath, eventsPath, leadMessagesPath, mediaImagesPath, crmPath, whatsappTemplatesPath, whatsappInboxPath, shopifyOAuthStatePath, broadcastCampaignsPath, whatsappOptoutsPath, whatsappTeamMetaPath, chatbotFlowsPath, instagramInboxPath, instagramSettingsPath, advancedCampaignsPath, customerSegmentsPath, dripCampaignsPath, quickReplySettingsPath, linkClicksPath, automationRulesPath]; }
+function mongoKnownPaths() { return [faqPath, settingsPath, leadsPath, eventsPath, leadMessagesPath, mediaImagesPath, crmPath, whatsappTemplatesPath, whatsappInboxPath, shopifyOAuthStatePath, broadcastCampaignsPath, whatsappOptoutsPath, whatsappTeamMetaPath, chatbotFlowsPath, instagramInboxPath, instagramSettingsPath, messengerInboxPath, messengerSettingsPath, advancedCampaignsPath, customerSegmentsPath, dripCampaignsPath, quickReplySettingsPath, linkClicksPath, automationRulesPath]; }
 async function mongoSave(key, value) {
   if (!mongoReady || !mongoCollection) return;
   try { await mongoCollection.updateOne({ key }, { $set: { key, value, updatedAt: new Date() } }, { upsert: true }); }
@@ -1044,6 +1046,7 @@ app.use('/api/team-inbox', requireAdmin);
 app.use('/api/shipping-settings', requireAdmin);
 
 app.use('/api/instagram', requireAdmin);
+app.use('/api/messenger', requireAdmin);
 app.use('/api/phase2', requireAdmin);
 app.use('/api/quickreply', requireAdmin);
 
@@ -2352,6 +2355,48 @@ app.post('/api/order-confirmed-by-customer', async (req, res) => {
   const lead = appendJson(leadsPath, { id: crypto.randomUUID(), type: 'customer_order_confirmed', createdAt: nowIso(), orderName, phone, message: body.message || 'Customer confirmed order', raw: body });
   const wa = await sendOwnerWhatsApp(`Customer confirmed order\nOrder: ${orderName || '-'}\nPhone: ${phone || '-'}\nMessage: ${body.message || ''}`).catch(err => ({ ok:false, error:err.message }));
   res.json({ ok:true, lead, ownerWhatsApp: wa });
+});
+
+
+// ---------- Facebook Messenger module ----------
+function readMessengerSettings(){
+  return readJson(messengerSettingsPath, { enabled:false, pageId:'', pageAccessToken:'', verifyToken:'tinyshiny_messenger_verify', autoReplyEnabled:false, catalogReplyEnabled:true, humanSupportKeywords:'support,help,agent,human', catalogKeywords:'catalog,catalogue,products,collection', mainCatalogLink:'https://www.tinyshinygifts.com/collections/all' });
+}
+function writeMessengerSettings(v){ writeJson(messengerSettingsPath, Object.assign(readMessengerSettings(), v||{}, {updatedAt:nowIso()})); return readMessengerSettings(); }
+app.get('/api/messenger/settings', (req,res)=>res.json({ok:true, settings:readMessengerSettings()}));
+app.post('/api/messenger/settings', (req,res)=>res.json({ok:true, settings:writeMessengerSettings(req.body||{})}));
+app.get('/api/messenger/inbox', (req,res)=>res.json({ok:true, messages:readJson(messengerInboxPath, [])}));
+app.post('/api/messenger/inbox/mock', (req,res)=>{
+  const body=req.body||{};
+  const msg={id:safeId('fb'), direction:body.direction||'inbound', from:body.from||body.username||body.psid||'facebook_user', username:body.username||body.from||body.psid||'facebook_user', text:body.text||'', status:body.status||'unread', channel:'messenger', createdAt:nowIso(), raw:body};
+  appendJson(messengerInboxPath, msg);
+  appendJson(crmPath, {id:safeId('crm_fb'), source:'facebook_messenger', name:msg.username, phone:'', lastMessage:msg.text, status:'New', updatedAt:nowIso(), createdAt:nowIso()});
+  res.json({ok:true,msg});
+});
+app.post('/api/messenger/reply', async (req,res)=>{
+  const body=req.body||{};
+  const msg={id:safeId('fb_out'), direction:'outbound', to:body.to||body.username||'', username:body.username||body.to||'', text:body.message||body.text||'', status:'saved', channel:'messenger', createdAt:nowIso(), note:'Facebook Messenger API send requires Page token/permissions. Saved in inbox as outbound.'};
+  appendJson(messengerInboxPath, msg);
+  res.json({ok:true,msg});
+});
+app.get('/webhooks/messenger', (req,res)=>{
+  const settings=readMessengerSettings();
+  const mode=req.query['hub.mode'], token=req.query['hub.verify_token'], challenge=req.query['hub.challenge'];
+  if(mode==='subscribe' && token===(settings.verifyToken||'tinyshiny_messenger_verify')) return res.status(200).send(String(challenge||''));
+  res.sendStatus(403);
+});
+app.post('/webhooks/messenger', express.json({limit:'5mb'}), (req,res)=>{
+  const body=req.body||{}; const saved=[];
+  try{
+    for(const entry of body.entry||[]){
+      for(const messaging of entry.messaging||[]){
+        const sender=messaging.sender?.id||'';
+        const text=messaging.message?.text||messaging.postback?.title||messaging.postback?.payload||'';
+        if(sender||text){ const msg={id:safeId('fb'), direction:'inbound', from:sender, username:sender, text, status:'unread', channel:'messenger', createdAt:nowIso(), raw:messaging}; appendJson(messengerInboxPath,msg); saved.push(msg); }
+      }
+    }
+  }catch(e){ console.error('Messenger webhook parse error', e.message); }
+  res.json({ok:true,saved:saved.length});
 });
 
 initMongoStorage().finally(() => {

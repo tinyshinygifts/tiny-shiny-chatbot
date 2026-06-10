@@ -845,4 +845,184 @@ document.addEventListener('click',async e=>{
 
   if(e.target.id==='refreshLeads') loadLeads(); if(e.target.id==='refreshEvents') loadEvents(); if(e.target.id==='refreshMsgs') loadMessages();
 });
+
+// ---------- Final WATI style unified Team Inbox override ----------
+let messengerMessages = [];
+let teamInboxChannelFilter = localStorage.getItem('tsgTeamInboxChannel') || 'all';
+function channelOfGroup(g){ return g.channel || (String(g.phone||'').startsWith('instagram:')?'instagram':String(g.phone||'').startsWith('messenger:')?'messenger':'whatsapp'); }
+function channelLabel(ch){ return ch==='instagram'?'Instagram':(ch==='messenger'?'Messenger':'WhatsApp'); }
+function channelBadge(ch){ return `<span class="channel-badge ${esc(ch)}">${esc(channelLabel(ch))}</span>`; }
+function socialMessageText(m){ return m.text || m.message || m.body || m.caption || ''; }
+function buildSocialGroups(messages, channel){
+  const map=new Map();
+  (messages||[]).forEach(m=>{
+    const key=String(m.username||m.from||m.to||m.sender||m.id||channel+'_user');
+    const phone=channel+':'+key;
+    if(!map.has(phone)) map.set(phone,{phone,channel,customerName:key,shopifyOnly:false,shopifyCustomer:null,messages:[],unread:0,lastAt:m.createdAt||m.updatedAt||new Date().toISOString()});
+    const g=map.get(phone);
+    const msg=Object.assign({},m,{channel, phone, body:socialMessageText(m), direction:m.direction||'inbound'});
+    g.messages.push(msg);
+    g.lastAt=msg.createdAt||g.lastAt;
+    if(msg.direction!=='outbound' && String(msg.status||'').toLowerCase()!=='read') g.unread++;
+  });
+  return Array.from(map.values()).map(g=>{ g.messages.sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0)); return g; });
+}
+function renderChannelTabs(){
+  document.querySelectorAll('.channel-tab').forEach(btn=>btn.classList.toggle('active', btn.dataset.channelFilter===teamInboxChannelFilter));
+}
+function renderChatList(groups){
+  const list=$('whatsappChatList') || $('whatsappInboxList');
+  if(!list) return;
+  renderChannelTabs();
+  list.innerHTML=groups.map(g=>{
+    const selected=String(selectedWhatsappInboxId)===String(g.phone);
+    const name=chatNameForGroup(g);
+    const ch=channelOfGroup(g);
+    const last=g.messages[g.messages.length-1]||{};
+    const preview=g.shopifyOnly ? 'Shopify customer - no chat yet' : (messageText(last) || socialMessageText(last) || last.status || '');
+    const known=ch==='whatsapp' && (shopifyHasPhone(g.phone) || !!g.shopifyOnly);
+    return `<button type="button" class="wa-chat-item wati-conversation ${selected?'active':''} ${g.unread?'unread':''} ${g.shopifyOnly?'shopify-only':''}" data-inbox-phone="${esc(g.phone)}">
+      <span class="wa-avatar ${esc(ch)}">${esc(initials(name,g.phone))}</span>
+      <span class="wa-chat-meta">
+        <span class="wa-chat-title"><b>${esc(name)}</b>${g.unread?`<em>${g.unread}</em>`:''}</span>
+        <span class="wa-chat-preview">${esc(preview || 'No message')}</span>
+        <span class="wa-chat-sub">${channelBadge(ch)} ${ch==='whatsapp'?esc(g.phone)+' • '+(known?'Shopify':'Not in Shopify'):esc(g.phone.replace(ch+':',''))}</span>
+      </span>
+      <span class="wa-chat-time">${esc(g.shopifyOnly ? 'Shopify' : timeShort(last.createdAt||g.lastAt))}</span>
+    </button>`;
+  }).join('') || '<div class="wa-empty-list">No conversations yet.</div>';
+}
+function contactPanelHtml(group, name, known, linkedCustomer, meta){
+  const ch=channelOfGroup(group);
+  const displayId=String(group.phone||'').replace(/^instagram:/,'').replace(/^messenger:/,'');
+  return `<div class="contact-head"><span class="wa-avatar ${esc(ch)}">${esc(initials(name,displayId))}</span><div><h3>${esc(name)}</h3>${channelBadge(ch)} <span class="status-pill ${esc(meta.status||'open')}">${esc(meta.status||'open')}</span></div></div>
+  <div class="contact-info-list">
+    <div><b>Channel</b><span>${esc(channelLabel(ch))}</span></div>
+    <div><b>${ch==='whatsapp'?'Phone':'User ID'}</b><span>${esc(displayId)}</span></div>
+    <div><b>Shopify</b><span>${ch==='whatsapp'?(known?'Customer':'Not added'):'CRM Lead only'}</span></div>
+    ${linkedCustomer?`<div><b>Email</b><span>${esc(linkedCustomer.email||'-')}</span></div><div><b>Orders</b><span>${esc(linkedCustomer.ordersCount||0)}</span></div><div><b>Last Order</b><span>${esc(linkedCustomer.lastOrderDate||'-')}</span></div>`:''}
+  </div>`;
+}
+function renderActiveChat(group){
+  const pane=$('whatsappActiveChat');
+  if(!pane) return;
+  const action=$('whatsappShopifyAction');
+  const right=$('waContactPanel');
+  if(!group){ pane.className='wa-active-chat empty-state wati-chat-window'; pane.innerHTML='Select a customer chat from the left side.'; if(action) action.innerHTML=''; if(right) right.innerHTML='<h3>Contact Info</h3><p class="hint">Select chat to view customer details.</p>'; return; }
+  const ch=channelOfGroup(group);
+  const linkedCustomer=ch==='whatsapp' ? (shopifyCustomerByPhone(group.phone) || group.shopifyCustomer || null) : null;
+  const meta=teamInboxMeta[group.phone] || group.meta || {status:'open',agent:'',tags:[],note:''};
+  const known=ch==='whatsapp' && (!!linkedCustomer || shopifyHasPhone(group.phone));
+  const name=linkedCustomer?.name || chatNameForGroup(group);
+  const messages=group.messages||[];
+  let lastDate='';
+  const bubbles=messages.map(m=>{
+    const dlab=dateLabel(m.createdAt);
+    const dateSep=dlab && dlab!==lastDate ? (lastDate=dlab, `<div class="wa-date-sep">${esc(dlab)}</div>`) : '';
+    let dir=m.direction==='inbound'?'inbound':(m.direction==='outbound'?'outbound':'status');
+    const txt=messageText(m) || socialMessageText(m);
+    const extra=m.imageUrl||m.image||m.productImage||'';
+    const st=String(m.status||m.statusType||'').toLowerCase();
+    if(dir==='status' && txt && !['sent','delivered','read','failed','queued'].includes(st)) dir='inbound';
+    if(dir==='status') return `${dateSep}<div class="wa-status-line">${esc((statusLabel(m).replace(/^Status:\s*/,''))||'status')} • ${esc(timeShort(m.createdAt))}</div>`;
+    return `${dateSep}<div class="wa-bubble ${dir}">${extra?`<img src="${esc(extra)}" alt="" class="wa-bubble-img"/>`:''}<div class="wa-message-text">${esc(txt || '[message]')}</div><div class="wa-msg-time">${esc(timeShort(m.createdAt))}${dir==='outbound'?' ✓✓':''}</div></div>`;
+  }).join('');
+  pane.className='wa-active-chat wati-chat-window';
+  pane.innerHTML=`<div class="wati-chat-header"><div class="contact-head"><span class="wa-avatar ${esc(ch)}">${esc(initials(name,group.phone))}</span><div><h3>${esc(name)}</h3><span>${channelBadge(ch)} ${esc(String(group.phone).replace(/^instagram:/,'').replace(/^messenger:/,''))}</span></div></div><div class="inline-actions"><button class="ghost-btn compact-btn" type="button" data-mark-thread-read="${esc(group.phone)}">Mark Read</button></div></div><div class="wa-message-area wati-message-area">${bubbles || '<div class="wa-date-sep">No messages yet</div>'}</div>`;
+  if(action){ action.innerHTML = ch==='whatsapp' ? (known ? `<span class="wa-shopify-inline ok">Shopify Customer</span>` : `<span class="wa-shopify-inline missing">Not in Shopify</span><button class="primary-btn compact-btn" type="button" data-add-shopify-phone="${esc(group.phone)}" data-add-shopify-name="${esc(name)}">Add to Shopify Customer</button>`) : `<span class="wa-shopify-inline ok">${esc(channelLabel(ch))} Lead</span>`; }
+  if(right) right.innerHTML=contactPanelHtml(group,name,known,linkedCustomer,meta);
+  if($('waThreadStatus')) waThreadStatus.value=meta.status||'open';
+  if($('waThreadAgent')) waThreadAgent.value=meta.agent||'';
+  if($('waThreadTags')) waThreadTags.value=(meta.tags||[]).join(', ');
+  if($('waThreadNote')) waThreadNote.value=meta.note||'';
+  if($('whatsappReplyPhone')) whatsappReplyPhone.value=String(group.phone).replace(/^whatsapp:/,'');
+  setTimeout(()=>{ const area=pane.querySelector('.wa-message-area'); if(area) area.scrollTop=area.scrollHeight; },0);
+}
+function renderWhatsappInbox(){
+  renderWhatsappCustomerDatalist();
+  selectWhatsappSearchCustomer();
+  const q=($('whatsappInboxSearch')?.value||'').toLowerCase().trim();
+  const all=(whatsappInboxMessages||[]).filter(m=>m.direction==='inbound' || m.direction==='outbound' || m.direction==='status');
+  let groups=groupInboxMessages(all).map(g=>Object.assign(g,{channel:'whatsapp'}));
+  groups=groups.concat(buildSocialGroups(instagramMessages,'instagram'), buildSocialGroups(messengerMessages,'messenger'));
+  const byPhone=new Map(groups.map(g=>[String(g.phone),g]));
+  if(q && Array.isArray(shopifyCustomers)){
+    for(const c of shopifyCustomers){
+      const value=customerValue(c); const phone=formatWaPhone(c.phone||'');
+      if(!phone || !value.includes(q) || byPhone.has(phone)) continue;
+      const g=Object.assign(shopifyCustomerToInboxGroup(c),{channel:'whatsapp'}); groups.push(g); byPhone.set(phone,g);
+    }
+  }
+  groups=groups.filter(g=>{
+    if(teamInboxChannelFilter!=='all' && channelOfGroup(g)!==teamInboxChannelFilter) return false;
+    if(!q) return true;
+    return [g.customerName,g.phone,g.shopifyCustomer?.name,g.shopifyCustomer?.email,...(g.messages||[]).map(m=>messageText(m)||socialMessageText(m))].join(' ').toLowerCase().includes(q);
+  });
+  groups=groups.sort((a,b)=>new Date(b.lastAt||0)-new Date(a.lastAt||0));
+  if(!selectedWhatsappInboxId && groups[0]) selectedWhatsappInboxId=groups[0].phone;
+  if(selectedWhatsappInboxId && !groups.some(g=>String(g.phone)===String(selectedWhatsappInboxId)) && groups[0]) selectedWhatsappInboxId=groups[0].phone;
+  if($('whatsappInboxCount')) whatsappInboxCount.textContent=groups.length;
+  if($('whatsappInboxThreadCount')) whatsappInboxThreadCount.textContent=groups.length;
+  renderChatList(groups);
+  const group=groups.find(g=>String(g.phone)===String(selectedWhatsappInboxId));
+  renderActiveChat(group);
+}
+async function loadWhatsappInbox(silent=false){
+  const days=$('whatsappInboxDays')?.value||localStorage.getItem('tsgWhatsappInboxDays')||'7';
+  const [d, metaRes, igRes, fbRes] = await Promise.all([
+    fetch('/api/whatsapp-inbox?days='+encodeURIComponent(days),{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,messages:[]})),
+    fetch('/api/team-inbox/meta',{credentials:'include'}).then(r=>r.json()).catch(()=>({meta:{}})),
+    fetch('/api/instagram/inbox',{credentials:'include'}).then(r=>r.json()).catch(()=>({messages:[]})),
+    fetch('/api/messenger/inbox',{credentials:'include'}).then(r=>r.json()).catch(()=>({messages:[]}))
+  ]);
+  if($('whatsappInboxDays')) whatsappInboxDays.value=String(d.days||days);
+  whatsappInboxMessages=d.messages||[]; instagramMessages=igRes.messages||instagramMessages||[]; messengerMessages=fbRes.messages||[]; teamInboxMeta=metaRes.meta||teamInboxMeta||{};
+  if(!shopifyCustomers.length) await loadShopifyCustomers().catch(()=>{});
+  checkNewInboundNotifications(whatsappInboxMessages);
+  if($('whatsappInboxResult') && !d.ok && !silent) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
+  renderWhatsappInbox();
+}
+async function sendWhatsappInboxReply(){
+  const selected=String(selectedWhatsappInboxId||'');
+  const rawPhone=($('whatsappReplyPhone')?.value||'').trim();
+  const message=($('whatsappReplyText')?.value||'').trim();
+  const imageId=$('whatsappReplyImage')?.value||'';
+  if(!selected && !rawPhone) return alert('Please select a chat or enter reply ID.');
+  if(!message && !imageId) return alert('Write message or select image.');
+  let endpoint='/api/whatsapp-inbox/reply', body={phone:rawPhone||selected,message,imageIds:imageId?[imageId]:[]};
+  if(selected.startsWith('instagram:')){ endpoint='/api/instagram/reply'; body={to:selected.replace('instagram:',''),message}; }
+  if(selected.startsWith('messenger:')){ endpoint='/api/messenger/reply'; body={to:selected.replace('messenger:',''),message}; }
+  const d=await fetch(endpoint,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
+  if(d.ok && $('whatsappReplyText')) whatsappReplyText.value='';
+  await loadWhatsappInbox();
+}
+document.addEventListener('click', e=>{
+  const ct=e.target.closest('.channel-tab');
+  if(ct){ teamInboxChannelFilter=ct.dataset.channelFilter||'all'; localStorage.setItem('tsgTeamInboxChannel',teamInboxChannelFilter); selectedWhatsappInboxId=''; renderWhatsappInbox(); }
+  if(e.target.id==='enableDesktopNotifications2' || e.target.id==='enableDesktopNotifications') requestDesktopNotifications();
+});
+
+async function loadMessengerSettings(){
+  const d=await fetch('/api/messenger/settings',{credentials:'include'}).then(r=>r.json()).catch(()=>({settings:{}}));
+  const s=d.settings||{};
+  if($('msEnabled')) msEnabled.checked=!!s.enabled;
+  if($('msAutoReply')) msAutoReply.checked=!!s.autoReplyEnabled;
+  [['msPageId','pageId'],['msVerifyToken','verifyToken'],['msPageAccessToken','pageAccessToken'],['msMainCatalog','mainCatalogLink']].forEach(([id,key])=>{ if($(id)) $(id).value=s[key]||''; });
+}
+async function saveMessengerSettings(){
+  const body={enabled:!!$('msEnabled')?.checked,autoReplyEnabled:!!$('msAutoReply')?.checked,pageId:$('msPageId')?.value||'',verifyToken:$('msVerifyToken')?.value||'tinyshiny_messenger_verify',pageAccessToken:$('msPageAccessToken')?.value||'',mainCatalogLink:$('msMainCatalog')?.value||''};
+  const d=await fetch('/api/messenger/settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('messengerResult')) messengerResult.textContent=JSON.stringify(d,null,2);
+}
+async function mockMessengerMessage(){
+  const text=prompt('Test Messenger message text','catalog'); if(text===null) return;
+  const username=prompt('Facebook sender ID/name','facebook_customer')||'facebook_customer';
+  const d=await fetch('/api/messenger/inbox/mock',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,text})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('messengerResult')) messengerResult.textContent=JSON.stringify(d,null,2);
+  await loadWhatsappInbox(true);
+}
+setTimeout(()=>loadMessengerSettings().catch(()=>{}),0);
+document.addEventListener('click', e=>{ if(e.target.id==='saveMessengerSettings') saveMessengerSettings(); if(e.target.id==='mockMessengerMessage') mockMessengerMessage(); });
+
 load().catch(err=>{console.error(err); if(String(err).includes('401')) location.href='/login.html';});
