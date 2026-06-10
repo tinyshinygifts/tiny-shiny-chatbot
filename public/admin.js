@@ -285,16 +285,20 @@ function renderActiveChat(group){
   const bubbles=messages.map(m=>{
     const dlab=dateLabel(m.createdAt);
     const dateSep=dlab && dlab!==lastDate ? (lastDate=dlab, `<div class="wa-date-sep">${esc(dlab)}</div>`) : '';
-    const dir=m.direction==='inbound'?'inbound':(m.direction==='outbound'?'outbound':'status');
+    let dir=m.direction==='inbound'?'inbound':(m.direction==='outbound'?'outbound':'status');
     const txt=messageText(m);
     const extra=m.imageUrl||m.image||m.productImage||'';
+    const hasCustomerText = !!String(txt||'').trim();
+    const st = String(m.status||m.statusType||'').toLowerCase();
+    // Some saved messages come with only status/direction mismatch. Treat rows with text as real chat bubbles.
+    if(dir==='status' && hasCustomerText && !['sent','delivered','read','failed','queued'].includes(st)) dir='inbound';
     if(dir==='status'){
       const label = statusLabel(m).replace(/^Status:\s*/,'') || 'status';
       return `${dateSep}<div class="wa-status-line">${esc(label)} • ${esc(timeShort(m.createdAt))}</div>`;
     }
     return `${dateSep}<div class="wa-bubble ${dir}">
       ${extra?`<img src="${esc(extra)}" alt="" class="wa-bubble-img"/>`:''}
-      <div>${esc(txt || '[Message]')}</div>
+      <div class="wa-message-text">${esc(txt || '[Message]')}</div>
       <small>${esc(dir==='outbound' ? (m.status||'sent') : 'customer')} • ${esc(timeShort(m.createdAt))}</small>
     </div>`;
   }).join('');
@@ -320,7 +324,35 @@ function renderActiveChat(group){
   if($('waThreadNote')) waThreadNote.value=meta.note||'';
   setTimeout(()=>{ const area=pane.querySelector('.wa-message-area'); if(area) area.scrollTop=area.scrollHeight; },0);
 }
+
+function renderWhatsappCustomerDatalist(){
+  const dl=$('whatsappShopifyCustomerList');
+  if(!dl) return;
+  const items=(shopifyCustomers||[]).filter(c=>formatWaPhone(c.phone||'')).slice(0,500);
+  dl.innerHTML=items.map(c=>{
+    const phone=formatWaPhone(c.phone||'');
+    const label=[c.name||'Shopify Customer', phone, c.email||''].filter(Boolean).join(' • ');
+    return `<option value="${esc(label)}" data-phone="${esc(phone)}"></option>`;
+  }).join('');
+}
+function selectWhatsappSearchCustomer(){
+  const input=$('whatsappInboxSearch'); if(!input) return false;
+  const val=(input.value||'').trim(); if(!val) return false;
+  const match=(shopifyCustomers||[]).find(c=>{
+    const phone=formatWaPhone(c.phone||'');
+    const label=[c.name||'Shopify Customer', phone, c.email||''].filter(Boolean).join(' • ');
+    return val===label || val.includes(phone) || (phone && val.endsWith(phone));
+  });
+  if(!match) return false;
+  const phone=formatWaPhone(match.phone||'');
+  if(!phone) return false;
+  selectedWhatsappInboxId=phone;
+  if($('whatsappReplyPhone')) whatsappReplyPhone.value=phone;
+  return true;
+}
 function renderWhatsappInbox(){
+  renderWhatsappCustomerDatalist();
+  selectWhatsappSearchCustomer();
   const q=($('whatsappInboxSearch')?.value||'').toLowerCase().trim();
   const all=(whatsappInboxMessages||[]).filter(m=>m.direction==='inbound' || m.direction==='outbound' || m.direction==='status');
   let groups=groupInboxMessages(all);
@@ -747,7 +779,7 @@ function setupPwaInstall(){
 setupPwaInstall();
 
 document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); if(e.target.id==='broadcastCategory') renderBroadcastContacts(); if(e.target.dataset.flowEdit){ const flow=activeFlow(); const i=Number(e.target.dataset.flowIndex); if(flow.blocks&&flow.blocks[i]){ flow.blocks[i][e.target.dataset.flowEdit]=e.target.value; } } const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; } if(e.target.id==='broadcastSelectAll'){ document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=e.target.checked); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); renderBroadcastContacts(); }); } });
+document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; } if(e.target.id==='broadcastSelectAll'){ document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=e.target.checked); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); renderBroadcastContacts(); }); } });
 document.addEventListener('click',async e=>{
 
   if(e.target.classList && e.target.classList.contains('contact-tab')){ const target=e.target.dataset.target; const mode=e.target.dataset.contactFilter || 'with'; if(target==='crm'){ crmContactFilter=mode; renderCrm(); } if(target==='lead'){ leadContactFilter=mode; renderLeads(); } if(target==='activity'){ activityContactFilter=mode; renderEvents(); } return; }

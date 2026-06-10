@@ -267,7 +267,8 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
         <aside class="wa-chat-sidebar">
           <div class="wa-sidebar-top">
             <label>Search
-              <input id="whatsappInboxSearch" placeholder="Name, phone, message"/>
+              <input id="whatsappInboxSearch" list="whatsappShopifyCustomerList" autocomplete="off" placeholder="Name, phone, message / Shopify customer"/>
+              <datalist id="whatsappShopifyCustomerList"></datalist>
             </label>
             <label>Keep / Show
               <select id="whatsappInboxDays"><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="4">4 days</option><option value="5">5 days</option><option value="6">6 days</option><option value="7" selected>7 days</option><option value="8">8 days</option><option value="9">9 days</option><option value="10">10 days</option></select>
