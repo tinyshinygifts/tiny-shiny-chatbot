@@ -207,7 +207,15 @@ async function loadConnectionStatus(){
   const grid=$('connectionStatusGrid'); if(!grid) return;
   const d=await fetch('/api/connection-status',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,rows:[]}));
   if(!d.ok){ grid.innerHTML=`<div class="connection-item not"><b>Status load failed</b><span>${esc(d.error||'Error')}</span></div>`; return; }
-  grid.innerHTML=(d.rows||[]).map(x=>`<div class="connection-item ${x.connected?'ok':'not'}"><div><b>${esc(x.name)}</b><span>${esc(x.details||'')}</span></div><em>${x.connected?'Connected':'Not Connected'}</em></div>`).join('');
+  const summary=d.summary||{};
+  const summaryHtml=`<div class="api-status-summary"><b>Total APIs: ${summary.total||0}</b><span class="ok-dot">Connected: ${summary.connected||0}</span><span class="warn-dot">Error: ${summary.error||0}</span><span class="bad-dot">Not Connected: ${summary.notConnected||0}</span></div>`;
+  grid.innerHTML=summaryHtml+(d.rows||[]).map(x=>{
+    const status=x.status || (x.connected?'connected':'not_connected');
+    const label=status==='connected'?'Connected':(status==='error'?'Connected but Error':'Not Connected');
+    const cls=status==='connected'?'ok':(status==='error'?'warn':'not');
+    const logs=(x.logs||[]).map(l=>`<li>${esc(l)}</li>`).join('');
+    return `<div class="connection-item ${cls}"><div><b><span class="status-light ${cls}"></span>${esc(x.name)}</b><span>${esc(x.details||'')}</span>${logs?`<ul class="api-log-list">${logs}</ul>`:''}</div><em>${label}</em></div>`;
+  }).join('');
   if($('connectionStatusTime')) connectionStatusTime.textContent='Last checked: '+(d.checkedAt||new Date().toISOString());
 }
 

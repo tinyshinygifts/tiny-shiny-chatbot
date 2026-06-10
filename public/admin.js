@@ -883,6 +883,8 @@ document.addEventListener('click',async e=>{
 
 // ---------- Final WATI style unified Team Inbox override ----------
 let messengerMessages = [];
+let selectedWhatsappAttachment = null;
+const quickEmojis = ['😊','🙏','👍','🎁','✨','✅','🚚','📦','💖','🙂'];
 let teamInboxChannelFilter = localStorage.getItem('tsgTeamInboxChannel') || 'all';
 function channelOfGroup(g){ return g.channel || (String(g.phone||'').startsWith('instagram:')?'instagram':String(g.phone||'').startsWith('messenger:')?'messenger':'whatsapp'); }
 function channelLabel(ch){ return ch==='instagram'?'Instagram':(ch==='messenger'?'Messenger':'WhatsApp'); }
@@ -902,6 +904,26 @@ function buildSocialGroups(messages, channel){
   });
   return Array.from(map.values()).map(g=>{ g.messages.sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0)); return g; });
 }
+
+function fileToDataUrl(file){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=()=>reject(r.error||new Error('File read failed')); r.readAsDataURL(file); }); }
+function setAttachmentLabel(){ const el=$('whatsappAttachmentLabel'); if(el) el.textContent=selectedWhatsappAttachment ? ('Attached: '+(selectedWhatsappAttachment.originalName||selectedWhatsappAttachment.filename||selectedWhatsappAttachment.type)) : ''; }
+async function uploadWhatsappMediaFile(file, type){
+  if(!file) return;
+  const dataUrl=await fileToDataUrl(file);
+  const d=await fetch('/api/whatsapp-inbox/upload-media',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataUrl,filename:file.name,type})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if(!d.ok){ alert(d.error||'Upload failed'); return; }
+  selectedWhatsappAttachment=Object.assign({},d.file,{absoluteUrl:d.url,type});
+  setAttachmentLabel();
+}
+function addEmojiToReply(){
+  const txt=$('whatsappReplyText'); if(!txt) return;
+  const emoji=quickEmojis[(Number(localStorage.getItem('tsgEmojiIdx')||0))%quickEmojis.length];
+  localStorage.setItem('tsgEmojiIdx', String((Number(localStorage.getItem('tsgEmojiIdx')||0)+1)%quickEmojis.length));
+  const start=txt.selectionStart||txt.value.length, end=txt.selectionEnd||txt.value.length;
+  txt.value=txt.value.slice(0,start)+emoji+txt.value.slice(end);
+  txt.focus(); txt.selectionStart=txt.selectionEnd=start+emoji.length;
+}
+
 function renderChannelTabs(){
   document.querySelectorAll('.channel-tab').forEach(btn=>btn.classList.toggle('active', btn.dataset.channelFilter===teamInboxChannelFilter));
 }
@@ -1030,19 +1052,26 @@ async function sendWhatsappInboxReply(){
   const message=($('whatsappReplyText')?.value||'').trim();
   const imageId=$('whatsappReplyImage')?.value||'';
   if(!selected && !rawPhone) return alert('Please select a chat or enter reply ID.');
-  if(!message && !imageId) return alert('Write message or select image.');
+  if(!message && !imageId && !selectedWhatsappAttachment) return alert('Write message or select image/document.');
   let endpoint='/api/whatsapp-inbox/reply', body={phone:rawPhone||selected,message,imageIds:imageId?[imageId]:[]};
+  if(selectedWhatsappAttachment){
+    if(String(selectedWhatsappAttachment.mime||'').startsWith('image/')) body.imageUrl=selectedWhatsappAttachment.absoluteUrl || selectedWhatsappAttachment.url;
+    else { body.documentUrl=selectedWhatsappAttachment.absoluteUrl || selectedWhatsappAttachment.url; body.documentName=selectedWhatsappAttachment.originalName || selectedWhatsappAttachment.filename || 'document'; }
+  }
   if(selected.startsWith('instagram:')){ endpoint='/api/instagram/reply'; body={to:selected.replace('instagram:',''),message}; }
   if(selected.startsWith('messenger:')){ endpoint='/api/messenger/reply'; body={to:selected.replace('messenger:',''),message}; }
   const d=await fetch(endpoint,{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
-  if(d.ok && $('whatsappReplyText')) whatsappReplyText.value='';
+  if(d.ok){ if($('whatsappReplyText')) whatsappReplyText.value=''; selectedWhatsappAttachment=null; setAttachmentLabel(); }
   await loadWhatsappInbox();
 }
 document.addEventListener('click', e=>{
   const ct=e.target.closest('.channel-tab');
   if(ct){ teamInboxChannelFilter=ct.dataset.channelFilter||'all'; localStorage.setItem('tsgTeamInboxChannel',teamInboxChannelFilter); selectedWhatsappInboxId=''; renderWhatsappInbox(); }
   if(e.target.id==='enableDesktopNotifications2' || e.target.id==='enableDesktopNotifications') requestDesktopNotifications();
+  if(e.target.id==='pickWhatsappEmoji') addEmojiToReply();
+  if(e.target.id==='pickWhatsappImage') $('whatsappImageFile')?.click();
+  if(e.target.id==='pickWhatsappDocument') $('whatsappDocumentFile')?.click();
 });
 
 async function loadMessengerSettings(){
@@ -1264,6 +1293,7 @@ async function saveNdrSettings(){
   const d=await fetch('/api/ndr/settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if($('ndrResult')) ndrResult.textContent=JSON.stringify(d,null,2); ndrSettings=d.settings||body;
 }
+async function cleanNdr(){ const d=await fetch('/api/ndr/clean',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if($('ndrResult')) ndrResult.textContent=JSON.stringify(d,null,2); await loadNdr(); }
 async function syncNdr(){ const d=await fetch('/api/ndr/sync',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if($('ndrResult')) ndrResult.textContent=JSON.stringify(d,null,2); await loadNdr(); }
 async function sendNdrWhatsapp(id,type='failed'){ const d=await fetch('/api/ndr/'+encodeURIComponent(id)+'/whatsapp',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({type})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if($('ndrResult')) ndrResult.textContent=JSON.stringify(d,null,2); await loadNdr(); }
 async function sendNdrPendingWhatsapp(){ const d=await fetch('/api/ndr/whatsapp/pending',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if($('ndrResult')) ndrResult.textContent=JSON.stringify(d,null,2); await loadNdr(); }
@@ -1271,7 +1301,7 @@ async function markNdrReattempt(id){ const d=await fetch('/api/ndr/'+encodeURICo
 function exportNdrCsv(){ const rows=ndrFilteredRows(); const csv=[['Provider','AWB','Order','Customer','Phone','Reason','Status','WhatsApp']].concat(rows.map(r=>[r.provider,r.awb,r.orderNo||r.orderNumber,r.customerName,r.phone,r.reason,r.status,r.whatsappStatus])).map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ndr-report.csv'; a.click(); URL.revokeObjectURL(a.href); }
 document.addEventListener('change', e=>{ if(['ndrProviderFilter','ndrStatusFilter'].includes(e.target.id)) renderNdr(); });
 document.addEventListener('input', e=>{ if(['ndrReasonFilter','ndrSearch'].includes(e.target.id)) renderNdr(); });
-document.addEventListener('click', e=>{ if(e.target.id==='refreshNdr') loadNdr(); if(e.target.id==='syncNdr') syncNdr(); if(e.target.id==='saveNdrSettings') saveNdrSettings(); if(e.target.id==='sendNdrPendingWhatsapp') sendNdrPendingWhatsapp(); if(e.target.id==='exportNdrCsv') exportNdrCsv(); if(e.target.dataset.ndrWa) sendNdrWhatsapp(e.target.dataset.ndrWa,e.target.dataset.ndrType||'failed'); if(e.target.dataset.ndrReattempt) markNdrReattempt(e.target.dataset.ndrReattempt); if(e.target.id==='closeShopifyCustomerModal'||e.target.id==='cancelModalShopifyCustomer') closeShopifyCustomerModal(); if(e.target.id==='saveModalShopifyCustomer') saveModalShopifyCustomer(); });
+document.addEventListener('click', e=>{ if(e.target.id==='refreshNdr') loadNdr(); if(e.target.id==='syncNdr') syncNdr(); if(e.target.id==='cleanNdr') cleanNdr(); if(e.target.id==='saveNdrSettings') saveNdrSettings(); if(e.target.id==='sendNdrPendingWhatsapp') sendNdrPendingWhatsapp(); if(e.target.id==='exportNdrCsv') exportNdrCsv(); if(e.target.dataset.ndrWa) sendNdrWhatsapp(e.target.dataset.ndrWa,e.target.dataset.ndrType||'failed'); if(e.target.dataset.ndrReattempt) markNdrReattempt(e.target.dataset.ndrReattempt); if(e.target.id==='closeShopifyCustomerModal'||e.target.id==='cancelModalShopifyCustomer') closeShopifyCustomerModal(); if(e.target.id==='saveModalShopifyCustomer') saveModalShopifyCustomer(); });
 
 load().catch(err=>{console.error(err); if(String(err).includes('401')) location.href='/login.html';});
 
@@ -1312,3 +1342,5 @@ document.addEventListener('click', e=>{
   if(e.target.closest('[data-close-ndr-modal]')){ const m=$('ndrTrackingModal'); if(m) m.classList.add('hidden'); }
   if(e.target && e.target.id==='enableDesktopNotifications'){ setTimeout(updateNotificationStatusDot,500); }
 });
+
+document.addEventListener('change', e=>{ if(e.target.id==='whatsappImageFile' && e.target.files?.[0]) uploadWhatsappMediaFile(e.target.files[0],'image'); if(e.target.id==='whatsappDocumentFile' && e.target.files?.[0]) uploadWhatsappMediaFile(e.target.files[0],'document'); });

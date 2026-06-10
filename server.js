@@ -679,6 +679,12 @@ async function sendWhatsAppImage({ to, imageUrl, caption = '' }) {
   return postWhatsApp({ messaging_product: 'whatsapp', recipient_type: 'individual', to: receiver, type: 'image', image: { link: imageUrl, caption: caption || '' } });
 }
 
+async function sendWhatsAppDocument({ to, documentUrl, filename = 'document.pdf', caption = '' }) {
+  const receiver = normalizeWhatsAppPhone(to);
+  if (!receiver || !documentUrl) return { ok: false, skipped: true, reason: 'Receiver phone or document URL missing.' };
+  return postWhatsApp({ messaging_product: 'whatsapp', recipient_type: 'individual', to: receiver, type: 'document', document: { link: documentUrl, filename: filename || 'document.pdf', caption: caption || '' } });
+}
+
 async function sendWhatsAppTextManual({ to, message = '' }) {
   const receiver = normalizeWhatsAppPhone(to);
   const body = String(message || '').trim();
@@ -692,6 +698,25 @@ function absoluteUrl(req, urlPath) {
   const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
   return `${proto}://${req.get('host')}${urlPath}`;
 }
+function saveMediaFromDataUrl({ dataUrl, filename }) {
+  const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/i);
+  if (!match) throw new Error('Invalid file data.');
+  const mime = match[1].toLowerCase();
+  const allowed = ['image/png','image/jpeg','image/jpg','image/webp','image/gif','application/pdf','text/plain','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.ms-excel','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'];
+  if (!allowed.includes(mime)) throw new Error('Only image, PDF, TXT, DOC/DOCX, XLS/XLSX files are supported.');
+  const extMap = {'image/png':'png','image/jpeg':'jpg','image/jpg':'jpg','image/webp':'webp','image/gif':'gif','application/pdf':'pdf','text/plain':'txt','application/msword':'doc','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'docx','application/vnd.ms-excel':'xls','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'xlsx'};
+  const ext = extMap[mime] || 'bin';
+  const safeName = String(filename || 'file').replace(/[^a-z0-9._-]/gi, '-').replace(/-+/g, '-').slice(0, 80);
+  const id = crypto.randomUUID();
+  const outDir = path.join(__dirname, 'public', 'uploads');
+  fs.mkdirSync(outDir, { recursive: true });
+  const base = safeName.replace(/\.[a-z0-9]+$/i,'') || 'file';
+  const outName = `${Date.now()}-${id}-${base}.${ext}`;
+  const outPath = path.join(outDir, outName);
+  fs.writeFileSync(outPath, Buffer.from(match[2], 'base64'));
+  return { id, url: `/uploads/${outName}`, mime, filename: outName, originalName: filename || outName };
+}
+
 function saveImageFromDataUrl({ dataUrl, filename }) {
   const match = String(dataUrl || '').match(/^data:(image\/(png|jpe?g|webp|gif));base64,(.+)$/i);
   if (!match) throw new Error('Only PNG, JPG, WEBP or GIF image data is supported.');
@@ -705,6 +730,13 @@ function saveImageFromDataUrl({ dataUrl, filename }) {
   fs.writeFileSync(outPath, Buffer.from(match[3], 'base64'));
   return { id, url: `/uploads/${outName}`, mime: match[1], filename: outName };
 }
+
+app.post('/api/whatsapp-inbox/upload-media', requireAdmin, (req, res) => {
+  try {
+    const file = saveMediaFromDataUrl({ dataUrl: req.body?.dataUrl, filename: req.body?.filename || 'file' });
+    res.json({ ok:true, file, url:absoluteUrl(req, file.url) });
+  } catch(e) { res.status(400).json({ ok:false, error:e.message }); }
+});
 
 function normalizeShopDomain(shop) {
   let value = String(shop || '').trim().toLowerCase();
@@ -1327,26 +1359,33 @@ app.post('/api/whatsapp-inbox/clear', (req, res) => {
   res.json({ ok:true, days:d, removed, messages: kept, conversations: groupWhatsappConversations(kept) });
 });
 
-app.post('/api/whatsapp-inbox/reply', async (req, res) => {
+app.post('/api/whatsapp-inbox/reply', requireAdmin, async (req, res) => {
   try {
-    const { phone = '', message = '', imageIds = [] } = req.body || {};
+    const { phone, message = '', imageIds = [], imageUrl = '', documentUrl = '', documentName = '' } = req.body || {};
     const to = normalizeWhatsAppPhone(phone);
-    if (!to) return res.status(400).json({ ok: false, error: 'Valid customer WhatsApp phone required' });
-    const text = String(message || '').trim();
-    const images = readJson(mediaImagesPath, []);
-    const selectedImages = (Array.isArray(imageIds) ? imageIds : []).map(id => images.find(x => String(x.id) === String(id))).filter(Boolean);
+    if (!to) return res.status(400).json({ ok:false, error:'Reply phone number required.' });
     const results = [];
-    if (text && !selectedImages.length) {
-      results.push({ type: 'text', result: await sendWhatsAppTextManual({ to, message: text }).catch(e => ({ ok:false, error:e.message })) });
-    }
-    for (const img of selectedImages.slice(0, 20)) {
-      const imageUrl = img.url && img.url.startsWith('/uploads/') ? img.url : (img.url || '');
-      results.push({ type:'image', imageId: img.id, result: await sendWhatsAppImage({ to, imageUrl: imageUrl.startsWith('http') ? imageUrl : (String(process.env.WEBSITE_URL || '').replace(/\/$/, '') + imageUrl), caption: text || img.caption || '' }).catch(e => ({ ok:false, error:e.message })) });
+    const text = String(message || '').trim();
+    if (documentUrl) {
+      results.push({ type:'document', result: await sendWhatsAppDocument({ to, documentUrl, filename: documentName || 'document', caption: text }).catch(e => ({ ok:false, error:e.message })) });
+    } else if (imageUrl) {
+      results.push({ type:'image', result: await sendWhatsAppImage({ to, imageUrl, caption: text }).catch(e => ({ ok:false, error:e.message })) });
+    } else if (Array.isArray(imageIds) && imageIds.length) {
+      const imgs = readJson(mediaImagesPath, []);
+      for (const id of imageIds) {
+        const img = imgs.find(x => String(x.id) === String(id));
+        if (!img) { results.push({ type:'image', imageId:id, result:{ok:false,error:'Image not found'} }); continue; }
+        const u = img.url && img.url.startsWith('/uploads/') ? absoluteUrl(req, img.url) : (img.url || '');
+        results.push({ type:'image', imageId:id, result: await sendWhatsAppImage({ to, imageUrl:u, caption: text || img.caption || '' }).catch(e => ({ ok:false, error:e.message })) });
+      }
+    } else {
+      if (!text) return res.status(400).json({ ok:false, error:'Message, image or document required.' });
+      results.push({ type:'text', result: await sendWhatsAppTextManual({ to, message:text }).catch(e => ({ ok:false, error:e.message })) });
     }
     const ok = results.some(r => r.result && r.result.ok);
-    const out = appendJson(whatsappInboxPath, { id: crypto.randomUUID(), direction: 'outbound', to, type: selectedImages.length ? 'image' : 'text', text, imageIds: selectedImages.map(x=>x.id), createdAt: nowIso(), status: ok ? 'sent' : 'failed', results });
-    res.json({ ok, message: out, results });
-  } catch (e) { res.status(500).json({ ok:false, error:e.message }); }
+    appendJson(whatsappInboxPath, { id:crypto.randomUUID(), direction:'outbound', to, customerName:'Business', type: documentUrl?'document':(imageUrl||imageIds.length?'image':'text'), text, documentUrl, imageUrl, createdAt:nowIso(), status:ok?'sent':'failed', raw:{results} });
+    res.json({ ok, results });
+  } catch(e) { res.status(500).json({ ok:false, error:e.message }); }
 });
 
 
@@ -1899,6 +1938,75 @@ app.get('/api/shopify/sales-analysis', requireAdmin, async (req,res)=>{
 
 
 
+
+function cleanupNdrRows(rows){
+  const seen=new Set();
+  const cleaned=[];
+  for(const r of (rows||[])){
+    if(String(r.provider||'shiprocket').toLowerCase()==='icarry') continue;
+    const order=String(r.orderNo||r.orderNumber||'').trim().toLowerCase();
+    const awb=String(r.awb||'').trim().toLowerCase();
+    const phone=normalizeWhatsAppPhone(r.phone||'');
+    const key=awb || (order+'|'+phone);
+    if(key && seen.has(key)) continue;
+    if(key) seen.add(key);
+    cleaned.push(Object.assign({provider:'shiprocket'}, r, {provider:'shiprocket'}));
+  }
+  return cleaned;
+}
+function findArrayDeep(obj){
+  if(Array.isArray(obj)) return obj;
+  if(!obj || typeof obj!=='object') return [];
+  for(const k of ['data','ndr','orders','shipments','records','result','results','payload']){
+    const v=obj[k];
+    if(Array.isArray(v)) return v;
+    if(v && typeof v==='object') { const a=findArrayDeep(v); if(a.length) return a; }
+  }
+  return [];
+}
+function mapShiprocketNdrItem(x){
+  const orderNo = x.order_id || x.orderId || x.order_no || x.orderNo || x.channel_order_id || x.reference_order_id || x.order_number || x.orderNumber || x.name || '';
+  const awb = x.awb || x.awb_code || x.awbCode || x.tracking_number || x.trackingNumber || x.airway_bill_number || '';
+  const phone = normalizeWhatsAppPhone(x.phone || x.customer_phone || x.customerPhone || x.consignee_phone || x.billing_phone || x.shipping_phone || '');
+  const customerName = x.customer_name || x.customerName || x.consignee_name || x.name || x.buyer_name || 'Customer';
+  const reason = x.ndr_reason || x.reason || x.latest_ndr_reason || x.failure_reason || x.exception_reason || x.status || 'NDR / delivery attempt pending';
+  const ndrAt = x.ndr_date || x.ndrDate || x.latest_ndr_date || x.created_at || x.updated_at || nowIso();
+  const attempts = x.ndr_attempt || x.attempts || x.attempt_count || x.delivery_attempts || 1;
+  const trackingLink = x.tracking_url || x.trackingLink || x.track_url || (awb ? `https://shiprocket.co/tracking/${encodeURIComponent(awb)}` : '');
+  return {
+    id: 'shiprocket_'+(awb || String(orderNo).replace(/[^a-z0-9]/gi,'') || safeId('ndr')),
+    provider:'shiprocket', awb:String(awb||''), orderNo:String(orderNo||''), orderDate:x.order_date || x.orderDate || x.created_at || '',
+    customerName, phone, courier:x.courier_name || x.courier || x.courier_company || '', reason,
+    status:String(x.ndr_status || x.status || 'pending').toLowerCase(), attempts:Number(attempts||1), ndrAt,
+    trackingLink, whatsappStatus:x.whatsappStatus||'not_sent', attemptInfo:x.attemptInfo || x.delivery_attempt_info || x.ndr_remark || x.remarks || reason,
+    customerResponse:x.customer_response || x.latest_customer_response || '', raw:x,
+    logs:[{at:nowIso(), text:'Live Shiprocket NDR data synced'}]
+  };
+}
+async function fetchShiprocketLiveNdr(){
+  const env=readEnvFile();
+  const token=String(process.env.SHIPROCKET_TOKEN || env.SHIPROCKET_TOKEN || '').trim();
+  if(!token || token==='********') return {ok:false,error:'Shiprocket token missing. Add SHIPROCKET_TOKEN in API Settings.', rows:[]};
+  const endpoints=[
+    'https://apiv2.shiprocket.in/v1/external/ndr/all',
+    'https://apiv2.shiprocket.in/v1/external/ndr/list',
+    'https://apiv2.shiprocket.in/v1/external/ndr',
+    'https://apiv2.shiprocket.in/v1/external/orders/processing/ndr'
+  ];
+  const errors=[];
+  for(const url of endpoints){
+    try{
+      const r=await fetch(url,{headers:{Authorization:`Bearer ${token}`,'Content-Type':'application/json'}});
+      const j=await r.json().catch(()=>({}));
+      if(!r.ok){ errors.push(`${url}: ${r.status} ${j.message||j.error||''}`); continue; }
+      const arr=findArrayDeep(j);
+      const rows=arr.map(mapShiprocketNdrItem).filter(x=>x.orderNo||x.awb||x.phone);
+      return {ok:true, endpoint:url, count:rows.length, rows, rawShape:Object.keys(j||{}).slice(0,10)};
+    }catch(e){ errors.push(`${url}: ${e.message}`); }
+  }
+  return {ok:false,error:'Shiprocket live NDR API failed or returned no readable NDR list.', details:errors, rows:[]};
+}
+
 // ---------- NDR: Shiprocket + WhatsApp automation ----------
 function defaultNdrSettings(){
   return {
@@ -1928,18 +2036,28 @@ function seedNdrFromLeads(){
   return sample;
 }
 app.get('/api/ndr', requireAdmin, (req,res)=>{
-  const rows=seedNdrFromLeads();
+  let rows=cleanupNdrRows(readJson(ndrPath,[]));
+  if(!rows.length) rows=cleanupNdrRows(seedNdrFromLeads());
+  writeJson(ndrPath, rows);
   const settings=readNdrSettings();
-  const summary={total:rows.length,pending:rows.filter(x=>x.status==='pending').length,reattempt:rows.filter(x=>String(x.status).includes('reattempt')).length,resolved:rows.filter(x=>x.status==='resolved').length,rto:rows.filter(x=>String(x.status).toLowerCase()==='rto').length,whatsappSent:rows.filter(x=>String(x.whatsappStatus).includes('sent')).length};
-  res.json({ok:true, ndr:rows, settings, summary, providers:{shiprocket:Boolean(process.env.SHIPROCKET_TOKEN||process.env.SHIPROCKET_EMAIL)}});
+  const summary={total:rows.length,pending:rows.filter(x=>String(x.status||'').includes('pending')).length,reattempt:rows.filter(x=>String(x.status).includes('reattempt')).length,resolved:rows.filter(x=>String(x.status).includes('resolved')||String(x.status).includes('delivered')).length,rto:rows.filter(x=>String(x.status).toLowerCase().includes('rto')).length,whatsappSent:rows.filter(x=>String(x.whatsappStatus).includes('sent')).length};
+  const env=readEnvFile();
+  res.json({ok:true, ndr:rows, settings, summary, providers:{shiprocket:Boolean(process.env.SHIPROCKET_TOKEN||env.SHIPROCKET_TOKEN)}, note: rows.some(x=>!x.awb)?'Some rows are saved/fallback rows. Click Sync Shiprocket Live NDR for AWB/tracking data.':''});
 });
 app.post('/api/ndr/settings', requireAdmin, (req,res)=>{ const next=Object.assign(readNdrSettings(), req.body||{}, {updatedAt:nowIso()}); writeJson(ndrSettingsPath,next); res.json({ok:true, settings:next}); });
+app.post('/api/ndr/clean', requireAdmin, (req,res)=>{ const rows=cleanupNdrRows(readJson(ndrPath,[])); writeJson(ndrPath, rows); res.json({ok:true, message:'Old iCarry/duplicate NDR records cleaned.', count:rows.length, ndr:rows}); });
 app.post('/api/ndr/sync', requireAdmin, async (req,res)=>{
-  const rows=seedNdrFromLeads();
-  // API placeholders: keep existing rows and mark last sync; real provider credentials are shown in status.
-  const synced=rows.map(x=>Object.assign({},x,{lastSyncAt:nowIso()}));
-  writeJson(ndrPath,synced);
-  res.json({ok:true, message:'NDR sync completed from saved data. Shiprocket live API fields will populate when provider endpoint returns NDR data.', count:synced.length, ndr:synced});
+  const live=await fetchShiprocketLiveNdr();
+  if(live.ok && live.rows.length){
+    const old=cleanupNdrRows(readJson(ndrPath,[]));
+    const oldByKey=new Map(old.map(x=>[(x.awb || String(x.orderNo||x.orderNumber||'')+'|'+normalizeWhatsAppPhone(x.phone||'')),x]));
+    const rows=cleanupNdrRows(live.rows.map(x=>{ const key=x.awb || String(x.orderNo||'')+'|'+normalizeWhatsAppPhone(x.phone||''); const prev=oldByKey.get(key)||{}; return Object.assign({},prev,x,{whatsappStatus:prev.whatsappStatus||x.whatsappStatus||'not_sent', logs:[...(x.logs||[]),...(prev.logs||[]).slice(0,8)], lastSyncAt:nowIso()}); }));
+    writeJson(ndrPath, rows);
+    return res.json({ok:true, live:true, message:'Shiprocket live NDR sync completed.', endpoint:live.endpoint, count:rows.length, ndr:rows});
+  }
+  const rows=cleanupNdrRows(readJson(ndrPath,[]));
+  writeJson(ndrPath, rows);
+  res.json({ok:false, live:false, message:'No live NDR data found from Shiprocket. Saved Shiprocket-only rows kept.', error:live.error, details:live.details||[], count:rows.length, ndr:rows});
 });
 app.post('/api/ndr/:id/status', requireAdmin, (req,res)=>{ const rows=readJson(ndrPath,[]); const idx=rows.findIndex(x=>String(x.id)===String(req.params.id)); if(idx<0) return res.status(404).json({ok:false,error:'NDR not found'}); rows[idx]=Object.assign({},rows[idx],req.body||{},{updatedAt:nowIso()}); rows[idx].logs=[{at:nowIso(),text:'Status updated to '+(rows[idx].status||'updated')}].concat(rows[idx].logs||[]); writeJson(ndrPath,rows); res.json({ok:true, item:rows[idx]}); });
 app.post('/api/ndr/:id/whatsapp', requireAdmin, async (req,res)=>{
@@ -1966,21 +2084,31 @@ async function fetchLikeNdrSend(id,type){
 }
 
 
-app.get('/api/connection-status', requireAdmin, (req, res) => {
+app.get('/api/connection-status', requireAdmin, async (req, res) => {
   const cfg = readEnvFile();
   const settings = readJson(settingsPath, {});
-  const has = (...keys) => keys.some(k => String(cfg[k] || process.env[k] || settings[k] || '').trim());
+  const has = (...keys) => keys.some(k => String(cfg[k] || process.env[k] || settings[k] || '').trim() && String(cfg[k] || process.env[k] || settings[k] || '').trim() !== '********');
   const rows = [
-    { key:'shopify', name:'Shopify', connected: has('SHOPIFY_STORE_DOMAIN') && has('SHOPIFY_ADMIN_ACCESS_TOKEN'), details: has('SHOPIFY_STORE_DOMAIN') ? 'Store saved' : 'Store missing' },
-    { key:'whatsapp', name:'WhatsApp Cloud API', connected: has('WHATSAPP_CLOUD_TOKEN') && has('WHATSAPP_PHONE_NUMBER_ID'), details: has('WHATSAPP_PHONE_NUMBER_ID') ? 'Phone ID saved' : 'Phone ID missing' },
-    { key:'meta', name:'Meta Ads', connected: has('META_ACCESS_TOKEN') && has('META_AD_ACCOUNT_ID'), details: has('META_AD_ACCOUNT_ID') ? 'Ad account saved' : 'Ad account missing' },
-    { key:'instagram', name:'Instagram', connected: has('META_ACCESS_TOKEN') && has('META_INSTAGRAM_ACCOUNT_ID'), details: has('META_INSTAGRAM_ACCOUNT_ID') ? 'Instagram account saved' : 'Instagram account missing' },
-    { key:'messenger', name:'Facebook Messenger', connected: has('META_ACCESS_TOKEN') && has('META_FACEBOOK_PAGE_ID'), details: has('META_FACEBOOK_PAGE_ID') ? 'Page ID saved' : 'Page ID missing' },
-    { key:'shiprocket', name:'Shiprocket', connected: has('SHIPROCKET_TOKEN') || (has('SHIPROCKET_EMAIL') && has('SHIPROCKET_PASSWORD')), details: has('SHIPROCKET_TOKEN') ? 'Token saved' : (has('SHIPROCKET_EMAIL') ? 'Login saved' : 'Credentials missing') },
-    { key:'google', name:'Google Sheet', connected: has('GOOGLE_SHEETS_WEBHOOK_URL') || has('GOOGLE_SHEET_URL'), details: has('GOOGLE_SHEET_URL') ? 'Sheet link saved' : 'Sheet not configured' },
-    { key:'mongodb', name:'MongoDB Storage', connected: !!mongoReady, details: mongoReady ? `${mongoDbName}/${mongoCollectionName}` : (mongoUri ? 'Configured but not connected' : 'Not configured') }
+    { key:'shopify', name:'Shopify API', connected: has('SHOPIFY_STORE_DOMAIN') && has('SHOPIFY_ADMIN_ACCESS_TOKEN'), details: has('SHOPIFY_STORE_DOMAIN') ? 'Store/token saved' : 'Store/token missing', logs:[] },
+    { key:'whatsapp', name:'WhatsApp Cloud API', connected: has('WHATSAPP_CLOUD_TOKEN') && has('WHATSAPP_PHONE_NUMBER_ID'), details: has('WHATSAPP_PHONE_NUMBER_ID') ? 'Phone ID/token saved' : 'Phone ID/token missing', logs:[] },
+    { key:'meta', name:'Meta Ads / Campaign Reporting', connected: has('META_ACCESS_TOKEN') && has('META_AD_ACCOUNT_ID'), details: has('META_AD_ACCOUNT_ID') ? 'Ad account saved' : 'Ad account/token missing', logs:[] },
+    { key:'instagram', name:'Instagram Inbox', connected: has('META_ACCESS_TOKEN') && has('META_INSTAGRAM_ACCOUNT_ID'), details: has('META_INSTAGRAM_ACCOUNT_ID') ? 'Instagram business ID saved' : 'Instagram account/token missing', logs:[] },
+    { key:'messenger', name:'Facebook Messenger', connected: has('META_ACCESS_TOKEN') && has('META_FACEBOOK_PAGE_ID'), details: has('META_FACEBOOK_PAGE_ID') ? 'Facebook Page ID saved' : 'Page ID/token missing', logs:[] },
+    { key:'shiprocket', name:'Shiprocket', connected: has('SHIPROCKET_TOKEN') || (has('SHIPROCKET_EMAIL') && has('SHIPROCKET_PASSWORD')), details: has('SHIPROCKET_TOKEN') ? 'Token saved' : (has('SHIPROCKET_EMAIL') ? 'Login saved' : 'Credentials missing'), logs:[] },
+    { key:'google', name:'Google Sheet', connected: has('GOOGLE_SHEETS_WEBHOOK_URL') || has('GOOGLE_SHEET_URL'), details: has('GOOGLE_SHEET_URL') ? 'Sheet link saved' : 'Sheet not configured', logs:[] },
+    { key:'mongodb', name:'MongoDB Storage', connected: !!mongoReady, details: mongoReady ? `${mongoDbName}/${mongoCollectionName}` : (mongoUri ? 'Configured but not connected' : 'Not configured'), logs:[] }
   ];
-  res.json({ ok:true, checkedAt: nowIso(), rows });
+  const live = String(req.query.live || '1') !== '0';
+  async function mark(key, status, log){ const row=rows.find(x=>x.key===key); if(row){ row.status=status; row.connected=status==='connected'; row.logs.push(log); } }
+  for(const row of rows){ row.status = row.connected ? 'connected' : 'not_connected'; if(!row.connected) row.logs.push(row.details || 'Required settings missing.'); }
+  if(live){
+    try{ const r=await shopifyFetch('shop.json'); await mark('shopify', r.ok?'connected':'error', r.ok?'Shopify shop API working.':`Shopify error ${r.status||''}: ${r.message||r.json?.errors||JSON.stringify(r.json||{}).slice(0,120)}`); }catch(e){ await mark('shopify','error','Shopify test failed: '+e.message); }
+    try{ const env=readEnvFile(); const token=String(env.WHATSAPP_CLOUD_TOKEN||process.env.WHATSAPP_CLOUD_TOKEN||'').trim(); const pid=String(env.WHATSAPP_PHONE_NUMBER_ID||process.env.WHATSAPP_PHONE_NUMBER_ID||'').replace(/\D/g,''); if(token&&pid){ const r=await fetch(`https://graph.facebook.com/v20.0/${pid}?fields=display_phone_number,verified_name`,{headers:{Authorization:`Bearer ${token}`}}); const j=await r.json().catch(()=>({})); await mark('whatsapp', r.ok?'connected':'error', r.ok?'WhatsApp phone number API working.':`WhatsApp error ${r.status}: ${j.error?.message||JSON.stringify(j).slice(0,120)}`); } }catch(e){ await mark('whatsapp','error','WhatsApp test failed: '+e.message); }
+    try{ const env=readEnvFile(); const token=String(env.META_ACCESS_TOKEN||process.env.META_ACCESS_TOKEN||'').trim(); const ad=String(env.META_AD_ACCOUNT_ID||process.env.META_AD_ACCOUNT_ID||'').trim(); if(token&&ad){ const acct=ad.startsWith('act_')?ad:'act_'+ad.replace(/^act_/,''); const r=await fetch(`https://graph.facebook.com/v20.0/${acct}?fields=name,account_status`,{headers:{Authorization:`Bearer ${token}`}}); const j=await r.json().catch(()=>({})); await mark('meta', r.ok?'connected':'error', r.ok?'Meta ad account API working.':`Meta Ads error ${r.status}: ${j.error?.message||JSON.stringify(j).slice(0,120)}`); } }catch(e){ await mark('meta','error','Meta Ads test failed: '+e.message); }
+    try{ const liveNdr=await fetchShiprocketLiveNdr(); await mark('shiprocket', liveNdr.ok?'connected':'error', liveNdr.ok?`Shiprocket API working. Live NDR rows: ${liveNdr.count}`:`Shiprocket error: ${liveNdr.error}`); }catch(e){ await mark('shiprocket','error','Shiprocket test failed: '+e.message); }
+  }
+  const summary = rows.reduce((a,r)=>{ a.total++; a[r.status==='connected'?'connected':(r.status==='error'?'error':'notConnected')]++; return a; }, {total:0,connected:0,error:0,notConnected:0});
+  res.json({ ok:true, checkedAt: nowIso(), summary, rows });
 });
 
 app.get('/api/storage/status', (req, res) => res.json({ ok: true, storage: mongoReady ? 'mongodb' : 'json-file', mongodb: { configured: Boolean(mongoUri), connected: mongoReady, database: mongoReady ? mongoDbName : '', collection: mongoReady ? mongoCollectionName : '' } }));

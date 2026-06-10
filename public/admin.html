@@ -172,7 +172,7 @@
     <section class="panel tab-panel ndr-panel" id="ndrPanel">
       <div class="section-head">
         <div><h2>Non-Delivery Report (NDR)</h2><p>Shiprocket NDR data, delivery attempt tracking aur WhatsApp automation.</p></div>
-        <div class="inline-actions"><button id="refreshNdr" class="ghost-btn" type="button">Refresh NDR</button><button id="syncNdr" class="primary-btn" type="button">Sync Shiprocket</button><button id="exportNdrCsv" class="ghost-btn" type="button">Export CSV</button></div>
+        <div class="inline-actions"><button id="refreshNdr" class="ghost-btn" type="button">Refresh NDR</button><button id="syncNdr" class="primary-btn" type="button">Sync Shiprocket Live NDR</button><button id="cleanNdr" class="ghost-btn" type="button">Clean Old NDR</button><button id="exportNdrCsv" class="ghost-btn" type="button">Export CSV</button></div>
       </div>
       <div class="form-grid four ndr-filters">
         <label>Provider <select id="ndrProviderFilter"><option value="all">All</option><option value="shiprocket">Shiprocket</option></select></label>
@@ -379,13 +379,19 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
           <div class="wa-reply-dock wati-reply-dock">
             <div class="reply-mini-row">
               <input id="whatsappReplyPhone" placeholder="91XXXXXXXXXX" title="Reply To Number"/>
-              <select id="whatsappReplyImage" title="Attach Image Optional"><option value="">No image / Text only</option></select>
+              <select id="whatsappReplyImage" title="Saved Image Optional"><option value="">No image / Text only</option></select>
             </div>
             <div class="reply-compose-row">
               <textarea id="whatsappReplyText" placeholder="Type your message here..."></textarea>
               <button id="sendWhatsappInboxReply" class="primary-btn">Send</button>
             </div>
             <div class="reply-bottom-actions">
+              <button id="pickWhatsappEmoji" type="button" class="ghost-btn compact-btn" title="Add emoji">😊 Emoji</button>
+              <button id="pickWhatsappImage" type="button" class="ghost-btn compact-btn" title="Add image">🖼 Image</button>
+              <button id="pickWhatsappDocument" type="button" class="ghost-btn compact-btn" title="Add document">📎 Document</button>
+              <input id="whatsappImageFile" type="file" accept="image/*" hidden/>
+              <input id="whatsappDocumentFile" type="file" accept=".pdf,.txt,.doc,.docx,.xls,.xlsx,application/pdf,text/plain" hidden/>
+              <span id="whatsappAttachmentLabel" class="attachment-label"></span>
               <button id="enableDesktopNotifications2" type="button" class="ghost-btn compact-btn"><span id="notificationStatusDot" class="notify-dot unknown" title="Notification status"></span> Enable Notifications</button>
               <button id="markWhatsappInboxRead" class="ghost-btn compact-btn">Mark Read</button>
               <pre id="whatsappInboxResult"></pre>
