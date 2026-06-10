@@ -32,7 +32,7 @@
         </label>
         <button id="installPwaBtn" type="button" class="ghost-btn">Install App</button>
         <button id="enableDesktopNotifications" type="button" class="ghost-btn">Enable Notifications</button>
-        <a class="pill-link" href="/api-settings.html">API Settings</a>
+        <button class="ghost-btn header-api-settings tab-btn" type="button" data-tab="apiSettingsPanel">API Settings</button>
         <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
       </div>
     </header>
@@ -46,7 +46,6 @@
     </section>
 
     <section class="panel quick-nav admin-tabs" id="adminTabs">
-      <button class="tab-btn active" data-tab="apiSettingsPanel">API Settings</button>
       <button class="tab-btn" data-tab="crmPanel">CRM Dashboard</button>
       <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
       <button class="tab-btn" data-tab="bulkBroadcastPanel">Bulk WhatsApp Broadcast</button>
@@ -54,7 +53,7 @@
       <button class="tab-btn" data-tab="dripPanel">Drip Campaigns</button>
       <button class="tab-btn" data-tab="instagramInboxPanel">Instagram Inbox</button>
       <button class="tab-btn" data-tab="whatsappChatbotPanel">WhatsApp Chatbot</button>
-      <button class="tab-btn" data-tab="whatsappInboxPanel">Team Inbox</button>
+      <button class="tab-btn active" data-tab="whatsappInboxPanel">Team Inbox</button>
       <button class="tab-btn" data-tab="newProductsPanel">New Products</button>
       <button class="tab-btn" data-tab="leadPanel">Leads</button>
       <button class="tab-btn" data-tab="activityPanel">Visitor Activity</button>
@@ -63,7 +62,7 @@
       <button class="tab-btn" id="openGoogleSheetTab" data-tab="googleSheetPanel">Google Sheet</button>
     </section>
 
-    <section class="panel tab-panel active" id="apiSettingsPanel">
+    <section class="panel tab-panel" id="apiSettingsPanel">
       <h2>API Settings</h2>
       <div class="api-settings-grid">
         <div class="api-card">
@@ -275,7 +274,7 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
 
 
 
-    <section class="panel tab-panel compact-inbox whatsapp-web-panel wati-style-panel" id="whatsappInboxPanel">
+    <section class="panel tab-panel active compact-inbox whatsapp-web-panel wati-style-panel" id="whatsappInboxPanel">
       <div class="team-inbox-shell">
         <aside class="wati-left">
           <div class="wati-left-head">

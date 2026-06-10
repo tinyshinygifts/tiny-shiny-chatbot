@@ -1025,4 +1025,88 @@ async function mockMessengerMessage(){
 setTimeout(()=>loadMessengerSettings().catch(()=>{}),0);
 document.addEventListener('click', e=>{ if(e.target.id==='saveMessengerSettings') saveMessengerSettings(); if(e.target.id==='mockMessengerMessage') mockMessengerMessage(); });
 
+
+
+// ---------- Patch: WATI panel stable click/open + header API button ----------
+(function(){
+  function pickConversationButton(el){ return el && el.closest ? el.closest('[data-inbox-phone]') : null; }
+  document.addEventListener('click', function(e){
+    const btn = pickConversationButton(e.target);
+    if(btn){
+      e.preventDefault();
+      e.stopPropagation();
+      selectedWhatsappInboxId = btn.dataset.inboxPhone || '';
+      if($('whatsappReplyPhone')) whatsappReplyPhone.value = selectedWhatsappInboxId.replace(/^instagram:/,'').replace(/^messenger:/,'');
+      renderWhatsappInbox();
+      return false;
+    }
+  }, true);
+
+  const oldRenderActiveChat = window.renderActiveChat || renderActiveChat;
+  renderActiveChat = function(group){
+    const pane=$('whatsappActiveChat');
+    const action=$('whatsappShopifyAction');
+    const right=$('waContactPanel');
+    if(!pane) return oldRenderActiveChat(group);
+    if(!group){
+      pane.className='wa-active-chat empty-state wati-chat-window';
+      pane.innerHTML='<div class="wati-empty-center">Select a customer chat from the left side.</div>';
+      if(action) action.innerHTML='';
+      if(right) right.innerHTML='<h3>Contact details</h3><p class="hint">Select chat to view customer details.</p>';
+      return;
+    }
+    const ch = (typeof channelOfGroup==='function') ? channelOfGroup(group) : 'whatsapp';
+    const linkedCustomer = ch==='whatsapp' ? (shopifyCustomerByPhone(group.phone) || group.shopifyCustomer || null) : null;
+    const meta = teamInboxMeta[group.phone] || group.meta || {status:'open',agent:'',tags:[],note:''};
+    const known = ch==='whatsapp' && (!!linkedCustomer || shopifyHasPhone(group.phone));
+    const name = linkedCustomer?.name || chatNameForGroup(group);
+    let lastDate='';
+    const messages = (group.messages||[]).slice().sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0));
+    const bubbles = messages.map(m=>{
+      const dlab=dateLabel(m.createdAt);
+      const dateSep=dlab && dlab!==lastDate ? (lastDate=dlab, `<div class="wa-date-sep">${esc(dlab)}</div>`) : '';
+      let dir=m.direction==='inbound'?'inbound':(m.direction==='outbound'?'outbound':'status');
+      const txt=(messageText(m) || (typeof socialMessageText==='function'?socialMessageText(m):'') || '').trim();
+      const st=String(m.status||m.statusType||'').toLowerCase();
+      const extra=m.imageUrl||m.image||m.productImage||'';
+      if(dir==='status' && txt && !['sent','delivered','read','failed','queued'].includes(st)) dir='inbound';
+      if(dir==='status'){
+        const label=(statusLabel(m).replace(/^Status:\s*/,'')||'status');
+        return `${dateSep}<div class="wa-status-line">${esc(label)} • ${esc(timeShort(m.createdAt))}</div>`;
+      }
+      return `${dateSep}<div class="wa-bubble ${dir}">${extra?`<img src="${esc(extra)}" alt="" class="wa-bubble-img"/>`:''}<div class="wa-message-text">${esc(txt || '[message]')}</div><div class="wa-msg-time">${esc(timeShort(m.createdAt))}${dir==='outbound'?' ✓✓':''}</div></div>`;
+    }).join('');
+    pane.className='wa-active-chat wati-chat-window';
+    pane.innerHTML=`
+      <div class="wati-chat-header">
+        <div class="contact-head"><span class="wa-avatar ${esc(ch)}">${esc(initials(name,group.phone))}</span><div><h3>${esc(name)}</h3><span>${(typeof channelBadge==='function'?channelBadge(ch):'')} ${esc(String(group.phone).replace(/^instagram:/,'').replace(/^messenger:/,''))}</span></div></div>
+        <div class="wati-chat-tools">
+          <select id="waThreadStatusTop" class="status-mini-select"><option value="open">Open</option><option value="pending">Pending</option><option value="resolved">Resolved</option></select>
+          <button class="ghost-btn compact-btn" type="button" data-mark-thread-read="${esc(group.phone)}">Mark Read</button>
+        </div>
+      </div>
+      <div class="wa-message-area wati-message-area">${bubbles || '<div class="wa-date-sep">No messages yet</div>'}</div>`;
+    if($('waThreadStatusTop')) waThreadStatusTop.value=meta.status||'open';
+    if(action){ action.innerHTML = ch==='whatsapp' ? (known ? `<span class="wa-shopify-inline ok">Shopify Customer</span>` : `<span class="wa-shopify-inline missing">Not in Shopify</span><button class="primary-btn compact-btn" type="button" data-add-shopify-phone="${esc(group.phone)}" data-add-shopify-name="${esc(name)}">Add to Shopify Customer</button>`) : `<span class="wa-shopify-inline ok">${esc(typeof channelLabel==='function'?channelLabel(ch):ch)} Lead</span>`; }
+    if(right){
+      if(typeof contactPanelHtml==='function') right.innerHTML=contactPanelHtml(group,name,known,linkedCustomer,meta);
+      else right.innerHTML=`<h3>Contact details</h3><p>${esc(name)}</p>`;
+    }
+    if($('waThreadStatus')) waThreadStatus.value=meta.status||'open';
+    if($('waThreadAgent')) waThreadAgent.value=meta.agent||'';
+    if($('waThreadTags')) waThreadTags.value=(meta.tags||[]).join(', ');
+    if($('waThreadNote')) waThreadNote.value=meta.note||'';
+    if($('whatsappReplyPhone')) whatsappReplyPhone.value=String(group.phone).replace(/^instagram:/,'').replace(/^messenger:/,'');
+    setTimeout(()=>{ const area=pane.querySelector('.wa-message-area'); if(area) area.scrollTop=area.scrollHeight; },0);
+  };
+
+  document.addEventListener('change', function(e){
+    if(e.target && e.target.id==='waThreadStatusTop'){
+      const s=$('waThreadStatus'); if(s) s.value=e.target.value;
+      if(typeof saveWaThreadMeta==='function') saveWaThreadMeta();
+    }
+  });
+})();
+
+
 load().catch(err=>{console.error(err); if(String(err).includes('401')) location.href='/login.html';});
