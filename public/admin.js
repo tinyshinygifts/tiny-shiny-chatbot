@@ -891,15 +891,45 @@ async function mockInstagramMessage(){
 }
 
 function setupPwaInstall(){
-  if('serviceWorker' in navigator){ navigator.serviceWorker.register('/service-worker.js').catch(()=>{}); }
-  window.addEventListener('beforeinstallprompt', ev => { ev.preventDefault(); deferredInstallPrompt = ev; [$('installPwaBtn'),$('installAppBtn')].filter(Boolean).forEach(btn=>{ btn.style.display='inline-flex'; btn.textContent='Install WhatsApp App'; }); });
-  const btn=$('installPwaBtn') || $('installAppBtn');
-  const allBtns=[$('installPwaBtn'),$('installAppBtn')].filter(Boolean);
-  allBtns.forEach(b=>b.style.display='inline-flex');
-  if(btn){ allBtns.forEach(btnEl=>btnEl.addEventListener('click', async () => {
-    if(deferredInstallPrompt){ deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice.catch(()=>{}); deferredInstallPrompt=null; }
-    else alert('Mobile/Desktop Chrome menu ⋮ se Add to Home Screen / Install App select karo. Agar button prompt nahi de raha to browser PWA prompt ready nahi hai.');
-  })); }
+  const buttons = () => [$('installPwaBtn'), $('installAppBtn')].filter(Boolean);
+  function setInstallButton(state){
+    buttons().forEach(btn=>{
+      btn.style.display='inline-flex';
+      btn.disabled = state !== 'ready';
+      btn.classList.toggle('install-not-ready', state !== 'ready');
+      btn.textContent = state === 'ready' ? 'Install WhatsApp App' : (state === 'installed' ? 'App Installed' : 'Install not ready');
+      if(state === 'not-ready') btn.style.display='none';
+    });
+  }
+  if('serviceWorker' in navigator){
+    navigator.serviceWorker.register('/service-worker.js?ts=' + Date.now()).catch(()=>{});
+  }
+  if(window.matchMedia && window.matchMedia('(display-mode: standalone)').matches){
+    setInstallButton('installed');
+    return;
+  }
+  setInstallButton('not-ready');
+  window.addEventListener('beforeinstallprompt', ev => {
+    ev.preventDefault();
+    deferredInstallPrompt = ev;
+    setInstallButton('ready');
+  });
+  window.addEventListener('appinstalled', () => {
+    deferredInstallPrompt = null;
+    setInstallButton('installed');
+  });
+  document.addEventListener('click', async (e)=>{
+    const btn = e.target.closest('#installPwaBtn,#installAppBtn');
+    if(!btn) return;
+    e.preventDefault();
+    if(!deferredInstallPrompt){ setInstallButton('not-ready'); return; }
+    try{
+      await deferredInstallPrompt.prompt();
+      await deferredInstallPrompt.userChoice.catch(()=>{});
+    }catch(err){}
+    deferredInstallPrompt=null;
+    setInstallButton('not-ready');
+  });
 }
 setupPwaInstall();
 
@@ -1541,3 +1571,14 @@ function renderBroadcastImageLibrary(){
 }
 document.addEventListener('click', e=>{ const b=e.target.closest('[data-use-broadcast-img]'); if(b && $('broadcastImageUrl')) broadcastImageUrl.value=b.dataset.useBroadcastImg; });
 setInterval(renderBroadcastImageLibrary, 3000);
+
+(function tsgLoaderSafetyMobileFinal(){
+  function killLoader(){
+    document.querySelectorAll('.tsg-global-loader').forEach(x=>x.classList.add('hidden'));
+  }
+  if(window.matchMedia && window.matchMedia('(max-width: 900px)').matches){
+    setInterval(killLoader, 2500);
+    window.addEventListener('pageshow', ()=>setTimeout(killLoader, 800));
+    document.addEventListener('touchstart', ()=>setTimeout(killLoader, 300), {passive:true});
+  }
+})();

@@ -2,10 +2,10 @@
   "name": "Tiny Shiny WhatsApp Inbox",
   "short_name": "TSG WhatsApp",
   "description": "Tiny Shiny Gifts chatbot admin panel, WhatsApp inbox, Shopify customers and CRM.",
-  "start_url": "/whatsapp",
+  "start_url": "/whatsapp?app=1",
   "scope": "/",
   "display": "standalone",
-  "orientation": "portrait-primary",
+  "orientation": "portrait",
   "background_color": "#ffffff",
   "theme_color": "#d63384",
   "categories": [

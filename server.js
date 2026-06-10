@@ -95,6 +95,7 @@ const linkClicksPath = path.join(dataDir, 'link-clicks.json');
 const automationRulesPath = path.join(dataDir, 'automation-rules.json');
 const ndrPath = path.join(dataDir, 'ndr.json');
 const ndrSettingsPath = path.join(dataDir, 'ndr-settings.json');
+const catalogSessionPath = path.join(dataDir, 'catalog-session.json');
 
 
 // MongoDB persistent storage (Render-safe). When MONGODB_URI is set, JSON data and API settings are loaded from MongoDB and kept synced.
@@ -1559,12 +1560,75 @@ function defaultChatbotSettings(){ return { enabled:true, businessHours:false, m
 function getChatbotSettings(){ const s=readJson(settingsPath,{}); const cfg={ ...defaultChatbotSettings(), ...(s.whatsappChatbot||{}) }; cfg.catalogCategories=normalizeCatalogCategories(cfg.catalogCategories); return cfg; }
 app.get('/api/whatsapp-chatbot/settings',(req,res)=>res.json({ ok:true, settings:getChatbotSettings() }));
 app.post('/api/whatsapp-chatbot/settings',(req,res)=>{ const current=readJson(settingsPath,{}); const next={ ...defaultChatbotSettings(), ...(req.body||{}) }; writeJson(settingsPath,{ ...current, whatsappChatbot:next }); res.json({ ok:true, settings:next }); });
+
+function catalogSessionKey(phone){ return normalizeWhatsAppPhone(phone || '') || cleanPhone(phone || ''); }
+function getCatalogSession(){
+  const data = readJson(catalogSessionPath, {});
+  const now = Date.now();
+  for (const k of Object.keys(data || {})) {
+    if (!data[k] || !data[k].waiting || (now - Number(data[k].ts || 0)) > 30 * 60 * 1000) delete data[k];
+  }
+  writeJson(catalogSessionPath, data);
+  return data;
+}
+function setCatalogWaiting(phone, waiting=true){
+  const key = catalogSessionKey(phone); if(!key) return;
+  const data = getCatalogSession();
+  if(waiting) data[key] = { waiting:true, ts:Date.now() };
+  else delete data[key];
+  writeJson(catalogSessionPath, data);
+}
+function isCatalogWaiting(phone){
+  const key = catalogSessionKey(phone); if(!key) return false;
+  const data = getCatalogSession();
+  return !!(data[key] && data[key].waiting);
+}
+
 function faqAnswerFor(text=''){
   const raw=String(text||'').toLowerCase();
   const faqs=readJson(faqPath,[]);
   return (faqs||[]).find(f=>(f.keywords||[]).some(k=>k && raw.includes(String(k).toLowerCase())))?.answer || '';
 }
 async function handleWhatsappChatbotMessage(item={}){
+  if(!item || item.direction!=='inbound') return { ok:false, skipped:true };
+  const cfg=getChatbotSettings();
+  if(!cfg.enabled) return { ok:false, skipped:true, reason:'WhatsApp chatbot disabled' };
+  const text=String(item.text||'').trim();
+  const low=text.toLowerCase();
+  let reply='';
+
+  // Priority 1: greeting/menu should ALWAYS send welcome/menu, not catalog link.
+  if(/^(hi|hii|hello|hey|namaste|menu|help)$/i.test(low)) {
+    setCatalogWaiting(item.from, false);
+    reply=cfg.menuText;
+  }
+  // Priority 2: customer chooses Catalog from welcome menu.
+  else if(low==='2' || /\b(catalog|catalogue|products?|collection|price list)\b/i.test(low)){
+    setCatalogWaiting(item.from, true);
+    reply=catalogMenuText(cfg);
+  }
+  // Priority 3: category number/name works ONLY after catalog menu was sent.
+  else if(isCatalogWaiting(item.from) && (reply=catalogCategoryReply(text,cfg))) {
+    setCatalogWaiting(item.from, false);
+  }
+  else if(/\b(support|agent|human|call me|help me)\b/i.test(low) || low==='5') {
+    setCatalogWaiting(item.from, false);
+    appendJson(leadsPath,{ id:crypto.randomUUID(), type:'human_support_required', createdAt:nowIso(), phone:item.from, message:text, status:'Human Support Required' });
+    reply='Our support team has been notified. We will reply shortly.';
+  } else if(/\b(shipping|delivery charge|cod charge)\b/i.test(low) || low==='3') {
+    setCatalogWaiting(item.from, false);
+    reply=faqAnswerFor('shipping') || 'Shipping charges depend on order value and payment mode. Please share your product/order details for exact charges.';
+  } else if(/\b(return|refund|exchange)\b/i.test(low) || low==='4') {
+    setCatalogWaiting(item.from, false);
+    reply=faqAnswerFor('return') || 'Please share your order number. Our team will help you with return/exchange details.';
+  } else {
+    reply=faqAnswerFor(text);
+  }
+  if(!reply) return { ok:false, skipped:true, reason:'No chatbot rule matched' };
+  const send=await sendWhatsAppTextManual({ to:item.from, message:reply }).catch(e=>({ ok:false, error:e.message }));
+  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:item.from, customerName:item.customerName, type:'text', text:reply, createdAt:nowIso(), status:send.ok?'sent':'failed', raw:{ source:'whatsapp_chatbot', result:send } });
+  return { ok:!!send.ok, reply, result:send };
+}){
   if(!item || item.direction!=='inbound') return { ok:false, skipped:true };
   const cfg=getChatbotSettings();
   if(!cfg.enabled) return { ok:false, skipped:true, reason:'WhatsApp chatbot disabled' };
