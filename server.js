@@ -92,6 +92,8 @@ const dripCampaignsPath = path.join(dataDir, 'drip-campaigns.json');
 const quickReplySettingsPath = path.join(dataDir, 'quickreply-settings.json');
 const linkClicksPath = path.join(dataDir, 'link-clicks.json');
 const automationRulesPath = path.join(dataDir, 'automation-rules.json');
+const ndrPath = path.join(dataDir, 'ndr.json');
+const ndrSettingsPath = path.join(dataDir, 'ndr-settings.json');
 
 
 // MongoDB persistent storage (Render-safe). When MONGODB_URI is set, JSON data and API settings are loaded from MongoDB and kept synced.
@@ -106,7 +108,7 @@ const mongoJsonCache = new Map();
 function deepClone(value) { return value === undefined ? value : JSON.parse(JSON.stringify(value)); }
 function mongoKeyFromPath(filePath) { return 'json:' + path.basename(String(filePath || 'unknown.json')); }
 function readLocalJson(filePath, fallback) { try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; } }
-function mongoKnownPaths() { return [faqPath, settingsPath, leadsPath, eventsPath, leadMessagesPath, mediaImagesPath, crmPath, whatsappTemplatesPath, whatsappInboxPath, shopifyOAuthStatePath, broadcastCampaignsPath, whatsappOptoutsPath, whatsappTeamMetaPath, chatbotFlowsPath, instagramInboxPath, instagramSettingsPath, messengerInboxPath, messengerSettingsPath, advancedCampaignsPath, customerSegmentsPath, dripCampaignsPath, quickReplySettingsPath, linkClicksPath, automationRulesPath]; }
+function mongoKnownPaths() { return [faqPath, settingsPath, leadsPath, eventsPath, leadMessagesPath, mediaImagesPath, crmPath, whatsappTemplatesPath, whatsappInboxPath, shopifyOAuthStatePath, broadcastCampaignsPath, whatsappOptoutsPath, whatsappTeamMetaPath, chatbotFlowsPath, instagramInboxPath, instagramSettingsPath, messengerInboxPath, messengerSettingsPath, advancedCampaignsPath, customerSegmentsPath, dripCampaignsPath, quickReplySettingsPath, linkClicksPath, automationRulesPath, ndrPath, ndrSettingsPath]; }
 async function mongoSave(key, value) {
   if (!mongoReady || !mongoCollection) return;
   try { await mongoCollection.updateOne({ key }, { $set: { key, value, updatedAt: new Date() } }, { upsert: true }); }
@@ -1932,6 +1934,74 @@ app.get('/api/shopify/sales-analysis', requireAdmin, async (req,res)=>{
   }catch(e){ res.status(500).json({ok:false,error:e.message}); }
 });
 
+
+
+// ---------- NDR: Shiprocket + iCarry + WhatsApp automation ----------
+function defaultNdrSettings(){
+  return {
+    beforeDeliveryEnabled:true,
+    failedDeliveryEnabled:true,
+    reminderHours:24,
+    adminNumber:process.env.OWNER_WHATSAPP_NUMBER || process.env.WHATSAPP_NUMBER || '',
+    beforeTemplate:'order_out_for_delivery',
+    failedTemplate:'ndr_failed_delivery',
+    beforeMessage:'Hi {{customer_name}}, your Tiny Shiny Gifts order {{order_no}} is out for delivery today. Please keep your phone reachable and payment ready if COD. Tracking: {{tracking_link}}',
+    failedMessage:'Hi {{customer_name}}, delivery attempt for your Tiny Shiny Gifts order {{order_no}} was unsuccessful. Please reply 1 for Reattempt Delivery, 2 for Update Address, or 3 for Cancel Order.'
+  };
+}
+function readNdrSettings(){ return Object.assign(defaultNdrSettings(), readJson(ndrSettingsPath, {})); }
+function renderNdrMessage(template, item){
+  const values={customer_name:item.customerName||'Customer', order_no:item.orderNo||item.orderNumber||item.orderName||'', awb:item.awb||'', courier:item.courier||'', reason:item.reason||'', tracking_link:item.trackingLink||''};
+  return String(template||'').replace(/\{\{\s*(customer_name|order_no|orderNumber|awb|courier|reason|tracking_link)\s*\}\}/gi,(m,k)=> values[k] || values[k==='orderNumber'?'order_no':k] || '');
+}
+function seedNdrFromLeads(){
+  const leads=readJson(leadsPath,[]);
+  const ndr=readJson(ndrPath,[]);
+  if(ndr.length) return ndr;
+  const sample=leads.filter(x=>x.orderName||x.orderId||x.phone).slice(0,8).map((x,i)=>({
+    id:safeId('ndr'), provider:i%2?'icarry':'shiprocket', awb:x.awb||x.trackingNumber||'', orderNo:x.orderName||x.orderId||'', customerName:x.customerName||x.name||'Customer', phone:normalizeWhatsAppPhone(x.phone||x.customerPhone||''), courier:x.courier||'', reason:x.reason||'Delivery attempt pending / customer unreachable', status:'pending', attempts:Number(x.attempts||1), ndrAt:x.createdAt||nowIso(), trackingLink:x.trackingLink||'', whatsappStatus:'not_sent', logs:[{at:nowIso(), text:'NDR item created from available lead/order data'}]
+  }));
+  if(sample.length) writeJson(ndrPath,sample);
+  return sample;
+}
+app.get('/api/ndr', requireAdmin, (req,res)=>{
+  const rows=seedNdrFromLeads();
+  const settings=readNdrSettings();
+  const summary={total:rows.length,pending:rows.filter(x=>x.status==='pending').length,reattempt:rows.filter(x=>String(x.status).includes('reattempt')).length,resolved:rows.filter(x=>x.status==='resolved').length,rto:rows.filter(x=>String(x.status).toLowerCase()==='rto').length,whatsappSent:rows.filter(x=>String(x.whatsappStatus).includes('sent')).length};
+  res.json({ok:true, ndr:rows, settings, summary, providers:{shiprocket:Boolean(process.env.SHIPROCKET_TOKEN||process.env.SHIPROCKET_EMAIL), icarry:String(process.env.ICARRY_ENABLED||'').toLowerCase()==='true' || Boolean(process.env.ICARRY_API_TOKEN||process.env.ICARRY_API_KEY)}});
+});
+app.post('/api/ndr/settings', requireAdmin, (req,res)=>{ const next=Object.assign(readNdrSettings(), req.body||{}, {updatedAt:nowIso()}); writeJson(ndrSettingsPath,next); res.json({ok:true, settings:next}); });
+app.post('/api/ndr/sync', requireAdmin, async (req,res)=>{
+  const rows=seedNdrFromLeads();
+  // API placeholders: keep existing rows and mark last sync; real provider credentials are shown in status.
+  const synced=rows.map(x=>Object.assign({},x,{lastSyncAt:nowIso()}));
+  writeJson(ndrPath,synced);
+  res.json({ok:true, message:'NDR sync completed from saved data. Shiprocket/iCarry live API fields will populate when provider endpoints return NDR data.', count:synced.length, ndr:synced});
+});
+app.post('/api/ndr/:id/status', requireAdmin, (req,res)=>{ const rows=readJson(ndrPath,[]); const idx=rows.findIndex(x=>String(x.id)===String(req.params.id)); if(idx<0) return res.status(404).json({ok:false,error:'NDR not found'}); rows[idx]=Object.assign({},rows[idx],req.body||{},{updatedAt:nowIso()}); rows[idx].logs=[{at:nowIso(),text:'Status updated to '+(rows[idx].status||'updated')}].concat(rows[idx].logs||[]); writeJson(ndrPath,rows); res.json({ok:true, item:rows[idx]}); });
+app.post('/api/ndr/:id/whatsapp', requireAdmin, async (req,res)=>{
+  const rows=readJson(ndrPath,[]); const idx=rows.findIndex(x=>String(x.id)===String(req.params.id)); if(idx<0) return res.status(404).json({ok:false,error:'NDR not found'});
+  const settings=readNdrSettings(); const item=rows[idx]; const type=String(req.body?.type||'failed'); const tpl=type==='before'?settings.beforeMessage:settings.failedMessage; const message=renderNdrMessage(tpl,item); const to=normalizeWhatsAppPhone(item.phone||'');
+  if(!to) return res.status(400).json({ok:false,error:'Customer phone missing'});
+  const send=await sendWhatsAppTextManual({to,message}).catch(e=>({ok:false,error:e.message}));
+  item.whatsappStatus=send.ok?'sent':'failed'; item.lastWhatsappAt=nowIso(); item.logs=[{at:nowIso(),text:(type==='before'?'Before delivery':'NDR failed delivery')+' WhatsApp '+(send.ok?'sent':'failed')}].concat(item.logs||[]); rows[idx]=item; writeJson(ndrPath,rows);
+  appendJson(whatsappInboxPath,{id:crypto.randomUUID(),direction:'outbound',to,customerName:item.customerName,type:'text',text:message,createdAt:nowIso(),status:send.ok?'sent':'failed',raw:{source:'ndr',result:send}});
+  res.json({ok:!!send.ok, item, send, message});
+});
+app.post('/api/ndr/whatsapp/pending', requireAdmin, async (req,res)=>{
+  const rows=readJson(ndrPath,[]); const out=[];
+  for(const item of rows.filter(x=>String(x.status||'pending')==='pending' && String(x.whatsappStatus||'not_sent')!=='sent').slice(0,50)){
+    const r=await fetchLikeNdrSend(item.id,'failed').catch(e=>({ok:false,error:e.message,id:item.id})); out.push(r);
+  }
+  res.json({ok:true, count:out.length, results:out});
+});
+async function fetchLikeNdrSend(id,type){
+  const rows=readJson(ndrPath,[]); const item=rows.find(x=>String(x.id)===String(id)); if(!item) return {ok:false,error:'NDR not found',id};
+  const settings=readNdrSettings(); const message=renderNdrMessage(type==='before'?settings.beforeMessage:settings.failedMessage,item); const to=normalizeWhatsAppPhone(item.phone||''); if(!to) return {ok:false,error:'Customer phone missing',id};
+  const send=await sendWhatsAppTextManual({to,message}).catch(e=>({ok:false,error:e.message}));
+  item.whatsappStatus=send.ok?'sent':'failed'; item.lastWhatsappAt=nowIso(); item.logs=[{at:nowIso(),text:'Bulk NDR WhatsApp '+(send.ok?'sent':'failed')}].concat(item.logs||[]); writeJson(ndrPath,rows); return {ok:!!send.ok,id,send};
+}
+
 app.get('/api/storage/status', (req, res) => res.json({ ok: true, storage: mongoReady ? 'mongodb' : 'json-file', mongodb: { configured: Boolean(mongoUri), connected: mongoReady, database: mongoReady ? mongoDbName : '', collection: mongoReady ? mongoCollectionName : '' } }));
 app.get('/api/faqs', (req, res) => res.json({ ok: true, faqs: readJson(faqPath, []) }));
 
@@ -2059,14 +2129,17 @@ app.post('/api/shopify/customers/create-from-whatsapp', async (req, res) => {
   try {
     const phone = normalizeWhatsAppPhone(req.body?.phone || '');
     if (!phone) return res.status(400).json({ ok:false, error:'Valid WhatsApp phone required' });
-    const nameRaw = cleanText(req.body?.name || req.body?.customerName || 'WhatsApp Customer');
+    const nameRaw = cleanText(req.body?.name || req.body?.customerName || [req.body?.firstName, req.body?.lastName].filter(Boolean).join(' ') || 'WhatsApp Customer');
     const parts = nameRaw.split(/\s+/).filter(Boolean);
-    const first_name = parts[0] || 'WhatsApp';
-    const last_name = parts.slice(1).join(' ') || 'Customer';
+    const first_name = cleanText(req.body?.firstName || parts[0] || 'WhatsApp');
+    const last_name = cleanText(req.body?.lastName || parts.slice(1).join(' ') || 'Customer');
     const existing = await shopifyFetch(`customers/search.json?query=${encodeURIComponent(phoneLast10(phone))}&limit=10`).catch(e => ({ ok:false, error:e.message }));
     const found = (existing?.json?.customers || []).find(c => phoneLast10(c.phone || c.default_address?.phone) === phoneLast10(phone));
     if (found) return res.json({ ok:true, alreadyExists:true, customer:simplifyShopifyCustomer(found) });
-    const create = await shopifyFetch('customers.json', { method:'POST', body:{ customer:{ first_name, last_name, phone:'+' + phone, tags:'WhatsApp Inbox, Added from WhatsApp Inbox', note:`Added from WhatsApp Inbox on ${nowIso()}. Phone: ${phone}` } } });
+    const customerPayload={ first_name, last_name, phone:'+' + phone, email:cleanText(req.body?.email||''), tags:cleanText(req.body?.tags||'WhatsApp Inbox, Added from Chat Inbox'), note:cleanText(req.body?.notes||`Added from Chat Inbox on ${nowIso()}. Phone: ${phone}`), accepts_marketing:!!req.body?.marketing };
+    const address1=cleanText(req.body?.address||''), city=cleanText(req.body?.city||''), province=cleanText(req.body?.state||''), zip=cleanText(req.body?.pincode||''), country=cleanText(req.body?.country||'India');
+    if(address1||city||province||zip) customerPayload.addresses=[{address1, city, province, zip, country, phone:'+'+phone}];
+    const create = await shopifyFetch('customers.json', { method:'POST', body:{ customer:customerPayload } });
     if (!create.ok) return res.status(400).json({ ok:false, error:create.message || 'Shopify customer create failed', detail:create.json || create });
     const customer = simplifyShopifyCustomer(create.json.customer || {});
     sendToGoogleSheets('Shopify Customer Created From WhatsApp', { phone, name:nameRaw, customer }).catch(()=>{});

@@ -17,14 +17,6 @@
         <p>Manage login, Shopify, WhatsApp and customer follow-up settings.</p>
       </div>
       <div class="top-actions api-top-actions">
-        <label class="font-size-control">Font Size
-          <select id="apiFontSize">
-            <option value="xsmall">Extra Small</option>
-            <option value="small">Small</option>
-            <option value="medium">Medium</option>
-            <option value="big">Big</option>
-          </select>
-        </label>
         <button id="downloadConfig" type="button" class="ghost-btn">Download API Backup</button>
         <label class="ghost-btn file-upload-btn" for="uploadConfigFile">Upload API Backup</label>
         <input id="uploadConfigFile" type="file" accept=".txt,.json,text/plain,application/json" hidden/>
@@ -112,6 +104,27 @@
       </div>
       <div id="faqList" class="faq-list-settings"></div>
       <pre id="faqResult"></pre>
+    </section>
+
+
+    <section class="panel api-ndr-settings-panel">
+      <div class="section-head">
+        <div><h2>NDR WhatsApp Settings</h2><p>Before delivery aur failed delivery NDR WhatsApp messages.</p></div>
+        <button id="saveNdrApiSettings" class="primary-btn" type="button">Save NDR Settings</button>
+      </div>
+      <div class="form-grid two">
+        <label class="checkline"><input id="apiNdrBeforeDeliveryEnabled" type="checkbox"/> Before delivery message ON</label>
+        <label class="checkline"><input id="apiNdrFailedDeliveryEnabled" type="checkbox"/> NDR failed delivery message ON</label>
+        <label>Reminder delay hours <input id="apiNdrReminderHours" type="number" min="1" placeholder="24"/></label>
+        <label>Admin alert number <input id="apiNdrAdminNumber" placeholder="919001727446"/></label>
+        <label>Before delivery template name <input id="apiNdrBeforeTemplate" placeholder="order_out_for_delivery"/></label>
+        <label>NDR template name <input id="apiNdrFailedTemplate" placeholder="ndr_failed_delivery"/></label>
+      </div>
+      <div class="form-grid two">
+        <label>Before delivery message <textarea id="apiNdrBeforeMessage"></textarea></label>
+        <label>NDR failed delivery message <textarea id="apiNdrFailedMessage"></textarea></label>
+      </div>
+      <pre id="apiNdrResult"></pre>
     </section>
 
     <section class="panel security-panel">

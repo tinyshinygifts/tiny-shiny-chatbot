@@ -52,6 +52,7 @@ function showTab(id){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
   localStorage.setItem('tsgAdminActiveTab', id);
   if(id === 'shopifySalesPanel' && typeof loadShopifySalesAnalysis === 'function') setTimeout(()=>loadShopifySalesAnalysis().catch(()=>{}),0);
+  if(id === 'ndrPanel' && typeof loadNdr === 'function') setTimeout(()=>loadNdr().catch(()=>{}),0);
 }
 
 function activeTabId(){ return localStorage.getItem('tsgAdminActiveTab') || 'whatsappInboxPanel'; }
@@ -169,7 +170,7 @@ async function load(){
   updateGoogleSheetTab();
   faqs=f.faqs||[]; renderFaqs();
   await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages(), loadShopifyCustomers().catch(()=>{}), loadShopifySalesAnalysis().catch(()=>{}), loadWhatsappInbox(), loadBroadcasts().catch(()=>{}), loadWhatsappChatbotSettings().catch(()=>{}), loadChatbotFlows().catch(()=>{}), loadShippingSettings().catch(()=>{}), loadTeamInboxMeta().catch(()=>{}), loadPhase2Analytics().catch(()=>{}), loadDrips().catch(()=>{}), loadInstagram().catch(()=>{})]);
-  const active = localStorage.getItem('tsgAdminActiveTab') || 'basicPanel';
+  const active = localStorage.getItem('tsgAdminActiveTab') || 'whatsappInboxPanel';
   showTab($(active) ? active : 'whatsappInboxPanel');
 }
 function updateGoogleSheetTab(){
@@ -417,12 +418,31 @@ async function clearWhatsappInbox(all=false){
   if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
   await loadWhatsappInbox();
 }
-async function addWhatsappCustomerToShopify(phone,name){
-  const d=await fetch('/api/shopify/customers/create-from-whatsapp',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({phone,name})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
-  if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
-  await loadShopifyCustomers().catch(()=>{});
-  renderWhatsappInbox();
+let pendingShopifyModal = { phone:'', name:'' };
+function openShopifyCustomerModal(phone,name){
+  pendingShopifyModal={phone:formatWaPhone(phone||''), name:name||'WhatsApp Customer'};
+  const parts=String(pendingShopifyModal.name||'').split(/\s+/).filter(Boolean);
+  const set=(id,val)=>{ if($(id)) $(id).value=val||''; };
+  set('modalFirstName', parts[0]||''); set('modalLastName', parts.slice(1).join(' ')); set('modalPhone', pendingShopifyModal.phone); set('modalEmail',''); set('modalAddress',''); set('modalCity',''); set('modalState',''); set('modalPincode',''); set('modalCountry','India'); set('modalTags','WhatsApp Inbox, Added from Chat Inbox'); set('modalNotes',`Added from Chat Inbox. WhatsApp: ${pendingShopifyModal.phone}`);
+  if($('modalMarketing')) modalMarketing.checked=true;
+  if($('modalShopifyResult')) modalShopifyResult.textContent='';
+  const modal=$('shopifyCustomerModal'); if(modal) modal.classList.remove('hidden');
 }
+function closeShopifyCustomerModal(){ const modal=$('shopifyCustomerModal'); if(modal) modal.classList.add('hidden'); }
+async function addWhatsappCustomerToShopify(phone,name){ openShopifyCustomerModal(phone,name); }
+async function saveModalShopifyCustomer(){
+  const body={
+    phone:$('modalPhone')?.value||pendingShopifyModal.phone,
+    firstName:$('modalFirstName')?.value||'', lastName:$('modalLastName')?.value||'',
+    name:[ $('modalFirstName')?.value||'', $('modalLastName')?.value||'' ].filter(Boolean).join(' ') || pendingShopifyModal.name,
+    email:$('modalEmail')?.value||'', address:$('modalAddress')?.value||'', city:$('modalCity')?.value||'', state:$('modalState')?.value||'', pincode:$('modalPincode')?.value||'', country:$('modalCountry')?.value||'India', tags:$('modalTags')?.value||'', notes:$('modalNotes')?.value||'', marketing:!!$('modalMarketing')?.checked
+  };
+  const d=await fetch('/api/shopify/customers/create-from-whatsapp',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('modalShopifyResult')) modalShopifyResult.textContent=JSON.stringify(d,null,2);
+  if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
+  if(d.ok){ await loadShopifyCustomers().catch(()=>{}); renderWhatsappInbox(); setTimeout(closeShopifyCustomerModal,550); }
+}
+
 async function sendWhatsappInboxReply(){
   const phone=($('whatsappReplyPhone')?.value||'').trim();
   const message=($('whatsappReplyText')?.value||'').trim();
@@ -899,13 +919,20 @@ function renderChatList(groups){
 function contactPanelHtml(group, name, known, linkedCustomer, meta){
   const ch=channelOfGroup(group);
   const displayId=String(group.phone||'').replace(/^instagram:/,'').replace(/^messenger:/,'');
+  const logs=[];
+  const msgs=(group.messages||[]).slice(-8).reverse();
+  msgs.forEach(m=>logs.push({at:m.createdAt||'', text:`${m.direction==='inbound'?'Customer':'Business'}: ${(messageText(m)||socialMessageText(m)||m.status||'message').slice(0,90)}`}));
+  if(linkedCustomer) logs.unshift({at:linkedCustomer.lastOrderDate||'', text:`Shopify customer • Orders: ${linkedCustomer.ordersCount||0}`});
+  if(!known && ch==='whatsapp') logs.unshift({at:'', text:'Not in Shopify - add customer from button above'});
+  const logHtml=logs.map(l=>`<div class="activity-log-row"><b>${esc(l.text)}</b><small>${esc(l.at?timeShort(l.at):'')}</small></div>`).join('') || '<p class="hint">No activity log yet.</p>';
   return `<div class="contact-head"><span class="wa-avatar ${esc(ch)}">${esc(initials(name,displayId))}</span><div><h3>${esc(name)}</h3>${channelBadge(ch)} <span class="status-pill ${esc(meta.status||'open')}">${esc(meta.status||'open')}</span></div></div>
   <div class="contact-info-list">
     <div><b>Channel</b><span>${esc(channelLabel(ch))}</span></div>
     <div><b>${ch==='whatsapp'?'Phone':'User ID'}</b><span>${esc(displayId)}</span></div>
     <div><b>Shopify</b><span>${ch==='whatsapp'?(known?'Customer':'Not added'):'CRM Lead only'}</span></div>
     ${linkedCustomer?`<div><b>Email</b><span>${esc(linkedCustomer.email||'-')}</span></div><div><b>Orders</b><span>${esc(linkedCustomer.ordersCount||0)}</span></div><div><b>Last Order</b><span>${esc(linkedCustomer.lastOrderDate||'-')}</span></div>`:''}
-  </div>`;
+  </div>
+  <div class="contact-log-box"><div class="section-head mini"><div><h3>Customer Activity Log</h3><p>Latest chat, Shopify and delivery activity.</p></div></div><div class="activity-log-list">${logHtml}</div></div>`;
 }
 function renderActiveChat(group){
   const pane=$('whatsappActiveChat');
@@ -1151,6 +1178,59 @@ function exportShopifySalesCsv(){
 document.addEventListener('change', e=>{ if(['salesRange','salesPaymentFilter','salesStatusFilter'].includes(e.target.id)) loadShopifySalesAnalysis(); });
 document.addEventListener('input', e=>{ if(e.target.id==='salesCampaignFilter') clearTimeout(window.__salesFilterTimer), window.__salesFilterTimer=setTimeout(loadShopifySalesAnalysis,350); });
 document.addEventListener('click', e=>{ if(e.target.id==='refreshShopifySales') loadShopifySalesAnalysis(); if(e.target.id==='exportShopifySalesCsv') exportShopifySalesCsv(); });
+
+
+
+// ---------- NDR panel: Shiprocket + iCarry + WhatsApp automation ----------
+function renderNdrMoney(v){ return '₹' + Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:0}); }
+function ndrFilteredRows(){
+  const provider=($('ndrProviderFilter')?.value||'all').toLowerCase();
+  const status=($('ndrStatusFilter')?.value||'all').toLowerCase();
+  const reason=($('ndrReasonFilter')?.value||'').toLowerCase().trim();
+  const q=($('ndrSearch')?.value||'').toLowerCase().trim();
+  return (ndrRows||[]).filter(r=>{
+    if(provider!=='all' && String(r.provider||'').toLowerCase()!==provider) return false;
+    if(status!=='all' && !String(r.status||'').toLowerCase().includes(status)) return false;
+    if(reason && !String(r.reason||'').toLowerCase().includes(reason)) return false;
+    if(q && ![r.awb,r.orderNo,r.orderNumber,r.customerName,r.phone,r.reason,r.courier,r.provider].join(' ').toLowerCase().includes(q)) return false;
+    return true;
+  });
+}
+function fillNdrSettings(){
+  const s=ndrSettings||{};
+  if($('ndrBeforeDeliveryEnabled')) ndrBeforeDeliveryEnabled.checked=!!s.beforeDeliveryEnabled;
+  if($('ndrFailedDeliveryEnabled')) ndrFailedDeliveryEnabled.checked=!!s.failedDeliveryEnabled;
+  if($('ndrReminderHours')) ndrReminderHours.value=s.reminderHours||24;
+  if($('ndrAdminNumber')) ndrAdminNumber.value=s.adminNumber||'';
+  if($('ndrBeforeMessage')) ndrBeforeMessage.value=s.beforeMessage||'';
+  if($('ndrFailedMessage')) ndrFailedMessage.value=s.failedMessage||'';
+}
+function renderNdr(){
+  const rows=ndrFilteredRows();
+  const summary={total:rows.length,pending:rows.filter(x=>String(x.status).includes('pending')).length,reattempt:rows.filter(x=>String(x.status).includes('reattempt')).length,rto:rows.filter(x=>String(x.status).toLowerCase()==='rto').length,whatsappSent:rows.filter(x=>String(x.whatsappStatus).includes('sent')).length};
+  if($('ndrSummary')) ndrSummary.innerHTML=[['Total NDR',summary.total],['Pending',summary.pending],['Reattempt',summary.reattempt],['RTO',summary.rto],['WhatsApp Sent',summary.whatsappSent]].map(x=>`<div class="sales-kpi"><span>${esc(x[0])}</span><b>${esc(x[1])}</b></div>`).join('');
+  if($('ndrTable')) ndrTable.innerHTML=`<table class="customer-table ndr-table"><thead><tr><th>Provider</th><th>AWB</th><th>Order</th><th>Customer</th><th>Phone</th><th>Reason</th><th>Status</th><th>WhatsApp</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(r.provider||'')}</td><td>${esc(r.awb||'-')}</td><td>${esc(r.orderNo||r.orderNumber||'-')}</td><td>${esc(r.customerName||'-')}</td><td>${esc(r.phone||'-')}</td><td>${esc(r.reason||'-')}</td><td>${esc(r.status||'pending')}</td><td>${esc(r.whatsappStatus||'not_sent')}</td><td><button class="ghost-btn compact-btn" data-ndr-wa="${esc(r.id)}" data-ndr-type="before">Before</button><button class="primary-btn compact-btn" data-ndr-wa="${esc(r.id)}" data-ndr-type="failed">NDR Msg</button><button class="ghost-btn compact-btn" data-ndr-reattempt="${esc(r.id)}">Reattempt</button></td></tr>`).join(''):'<tr><td colspan="9">No NDR data. Sync Shiprocket / iCarry click karein.</td></tr>'}</tbody></table>`;
+  const logs=[]; rows.forEach(r=>(r.logs||[]).slice(0,4).forEach(l=>logs.push({at:l.at||r.updatedAt||'', text:`${r.orderNo||r.awb||''}: ${l.text||''}`})));
+  if($('ndrLogs')) ndrLogs.innerHTML=logs.slice(0,80).map(l=>`<div class="activity-log-row"><b>${esc(l.text)}</b><small>${esc(l.at)}</small></div>`).join('') || '<p class="hint">No NDR activity logs yet.</p>';
+}
+async function loadNdr(){
+  const d=await fetch('/api/ndr',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,ndr:[]}));
+  ndrRows=d.ndr||[]; ndrSettings=d.settings||{}; fillNdrSettings(); renderNdr();
+  if($('ndrResult') && !d.ok) ndrResult.textContent=JSON.stringify(d,null,2); else if($('ndrResult')) ndrResult.textContent='';
+}
+async function saveNdrSettings(){
+  const body={beforeDeliveryEnabled:!!$('ndrBeforeDeliveryEnabled')?.checked, failedDeliveryEnabled:!!$('ndrFailedDeliveryEnabled')?.checked, reminderHours:Number($('ndrReminderHours')?.value||24), adminNumber:$('ndrAdminNumber')?.value||'', beforeMessage:$('ndrBeforeMessage')?.value||'', failedMessage:$('ndrFailedMessage')?.value||''};
+  const d=await fetch('/api/ndr/settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('ndrResult')) ndrResult.textContent=JSON.stringify(d,null,2); ndrSettings=d.settings||body;
+}
+async function syncNdr(){ const d=await fetch('/api/ndr/sync',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if($('ndrResult')) ndrResult.textContent=JSON.stringify(d,null,2); await loadNdr(); }
+async function sendNdrWhatsapp(id,type='failed'){ const d=await fetch('/api/ndr/'+encodeURIComponent(id)+'/whatsapp',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({type})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if($('ndrResult')) ndrResult.textContent=JSON.stringify(d,null,2); await loadNdr(); }
+async function sendNdrPendingWhatsapp(){ const d=await fetch('/api/ndr/whatsapp/pending',{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if($('ndrResult')) ndrResult.textContent=JSON.stringify(d,null,2); await loadNdr(); }
+async function markNdrReattempt(id){ const d=await fetch('/api/ndr/'+encodeURIComponent(id)+'/status',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'reattempt requested',whatsappStatus:'customer requested reattempt'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if($('ndrResult')) ndrResult.textContent=JSON.stringify(d,null,2); await loadNdr(); }
+function exportNdrCsv(){ const rows=ndrFilteredRows(); const csv=[['Provider','AWB','Order','Customer','Phone','Reason','Status','WhatsApp']].concat(rows.map(r=>[r.provider,r.awb,r.orderNo||r.orderNumber,r.customerName,r.phone,r.reason,r.status,r.whatsappStatus])).map(r=>r.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='ndr-report.csv'; a.click(); URL.revokeObjectURL(a.href); }
+document.addEventListener('change', e=>{ if(['ndrProviderFilter','ndrStatusFilter'].includes(e.target.id)) renderNdr(); });
+document.addEventListener('input', e=>{ if(['ndrReasonFilter','ndrSearch'].includes(e.target.id)) renderNdr(); });
+document.addEventListener('click', e=>{ if(e.target.id==='refreshNdr') loadNdr(); if(e.target.id==='syncNdr') syncNdr(); if(e.target.id==='saveNdrSettings') saveNdrSettings(); if(e.target.id==='sendNdrPendingWhatsapp') sendNdrPendingWhatsapp(); if(e.target.id==='exportNdrCsv') exportNdrCsv(); if(e.target.dataset.ndrWa) sendNdrWhatsapp(e.target.dataset.ndrWa,e.target.dataset.ndrType||'failed'); if(e.target.dataset.ndrReattempt) markNdrReattempt(e.target.dataset.ndrReattempt); if(e.target.id==='closeShopifyCustomerModal'||e.target.id==='cancelModalShopifyCustomer') closeShopifyCustomerModal(); if(e.target.id==='saveModalShopifyCustomer') saveModalShopifyCustomer(); });
 
 load().catch(err=>{console.error(err); if(String(err).includes('401')) location.href='/login.html';});
 

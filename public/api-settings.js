@@ -351,3 +351,25 @@ document.addEventListener('click', async (e)=>{
   }
 });
 loadConfig();
+
+
+// ---------- NDR API Settings ----------
+async function loadNdrApiSettings(){
+  const d=await fetch('/api/ndr',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(()=>({settings:{}}));
+  const st=d.settings||{};
+  if($('apiNdrBeforeDeliveryEnabled')) apiNdrBeforeDeliveryEnabled.checked=!!st.beforeDeliveryEnabled;
+  if($('apiNdrFailedDeliveryEnabled')) apiNdrFailedDeliveryEnabled.checked=!!st.failedDeliveryEnabled;
+  if($('apiNdrReminderHours')) apiNdrReminderHours.value=st.reminderHours||24;
+  if($('apiNdrAdminNumber')) apiNdrAdminNumber.value=st.adminNumber||'';
+  if($('apiNdrBeforeTemplate')) apiNdrBeforeTemplate.value=st.beforeTemplate||'order_out_for_delivery';
+  if($('apiNdrFailedTemplate')) apiNdrFailedTemplate.value=st.failedTemplate||'ndr_failed_delivery';
+  if($('apiNdrBeforeMessage')) apiNdrBeforeMessage.value=st.beforeMessage||'';
+  if($('apiNdrFailedMessage')) apiNdrFailedMessage.value=st.failedMessage||'';
+}
+async function saveNdrApiSettings(){
+  const body={beforeDeliveryEnabled:!!$('apiNdrBeforeDeliveryEnabled')?.checked, failedDeliveryEnabled:!!$('apiNdrFailedDeliveryEnabled')?.checked, reminderHours:Number($('apiNdrReminderHours')?.value||24), adminNumber:$('apiNdrAdminNumber')?.value||'', beforeTemplate:$('apiNdrBeforeTemplate')?.value||'', failedTemplate:$('apiNdrFailedTemplate')?.value||'', beforeMessage:$('apiNdrBeforeMessage')?.value||'', failedMessage:$('apiNdrFailedMessage')?.value||''};
+  const d=await fetch('/api/ndr/settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('apiNdrResult')) show($('apiNdrResult'), d);
+}
+document.addEventListener('click', e=>{ if(e.target.id==='saveNdrApiSettings') saveNdrApiSettings(); });
+setTimeout(()=>loadNdrApiSettings().catch(()=>{}),0);

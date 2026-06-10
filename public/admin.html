@@ -30,14 +30,6 @@
             <option value="600">600 sec</option>
           </select>
         </label>
-        <label class="font-size-control admin-font-size-control">Font Size
-          <select id="adminFontSize">
-            <option value="xsmall">Extra Small</option>
-            <option value="small">Small</option>
-            <option value="medium" selected>Medium</option>
-            <option value="big">Big</option>
-          </select>
-        </label>
         <button id="installPwaBtn" type="button" class="ghost-btn">Install App</button>
         <button id="enableDesktopNotifications" type="button" class="ghost-btn">Enable Notifications</button>
         <a class="ghost-btn header-api-settings" href="/api-settings.html">API Settings</a>
@@ -58,6 +50,7 @@
       <button class="tab-btn active" data-tab="whatsappInboxPanel">Chat Inbox</button>
       <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
       <button class="tab-btn" data-tab="shopifySalesPanel">Shopify Sales Analysis</button>
+      <button class="tab-btn" data-tab="ndrPanel">NDR</button>
       <button class="tab-btn" data-tab="bulkBroadcastPanel">Bulk WhatsApp Broadcast</button>
       <button class="tab-btn" data-tab="phase2Panel">Campaign Analytics</button>
       <button class="tab-btn" data-tab="dripPanel">Drip Campaigns</button>
@@ -172,6 +165,41 @@
         <div class="sales-card"><h3>City / State Sales</h3><div id="salesCityTable" class="table-wrap"></div></div>
       </div>
       <pre id="shopifySalesResult"></pre>
+    </section>
+
+
+
+    <section class="panel tab-panel ndr-panel" id="ndrPanel">
+      <div class="section-head">
+        <div><h2>NDR</h2><p>Shiprocket + iCarry NDR data, delivery attempt tracking aur WhatsApp automation.</p></div>
+        <div class="inline-actions"><button id="refreshNdr" class="ghost-btn" type="button">Refresh NDR</button><button id="syncNdr" class="primary-btn" type="button">Sync Shiprocket / iCarry</button><button id="exportNdrCsv" class="ghost-btn" type="button">Export CSV</button></div>
+      </div>
+      <div class="form-grid four ndr-filters">
+        <label>Provider <select id="ndrProviderFilter"><option value="all">All</option><option value="shiprocket">Shiprocket</option><option value="icarry">iCarry</option></select></label>
+        <label>Status <select id="ndrStatusFilter"><option value="all">All</option><option value="pending">Pending</option><option value="reattempt">Reattempt</option><option value="resolved">Resolved</option><option value="rto">RTO</option></select></label>
+        <label>Reason <input id="ndrReasonFilter" placeholder="Customer unavailable, refused, address issue"/></label>
+        <label>Search <input id="ndrSearch" placeholder="AWB, order, customer, phone"/></label>
+      </div>
+      <div class="ndr-summary-grid" id="ndrSummary"></div>
+      <div class="ndr-automation-card">
+        <h3>NDR WhatsApp Automation</h3>
+        <div class="form-grid four">
+          <label class="checkline"><input id="ndrBeforeDeliveryEnabled" type="checkbox"/> Before delivery WhatsApp</label>
+          <label class="checkline"><input id="ndrFailedDeliveryEnabled" type="checkbox"/> Failed delivery / NDR WhatsApp</label>
+          <label>Reminder delay hours <input id="ndrReminderHours" type="number" min="1" value="24"/></label>
+          <label>Admin alert number <input id="ndrAdminNumber" placeholder="919001727446"/></label>
+        </div>
+        <div class="form-grid two">
+          <label>Before delivery message <textarea id="ndrBeforeMessage" placeholder="Hi {{customer_name}}, your order {{order_no}} is out for delivery today..."></textarea></label>
+          <label>NDR failed delivery message <textarea id="ndrFailedMessage" placeholder="Hi {{customer_name}}, delivery attempt for order {{order_no}} was unsuccessful..."></textarea></label>
+        </div>
+        <div class="inline-actions"><button id="saveNdrSettings" class="primary-btn" type="button">Save NDR WhatsApp Settings</button><button id="sendNdrPendingWhatsapp" class="ghost-btn" type="button">Send Pending WhatsApp</button></div>
+      </div>
+      <div class="ndr-grid">
+        <div class="ndr-card"><h3>NDR Orders</h3><div id="ndrTable" class="table-wrap"></div></div>
+        <div class="ndr-card"><h3>WhatsApp / Activity Logs</h3><div id="ndrLogs" class="activity-log-list"></div></div>
+      </div>
+      <pre id="ndrResult"></pre>
     </section>
 
     <section class="panel tab-panel" id="bulkBroadcastPanel">
@@ -358,8 +386,7 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
             </div>
           </div>
         </main>
-
-        <aside class="wati-right">
+  <aside class="wati-right">
           <div id="waContactPanel" class="wa-contact-panel">
             <h3>Contact Info</h3>
             <p class="hint">Select chat to view customer details.</p>
@@ -481,6 +508,27 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
     <section class="panel tab-panel" id="googleSheetPanel"><h2>Google Sheet</h2><p id="googleSheetHelp">Google Sheet link not configured. Please add it in API Settings.</p><a id="googleSheetOpenLink" class="primary-btn" target="_blank" rel="noopener" href="#">Open Google Sheet</a></section>
     <div id="adminNotificationToast" class="admin-toast hidden" role="status" aria-live="polite"></div>
   </main>
+  <div id="shopifyCustomerModal" class="modal-overlay hidden">
+    <div class="modal-card shopify-customer-modal">
+      <div class="section-head mini"><div><h2>Add Shopify Customer</h2><p>Customer details fill karke Shopify customer create karein.</p></div><button type="button" class="ghost-btn" id="closeShopifyCustomerModal">Close</button></div>
+      <div class="form-grid two">
+        <label>First Name <input id="modalFirstName"/></label>
+        <label>Last Name <input id="modalLastName"/></label>
+        <label>Phone / WhatsApp <input id="modalPhone"/></label>
+        <label>Email <input id="modalEmail"/></label>
+        <label>Address <input id="modalAddress"/></label>
+        <label>City <input id="modalCity"/></label>
+        <label>State <input id="modalState"/></label>
+        <label>Pincode <input id="modalPincode"/></label>
+        <label>Country <input id="modalCountry" value="India"/></label>
+        <label>Tags <input id="modalTags" value="WhatsApp Inbox, Added from Chat Inbox"/></label>
+        <label class="checkline"><input id="modalMarketing" type="checkbox" checked/> Marketing / WhatsApp consent</label>
+      </div>
+      <label>Notes <textarea id="modalNotes" placeholder="Customer note"></textarea></label>
+      <div class="inline-actions"><button type="button" class="primary-btn" id="saveModalShopifyCustomer">Save Customer</button><button type="button" class="ghost-btn" id="cancelModalShopifyCustomer">Cancel</button></div>
+      <pre id="modalShopifyResult"></pre>
+    </div>
+  </div>
   <script src="/admin.js"></script>
 </body>
 </html>
