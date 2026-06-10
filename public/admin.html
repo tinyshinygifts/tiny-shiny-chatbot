@@ -5,6 +5,8 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>Chatbot Admin - Tiny Shiny Gifts</title>
   <link rel="icon" href="/tiny-shiny-logo.jpg"/>
+  <link rel="manifest" href="/manifest.json"/>
+  <meta name="theme-color" content="#d63384"/>
   <link rel="stylesheet" href="/style.css"/>
 </head>
 <body>
@@ -28,6 +30,7 @@
             <option value="600">600 sec</option>
           </select>
         </label>
+        <button id="installPwaBtn" type="button" class="ghost-btn">Install App</button>
         <button id="enableDesktopNotifications" type="button" class="ghost-btn">Enable Notifications</button>
         <a class="pill-link" href="/api-settings.html">API Settings</a>
         <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
@@ -51,7 +54,6 @@
       <button class="tab-btn" data-tab="dripPanel">Drip Campaigns</button>
       <button class="tab-btn" data-tab="instagramInboxPanel">Instagram Inbox</button>
       <button class="tab-btn" data-tab="whatsappChatbotPanel">WhatsApp Chatbot</button>
-      <button class="tab-btn" data-tab="chatbotFlowBuilderPanel">Chatbot Flow Builder</button>
       <button class="tab-btn" data-tab="whatsappInboxPanel">WhatsApp Inbox</button>
       <button class="tab-btn" data-tab="newProductsPanel">New Products</button>
       <button class="tab-btn" data-tab="leadPanel">Leads</button>
@@ -86,6 +88,10 @@
         <label>Quick Status
           <select id="crmBulkStatus"><option value="Follow Up">Follow Up</option><option value="Hot Lead">Hot Lead</option><option value="Converted">Converted</option><option value="Not Interested">Not Interested</option></select>
         </label>
+      </div>
+      <div class="contact-tabs" id="crmContactTabs">
+        <button type="button" class="contact-tab active" data-contact-filter="with" data-target="crm">With Contact Number</button>
+        <button type="button" class="contact-tab" data-contact-filter="without" data-target="crm">Without Contact Number</button>
       </div>
       <pre id="crmSyncResult"></pre>
       <div id="crmSummary" class="crm-summary"></div>
@@ -248,38 +254,6 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
 
 
 
-    <section class="panel tab-panel" id="chatbotFlowBuilderPanel">
-      <div class="section-head">
-        <div><h2>Chatbot Flow Builder</h2><p>Interakt/WATI style no-code flow: blocks add karo, order set karo, save karo.</p></div>
-        <div class="inline-actions"><button id="addFlowBlock" class="ghost-btn">Add Block</button><button id="saveChatbotFlow" class="primary-btn">Save Flow</button></div>
-      </div>
-      <div class="flow-builder-shell">
-        <aside class="flow-toolbox">
-          <h3>Blocks</h3>
-          <button class="flow-palette" data-flow-block="message">Message</button>
-          <button class="flow-palette" data-flow-block="question">Question</button>
-          <button class="flow-palette" data-flow-block="quick_reply">Quick Reply Buttons</button>
-          <button class="flow-palette" data-flow-block="condition">Condition / If-Else</button>
-          <button class="flow-palette" data-flow-block="catalog">Catalog Link</button>
-          <button class="flow-palette" data-flow-block="order_tracking">Order Tracking</button>
-          <button class="flow-palette" data-flow-block="cod">COD Confirm / Cancel</button>
-          <button class="flow-palette" data-flow-block="human">Human Support</button>
-          <button class="flow-palette" data-flow-block="delay">Delay / Wait</button>
-          <button class="flow-palette" data-flow-block="tag">Tag Customer</button>
-        </aside>
-        <main class="flow-canvas-wrap">
-          <div class="form-grid three">
-            <label>Flow Name <input id="flowName" value="Default WhatsApp Menu Flow"/></label>
-            <label>Trigger Keywords <input id="flowTriggers" value="hi,hello,namaste,menu,help"/></label>
-            <label class="checkline"><input id="flowEnabled" type="checkbox" checked/> Flow Enabled</label>
-          </div>
-          <div id="flowCanvas" class="flow-canvas"></div>
-          <p class="hint">Blocks ko upar/neeche move kar sakte ho. Phase 1 me linear flow save hota hai; next phase me arrow connector add karenge.</p>
-          <pre id="flowBuilderResult"></pre>
-        </main>
-      </div>
-    </section>
-
     <section class="panel tab-panel compact-inbox whatsapp-web-panel" id="whatsappInboxPanel">
       <div class="section-head whatsapp-inbox-head">
         <div>
@@ -430,8 +404,22 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
       <button id="saveFaqs" class="primary-btn">Save FAQs</button>
     </section>
 
-    <section class="panel tab-panel" id="leadPanel"><h2>Leads / Order Requests</h2><button id="refreshLeads" class="ghost-btn">Refresh Leads</button><div id="leadList"></div></section>
-    <section class="panel tab-panel" id="activityPanel"><h2>Visitor / Product Activity</h2><button id="refreshEvents" class="ghost-btn">Refresh Activity</button><div id="eventList"></div></section>
+    <section class="panel tab-panel" id="leadPanel">
+      <div class="section-head"><div><h2>Leads / Order Requests</h2><p>Contact number wale aur bina contact number wale leads alag dekhein.</p></div><button id="refreshLeads" class="ghost-btn">Refresh Leads</button></div>
+      <div class="contact-tabs" id="leadContactTabs">
+        <button type="button" class="contact-tab active" data-contact-filter="with" data-target="lead">With Contact Number</button>
+        <button type="button" class="contact-tab" data-contact-filter="without" data-target="lead">Without Contact Number</button>
+      </div>
+      <div id="leadList"></div>
+    </section>
+    <section class="panel tab-panel" id="activityPanel">
+      <div class="section-head"><div><h2>Visitor / Product Activity</h2><p>Identified visitors aur anonymous activity alag dekhein.</p></div><button id="refreshEvents" class="ghost-btn">Refresh Activity</button></div>
+      <div class="contact-tabs" id="activityContactTabs">
+        <button type="button" class="contact-tab active" data-contact-filter="with" data-target="activity">With Contact Number</button>
+        <button type="button" class="contact-tab" data-contact-filter="without" data-target="activity">Without Contact Number</button>
+      </div>
+      <div id="eventList"></div>
+    </section>
     <section class="panel tab-panel" id="messagePanel"><h2>Generated Buy Messages</h2><button id="refreshMsgs" class="ghost-btn">Refresh Messages</button><div id="messageList"></div></section>
     <section class="panel tab-panel" id="googleSheetPanel"><h2>Google Sheet</h2><p id="googleSheetHelp">Google Sheet link not configured. Please add it in API Settings.</p><a id="googleSheetOpenLink" class="primary-btn" target="_blank" rel="noopener" href="#">Open Google Sheet</a></section>
     <div id="adminNotificationToast" class="admin-toast hidden" role="status" aria-live="polite"></div>
