@@ -2,6 +2,7 @@ const keys = ['WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER','ADMIN_USE
 let whatsappTemplates = [];
 let whatsappTemplateMappings = {};
 let selectedTemplateId = '';
+let faqs = [];
 function $(id){ return document.getElementById(id); }
 function show(el, data){ el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); }
 const templateTargetLabels = {customer_followup:'Customer Follow-up', order_confirmation:'Order Confirmation', test_whatsapp:'Test WhatsApp / Owner'};
@@ -33,17 +34,23 @@ function applyApiTemplateToTarget(tpl, target){
 }
 function templateBySelectValue(value){ return whatsappTemplates.find(t=>String(t.id)===String(value) || t.name===value); }
 function selectedMapTarget(){ return $('templateMapTarget')?.value || 'customer_followup'; }
+function normalizeFontSize(size){
+  const map={xs:'xsmall',extraSmall:'xsmall','extra-small':'xsmall',large:'big',xlarge:'big'};
+  const raw=String(size||'medium');
+  const val=map[raw]||raw;
+  return ['xsmall','small','medium','big'].includes(val) ? val : 'medium';
+}
 function applyApiFontSize(size){
-  const allowed = ['small','medium','large','xlarge'];
-  const val = allowed.includes(String(size)) ? String(size) : 'medium';
-  document.body.classList.remove('api-font-small','api-font-medium','api-font-large','api-font-xlarge');
+  const val = normalizeFontSize(size);
+  document.body.classList.remove('api-font-xsmall','api-font-small','api-font-medium','api-font-big','api-font-large','api-font-xlarge');
   document.body.classList.add('api-font-' + val);
   localStorage.setItem('tsgApiFontSize', val);
   if($('apiFontSize')) $('apiFontSize').value = val;
 }
 async function saveApiFontSize(size){
-  applyApiFontSize(size);
-  try{ await fetch('/api/settings',{method:'POST',credentials:'include',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiFontSize:size})}); }catch(e){}
+  const val=normalizeFontSize(size);
+  applyApiFontSize(val);
+  try{ await fetch('/api/settings',{method:'POST',credentials:'include',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({apiFontSize:val})}); }catch(e){}
 }
 
 
@@ -201,6 +208,8 @@ async function loadConfig(){
   if(!data.ok) return alert('Could not load API settings');
   const cfg = data.config || {};
   keys.forEach(k => { if($(k)) $(k).value = cfg[k] || ''; });
+  if($('basicOwnerNumberMirror')) basicOwnerNumberMirror.value = cfg.OWNER_WHATSAPP_NUMBER || '';
+  await loadBasicSettingsAndFaqs();
   await loadApiTemplates();
 }
 async function saveAppearance(){
@@ -213,6 +222,39 @@ async function saveAppearance(){
   if(data.ok) { setThemeColor(body.themeColor); if($('chatbotStatusText')) $('chatbotStatusText').textContent = body.chatbotEnabled ? 'ON' : 'OFF'; }
   if($('appearanceResult')) show($('appearanceResult'), data.ok ? {ok:true,message:'Chatbot appearance saved. Refresh website. If old widget remains, use widget.js?v=19 in Shopify.'} : data);
   return data;
+}
+
+async function loadBasicSettingsAndFaqs(){
+  const [settingsRes, faqRes] = await Promise.all([
+    fetch('/api/settings',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(()=>({settings:{}})),
+    fetch('/api/faqs',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(()=>({faqs:[]}))
+  ]);
+  const settings=settingsRes.settings||{};
+  ['welcomeMessage','fallbackMessage','leadOfferMessage','cartOfferMessage','leadPopupDelaySeconds'].forEach(id=>{ if($(id)) $(id).value=settings[id]||''; });
+  if($('basicOwnerNumberMirror')) basicOwnerNumberMirror.value = $('OWNER_WHATSAPP_NUMBER')?.value || '';
+  faqs=faqRes.faqs||[];
+  renderFaqs();
+}
+function renderFaqs(){
+  const box=$('faqList'); if(!box) return;
+  box.innerHTML=(faqs||[]).map((faq,index)=>`<div class="faq-row faq-settings-row"><label>Keywords <input data-faq-index="${index}" data-faq-field="keywords" value="${esc((faq.keywords||[]).join(', '))}" placeholder="track, order, shipping"/></label><label>Answer <textarea data-faq-index="${index}" data-faq-field="answer" placeholder="Reply answer">${esc(faq.answer||'')}</textarea></label><button type="button" data-remove-faq="${index}" class="ghost-btn danger-outline">Remove</button></div>`).join('') || '<p class="hint">No FAQ rules. + Add FAQ click karo.</p>';
+}
+async function saveBasicSettings(){
+  const body={
+    welcomeMessage:$('welcomeMessage')?.value||'',
+    fallbackMessage:$('fallbackMessage')?.value||'',
+    leadOfferMessage:$('leadOfferMessage')?.value||'',
+    cartOfferMessage:$('cartOfferMessage')?.value||'',
+    leadPopupDelaySeconds:Number($('leadPopupDelaySeconds')?.value||12)
+  };
+  const res=await fetch('/api/settings',{method:'POST',credentials:'include',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('basicSettingsResult')) show($('basicSettingsResult'), res.ok ? {ok:true,message:'Basic settings saved.'} : res);
+  return res;
+}
+async function saveFaqRules(){
+  const res=await fetch('/api/faqs',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({faqs})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('faqResult')) show($('faqResult'), res.ok ? {ok:true,message:'FAQ rules saved.', total:(faqs||[]).length} : res);
+  return res;
 }
 
 function downloadConfigBackup(){
@@ -250,6 +292,13 @@ document.addEventListener('input', e=>{
   if(['CUSTOMER_WHATSAPP_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_NAME'].includes(e.target.id)) renderApiTemplates();
   if(e.target.id==='templateSearch') renderTemplates();
   if(e.target.id === 'chatbotEnabled' && $('chatbotStatusText')) $('chatbotStatusText').textContent = e.target.checked ? 'ON' : 'OFF';
+  const fi=e.target.dataset.faqIndex, ff=e.target.dataset.faqField;
+  if(fi!==undefined && ff){
+    const idx=Number(fi);
+    if(!faqs[idx]) return;
+    if(ff==='keywords') faqs[idx].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean);
+    if(ff==='answer') faqs[idx].answer=e.target.value;
+  }
 });
 document.addEventListener('change', e=>{
   if(e.target.id === 'themeColorPreset' && e.target.value !== 'custom') setThemeColor(e.target.value);
@@ -261,6 +310,10 @@ document.addEventListener('change', e=>{
 });
 document.addEventListener('click', async (e)=>{
   if(e.target.id === 'saveAppearance') return saveAppearance();
+  if(e.target.id === 'saveSettings') return saveBasicSettings();
+  if(e.target.id === 'addFaq') { faqs.push({keywords:['new keyword'],answer:'New answer'}); renderFaqs(); return; }
+  if(e.target.id === 'saveFaqs') return saveFaqRules();
+  if(e.target.dataset.removeFaq!==undefined){ faqs.splice(Number(e.target.dataset.removeFaq),1); renderFaqs(); return; }
   if(e.target.closest('#logoutBtn')) { e.preventDefault(); return logout(); }
   if(e.target.id === 'saveConfig') saveConfig();
   if(e.target.id === 'refreshApiTemplates') loadApiTemplates();

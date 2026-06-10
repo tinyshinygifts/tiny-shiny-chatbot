@@ -30,6 +30,14 @@
             <option value="600">600 sec</option>
           </select>
         </label>
+        <label class="font-size-control admin-font-size-control">Font Size
+          <select id="adminFontSize">
+            <option value="xsmall">Extra Small</option>
+            <option value="small">Small</option>
+            <option value="medium" selected>Medium</option>
+            <option value="big">Big</option>
+          </select>
+        </label>
         <button id="installPwaBtn" type="button" class="ghost-btn">Install App</button>
         <button id="enableDesktopNotifications" type="button" class="ghost-btn">Enable Notifications</button>
         <a class="ghost-btn header-api-settings" href="/api-settings.html">API Settings</a>
@@ -47,13 +55,13 @@
 
     <section class="panel quick-nav admin-tabs" id="adminTabs">
       <button class="tab-btn" data-tab="crmPanel">CRM Dashboard</button>
+      <button class="tab-btn active" data-tab="whatsappInboxPanel">Chat Inbox</button>
       <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
       <button class="tab-btn" data-tab="bulkBroadcastPanel">Bulk WhatsApp Broadcast</button>
       <button class="tab-btn" data-tab="phase2Panel">Campaign Analytics</button>
       <button class="tab-btn" data-tab="dripPanel">Drip Campaigns</button>
       <button class="tab-btn" data-tab="instagramInboxPanel">Instagram Inbox</button>
       <button class="tab-btn" data-tab="whatsappChatbotPanel">WhatsApp Chatbot</button>
-      <button class="tab-btn active" data-tab="whatsappInboxPanel">Team Inbox</button>
       <button class="tab-btn" data-tab="newProductsPanel">New Products</button>
       <button class="tab-btn" data-tab="leadPanel">Leads</button>
       <button class="tab-btn" data-tab="activityPanel">Visitor Activity</button>
@@ -278,7 +286,7 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
       <div class="team-inbox-shell">
         <aside class="wati-left">
           <div class="wati-left-head">
-            <h2>Team Inbox</h2>
+            <h2>Chat Inbox</h2>
             <button id="refreshWhatsappInbox" class="ghost-btn compact-btn">Refresh</button>
           </div>
           <div class="channel-tabs">

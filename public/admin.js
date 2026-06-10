@@ -1110,3 +1110,31 @@ document.addEventListener('click', e=>{ if(e.target.id==='saveMessengerSettings'
 
 
 load().catch(err=>{console.error(err); if(String(err).includes('401')) location.href='/login.html';});
+
+// ---------- Final patch: 90% window + admin font size selector ----------
+(function(){
+  function normalizeAdminFontSize(size){
+    const map={xs:'xsmall',extraSmall:'xsmall','extra-small':'xsmall',large:'big',xlarge:'big'};
+    const raw=String(size||'medium');
+    const val=map[raw]||raw;
+    return ['xsmall','small','medium','big'].includes(val) ? val : 'medium';
+  }
+  window.applyAdminFontSize=function(size){
+    const val=normalizeAdminFontSize(size);
+    document.body.classList.remove('admin-font-xsmall','admin-font-small','admin-font-medium','admin-font-big');
+    document.body.classList.add('admin-font-'+val);
+    localStorage.setItem('tsgAdminFontSize', val);
+    const sel=document.getElementById('adminFontSize');
+    if(sel) sel.value=val;
+  };
+  document.addEventListener('change', function(e){
+    if(e.target && e.target.id==='adminFontSize'){
+      const val=normalizeAdminFontSize(e.target.value);
+      applyAdminFontSize(val);
+      fetch('/api/settings',{method:'POST',credentials:'include',cache:'no-store',headers:{'Content-Type':'application/json'},body:JSON.stringify({adminFontSize:val})}).catch(()=>{});
+    }
+  });
+  setTimeout(function(){
+    fetch('/api/settings',{credentials:'include',cache:'no-store'}).then(r=>r.json()).then(d=>applyAdminFontSize((d.settings||{}).adminFontSize || localStorage.getItem('tsgAdminFontSize') || 'medium')).catch(()=>applyAdminFontSize(localStorage.getItem('tsgAdminFontSize') || 'medium'));
+  },0);
+})();

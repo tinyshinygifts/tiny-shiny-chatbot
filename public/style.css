@@ -461,3 +461,45 @@ body{overflow-x:hidden;}
 .wa-shopify-action{margin-top:10px!important;}
 @media(max-width:1280px){.team-inbox-shell{grid-template-columns:310px minmax(520px,1fr)!important;height:auto!important;min-height:760px!important}.wati-right{grid-column:1/-1!important;border-left:0!important;border-top:1px solid #f0d6e3!important;display:grid!important;grid-template-columns:1.2fr 1fr 1fr!important;gap:12px!important}.wa-bubble{max-width:76%!important}}
 @media(max-width:860px){.team-inbox-shell{grid-template-columns:1fr!important;height:auto!important;min-height:0!important}.wati-left{max-height:360px!important}.wati-center{min-height:640px!important}.wati-right{display:block!important}.reply-mini-row,.reply-compose-row{grid-template-columns:1fr!important}.wa-bubble{max-width:92%!important}.admin-fixed-layout{width:96vw!important}}
+
+/* ---------- User final patch: 90% layout, logo fix, font size, Chat Inbox fit ---------- */
+:root{--admin-page-width:90vw;}
+.admin-wrap.admin-fixed-layout,.admin-fixed-layout,.admin-wrap{width:min(90vw,1700px)!important;max-width:1700px!important;margin-left:auto!important;margin-right:auto!important;box-sizing:border-box!important;}
+.topbar{padding:18px 22px!important;min-height:112px!important;overflow:visible!important;}
+.brand-head{display:grid!important;grid-template-columns:50px minmax(220px,520px)!important;grid-template-areas:"logo badge" "logo title" "logo sub"!important;align-items:center!important;column-gap:14px!important;min-width:360px!important;}
+.brand-head .brand-logo.small,.brand-logo.small{grid-area:logo!important;width:46px!important;height:46px!important;min-width:46px!important;object-fit:contain!important;border-radius:12px!important;background:#fff!important;padding:4px!important;border:1px solid #f4cade!important;box-shadow:0 8px 18px rgba(214,51,132,.12)!important;}
+.brand-head .badge{grid-area:badge!important;width:100%!important;max-width:520px!important;min-height:34px!important;padding:7px 14px!important;justify-content:flex-start!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;}
+.brand-head h1{grid-area:title!important;margin:6px 0 0!important;font-size:28px!important;line-height:1.1!important;}
+.brand-head p{grid-area:sub!important;margin:4px 0 0!important;font-size:13px!important;}
+.font-size-control,.admin-font-size-control{display:inline-flex!important;align-items:center!important;gap:8px!important;border:1px solid #f1cee2!important;border-radius:999px!important;background:#fff!important;padding:6px 10px!important;margin:7px 7px 7px 0!important;font-size:12px!important;font-weight:950!important;color:#6c3a58!important;box-shadow:0 8px 20px rgba(130,40,90,.06)!important;}
+.font-size-control select,.admin-font-size-control select{width:auto!important;min-width:120px!important;height:34px!important;margin:0!important;border-radius:999px!important;padding:4px 10px!important;font-weight:900!important;}
+body.admin-font-xsmall,body.api-font-xsmall{font-size:12px!important;}
+body.admin-font-small,body.api-font-small{font-size:13px!important;}
+body.admin-font-medium,body.api-font-medium{font-size:14px!important;}
+body.admin-font-big,body.api-font-big{font-size:16px!important;}
+body.admin-font-xsmall .panel,body.api-font-xsmall .panel{font-size:12px!important;}
+body.admin-font-small .panel,body.api-font-small .panel{font-size:13px!important;}
+body.admin-font-big .panel,body.api-font-big .panel{font-size:16px!important;}
+.quick-nav .tab-btn[data-tab="whatsappInboxPanel"]::first-letter{text-transform:uppercase;}
+.wati-left-head h2::before{content:""!important;}
+.wati-left-head h2{font-size:19px!important;}
+.team-inbox-shell{grid-template-columns:360px minmax(720px,1fr) 340px!important;width:100%!important;height:calc(100vh - 245px)!important;min-height:560px!important;max-height:none!important;overflow:hidden!important;border-radius:22px!important;}
+.wati-style-panel{margin-top:14px!important;overflow:visible!important;}
+.wati-left,.wati-center,.wati-right{min-height:0!important;height:100%!important;}
+.wati-left{display:grid!important;grid-template-rows:auto auto auto auto minmax(0,1fr)!important;}
+.wati-list{min-height:0!important;overflow-y:auto!important;}
+.wati-center{grid-template-rows:minmax(0,1fr) auto!important;overflow:hidden!important;}
+.wati-chat-window{height:100%!important;min-height:0!important;grid-template-rows:64px minmax(0,1fr)!important;overflow:hidden!important;}
+.wati-message-area{min-height:0!important;height:100%!important;overflow-y:auto!important;padding:24px 34px!important;}
+.wa-bubble{max-width:64%!important;}
+.wati-reply-dock{padding:7px 12px!important;min-height:116px!important;max-height:150px!important;overflow:visible!important;}
+.reply-mini-row{grid-template-columns:minmax(170px,260px) minmax(180px,1fr)!important;gap:8px!important;}
+.reply-compose-row textarea{height:44px!important;min-height:44px!important;max-height:76px!important;}
+.reply-bottom-actions{display:flex!important;min-height:30px!important;gap:7px!important;overflow:hidden!important;}
+.reply-bottom-actions pre,#whatsappInboxResult,#whatsappInboxResult:empty{display:none!important;}
+.wati-right{overflow-y:auto!important;padding:16px!important;}
+.api-basic-settings-panel textarea,.api-faq-rules-panel textarea{min-height:78px!important;}
+.faq-list-settings{max-height:560px;overflow:auto;padding-right:6px;}
+.faq-settings-row{grid-template-columns:minmax(220px,.8fr) minmax(320px,1.2fr) auto!important;align-items:end!important;}
+@media(max-width:1300px){.team-inbox-shell{grid-template-columns:320px minmax(520px,1fr)!important;height:auto!important;min-height:720px!important}.wati-right{grid-column:1/-1!important;height:auto!important;display:grid!important;grid-template-columns:1fr 1fr 1fr!important;gap:12px!important}.brand-head{grid-template-columns:46px minmax(180px,1fr)!important}.topbar{position:static!important}}
+@media(max-width:900px){.admin-wrap.admin-fixed-layout,.admin-fixed-layout,.admin-wrap{width:96vw!important}.team-inbox-shell{grid-template-columns:1fr!important;height:auto!important;min-height:0!important}.wati-left{max-height:390px!important}.wati-center{min-height:640px!important}.wati-right{display:block!important}.brand-head{min-width:0!important;grid-template-columns:42px minmax(0,1fr)!important}.top-actions{justify-content:flex-start!important}.font-size-control{width:auto!important}.faq-settings-row{grid-template-columns:1fr!important}}

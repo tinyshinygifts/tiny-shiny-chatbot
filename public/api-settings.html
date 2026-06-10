@@ -19,10 +19,10 @@
       <div class="top-actions api-top-actions">
         <label class="font-size-control">Font Size
           <select id="apiFontSize">
-            <option value="medium">Medium</option>
-            <option value="large">Large</option>
-            <option value="xlarge">Extra Large</option>
+            <option value="xsmall">Extra Small</option>
             <option value="small">Small</option>
+            <option value="medium">Medium</option>
+            <option value="big">Big</option>
           </select>
         </label>
         <button id="downloadConfig" type="button" class="ghost-btn">Download API Backup</button>
@@ -78,6 +78,40 @@
       </div>
       <button id="saveAppearance" class="primary-btn" type="button">Save Chatbot Appearance</button>
       <pre id="appearanceResult"></pre>
+    </section>
+
+    <section class="panel api-basic-settings-panel">
+      <div class="section-head">
+        <div>
+          <h2>Basic Settings</h2>
+          <p>Website chatbot ke welcome, fallback, product popup aur admin notification settings.</p>
+        </div>
+        <button id="saveSettings" class="primary-btn" type="button">Save Basic Settings</button>
+      </div>
+      <div class="form-grid two">
+        <label>Welcome Message <textarea id="welcomeMessage" placeholder="Customer ko first message"></textarea></label>
+        <label>Fallback Message <textarea id="fallbackMessage" placeholder="Jab answer na mile"></textarea></label>
+        <label>Product Offer Message <textarea id="leadOfferMessage" placeholder="Product view follow-up message"></textarea></label>
+        <label>Add-to-cart Message <textarea id="cartOfferMessage" placeholder="Cart reminder message"></textarea></label>
+        <label>Product popup delay seconds <input id="leadPopupDelaySeconds" type="number" min="5" placeholder="12"/></label>
+        <label>Admin notification number <input id="basicOwnerNumberMirror" placeholder="Owner WhatsApp number"/></label>
+      </div>
+      <pre id="basicSettingsResult"></pre>
+    </section>
+
+    <section class="panel api-faq-rules-panel">
+      <div class="section-head">
+        <div>
+          <h2>FAQ Rules</h2>
+          <p>Keyword based auto replies. Add, edit, delete aur save FAQ rules yahi se hoga.</p>
+        </div>
+        <div class="inline-actions">
+          <button id="addFaq" class="ghost-btn" type="button">+ Add FAQ</button>
+          <button id="saveFaqs" class="primary-btn" type="button">Save FAQs</button>
+        </div>
+      </div>
+      <div id="faqList" class="faq-list-settings"></div>
+      <pre id="faqResult"></pre>
     </section>
 
     <section class="panel security-panel">
