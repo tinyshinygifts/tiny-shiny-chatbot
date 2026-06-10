@@ -25,6 +25,15 @@
       </div>
     </header>
 
+    <section class="panel api-connection-panel">
+      <div class="section-head">
+        <div><h2>Connection Status</h2><p>Jo API connected hai uske saamne green Connected dikhega. Jo missing hai uske saamne Not Connected.</p></div>
+        <button id="refreshConnectionStatus" class="ghost-btn" type="button">Refresh Status</button>
+      </div>
+      <div id="connectionStatusGrid" class="connection-status-grid"></div>
+      <p class="hint" id="connectionStatusTime"></p>
+    </section>
+
     <section class="panel">
       <h2>Business</h2>
       <div class="form-grid two">
@@ -209,24 +218,6 @@
         <label>Shiprocket Email <input id="SHIPROCKET_EMAIL" placeholder="seller@example.com"/></label>
         <label>Shiprocket Password <input id="SHIPROCKET_PASSWORD" type="password" placeholder="Password if token generation is used later"/></label>
       </div>
-    </section>
-
-    <section class="panel">
-      <h2>iCarry API</h2>
-      <p>Optional: add iCarry credentials for shipment/tracking status along with Shopify and Shiprocket.</p>
-      <label>Enable iCarry Tracking
-        <select id="ICARRY_ENABLED"><option value="false">false</option><option value="true">true</option></select>
-      </label>
-      <label>iCarry Tracking API URL <input id="ICARRY_TRACKING_URL" placeholder="https://www.icarry.in/api/tracking or your iCarry tracking endpoint"/></label>
-      <div class="form-grid two">
-        <label>iCarry API Token <input id="ICARRY_API_TOKEN" type="password" placeholder="Bearer token"/></label>
-        <label>iCarry API Key <input id="ICARRY_API_KEY" type="password" placeholder="API key"/></label>
-        <label>iCarry Client ID <input id="ICARRY_CLIENT_ID" placeholder="Client ID"/></label>
-        <label>iCarry Client Secret <input id="ICARRY_CLIENT_SECRET" type="password" placeholder="Client Secret"/></label>
-        <label>iCarry Username <input id="ICARRY_USERNAME" placeholder="Username / email"/></label>
-        <label>iCarry Password <input id="ICARRY_PASSWORD" type="password" placeholder="Password"/></label>
-      </div>
-      <p class="hint">Fill only the fields iCarry provides. Existing API settings stay safe when updating.</p>
     </section>
 
     <section class="panel api-template-library-panel">

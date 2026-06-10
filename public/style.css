@@ -557,3 +557,27 @@ body:has(.api-top-actions) .brand-logo.small{width:76px!important;height:76px!im
 .ndr-table th,.ndr-table td{white-space:nowrap;vertical-align:top;}
 .compact-btn{padding:7px 10px!important;font-size:12px!important;min-height:32px!important;}
 @media(max-width:1200px){.ndr-grid{grid-template-columns:1fr}.topbar .brand-head{grid-template-columns:110px minmax(180px,1fr)!important}.topbar .brand-head .brand-logo.small{width:104px!important;height:90px!important;min-width:104px!important}}
+
+
+/* ---------- Final patch: Shiprocket-only NDR, API connection status, notification dot, balanced chat height ---------- */
+.notify-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:8px;vertical-align:middle;background:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.12)}
+.notify-dot.enabled{background:#22c55e;box-shadow:0 0 0 3px rgba(34,197,94,.14)}
+.notify-dot.blocked{background:#ef4444;box-shadow:0 0 0 3px rgba(239,68,68,.14)}
+.notify-dot.unknown{background:#f59e0b}
+/* Reduce oversized message area but keep internal scroll and stop bottom clipping */
+.team-inbox-shell{min-height:690px!important;height:calc(100vh - 230px)!important;overflow:hidden!important;padding-bottom:0!important;}
+.wati-center{min-height:0!important;height:100%!important;grid-template-rows:minmax(360px,1fr) auto!important;}
+.wati-chat-window{min-height:360px!important;height:100%!important;}
+.wati-message-area{min-height:300px!important;max-height:none!important;height:100%!important;padding:18px 26px!important;overflow-y:auto!important;}
+.wati-reply-dock{min-height:122px!important;max-height:150px!important;margin-bottom:0!important;padding:10px 14px 12px!important;}
+.reply-compose-row textarea{min-height:54px!important;height:54px!important;max-height:90px!important;}
+.reply-compose-row .primary-btn{height:42px!important;}
+/* NDR dashboard */
+.ndr-kpi-row{grid-template-columns:repeat(4,minmax(180px,1fr))!important;}
+.ndr-kpi{background:#fff;border:1px solid rgba(214,51,132,.12);border-radius:16px;padding:18px 16px;box-shadow:0 8px 24px rgba(35,20,38,.05)}
+.ndr-kpi b{font-size:30px;color:#4966d5;margin-right:10px}.ndr-kpi em{font-style:normal;background:#f1f5f9;border-radius:999px;padding:6px 8px;font-weight:900;font-size:12px}.ndr-kpi span{display:block;margin-top:8px;font-size:13px;color:#2d2430;font-weight:750}
+.ndr-tabs{display:flex;gap:22px;margin:18px 0 14px;border-bottom:1px solid #ead8e3}.ndr-tab{border:0;background:transparent;padding:12px 0;font-weight:900;color:#584457;cursor:pointer}.ndr-tab.active{color:#4966d5;border-bottom:3px solid #4966d5}.enhanced-ndr-table th,.enhanced-ndr-table td{white-space:nowrap;vertical-align:top}.link-btn{border:0;background:transparent;color:#d63384;font-weight:900;cursor:pointer;padding:0;text-decoration:underline}.empty-ndr-state{text-align:center;padding:38px;color:#574558}.tracking-grid{display:grid;grid-template-columns:130px 1fr;gap:8px;border:1px solid #f0d3e2;border-radius:16px;padding:14px;margin:10px 0}.tracking-grid span{font-weight:800;color:#7b6475}.tracking-grid b{font-weight:900}.ndr-tracking-modal .section-head{align-items:flex-start}.tracking-popup-body{min-width:min(720px,80vw)}
+/* API connection status */
+.connection-status-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px}.connection-item{display:flex;align-items:center;justify-content:space-between;gap:12px;border:1px solid #ead8e3;border-radius:18px;background:#fff;padding:14px 16px;box-shadow:0 8px 24px rgba(35,20,38,.04)}.connection-item b{display:block;font-size:14px}.connection-item span{display:block;font-size:12px;color:#7b6475;margin-top:4px}.connection-item em{font-style:normal;border-radius:999px;padding:6px 10px;font-weight:950;font-size:12px;white-space:nowrap}.connection-item.ok em{background:#dcfce7;color:#166534}.connection-item.not em{background:#fee2e2;color:#991b1b}.connection-item.ok{border-color:#bbf7d0}.connection-item.not{border-color:#fecaca}
+@media(max-width:1250px){.team-inbox-shell{height:auto!important;min-height:760px!important}.ndr-kpi-row{grid-template-columns:repeat(2,minmax(180px,1fr))!important}}
+@media(max-width:760px){.ndr-kpi-row{grid-template-columns:1fr!important}.ndr-tabs{overflow:auto}.tracking-popup-body{min-width:0}}

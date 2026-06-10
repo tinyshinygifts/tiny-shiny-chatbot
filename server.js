@@ -127,12 +127,11 @@ const apiKeys = [
   'SHOPIFY_WEBHOOK_SECRET',
   'GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET',
   'SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD',
-  'ICARRY_ENABLED','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_ID','ICARRY_CLIENT_SECRET','ICARRY_USERNAME','ICARRY_PASSWORD','ICARRY_TRACKING_URL',
   'ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG',
   'COD_CONFIRMATION_WHATSAPP_ENABLED','COD_ORDER_CONFIRMATION_TEMPLATE_NAME','COD_ORDER_CONFIRMATION_TEMPLATE_LANG','COD_AUTO_CANCEL_ENABLED',
   'META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST'
 ];
-const secretKeys = new Set(['META_ACCESS_TOKEN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_SECRET','ICARRY_PASSWORD']);
+const secretKeys = new Set(['META_ACCESS_TOKEN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
 function readEnvFileWithoutMongo() {
   const out = {};
   const text = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
@@ -222,15 +221,6 @@ function writeEnvFile(next) {
     'SHIPROCKET_EMAIL=' + (merged.SHIPROCKET_EMAIL || ''),
     'SHIPROCKET_PASSWORD=' + (merged.SHIPROCKET_PASSWORD || ''),
     '',
-    '# iCarry API - optional for tracking link/status.',
-    'ICARRY_ENABLED=' + (merged.ICARRY_ENABLED || 'false'),
-    'ICARRY_API_TOKEN=' + (merged.ICARRY_API_TOKEN || ''),
-    'ICARRY_API_KEY=' + (merged.ICARRY_API_KEY || ''),
-    'ICARRY_CLIENT_ID=' + (merged.ICARRY_CLIENT_ID || ''),
-    'ICARRY_CLIENT_SECRET=' + (merged.ICARRY_CLIENT_SECRET || ''),
-    'ICARRY_USERNAME=' + (merged.ICARRY_USERNAME || ''),
-    'ICARRY_PASSWORD=' + (merged.ICARRY_PASSWORD || ''),
-    'ICARRY_TRACKING_URL=' + (merged.ICARRY_TRACKING_URL || 'https://www.icarry.in/'),
     '',
     '# Security for Shopify webhook. Add later when hosting.',
     'SHOPIFY_WEBHOOK_SECRET=' + (merged.SHOPIFY_WEBHOOK_SECRET || ''),
@@ -277,7 +267,7 @@ function configBackupText(env) {
   'META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST']],
     ['Google Sheets', ['GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET']],
     ['Shiprocket API', ['SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD']],
-    ['iCarry API', ['ICARRY_ENABLED','ICARRY_TRACKING_URL','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_ID','ICARRY_CLIENT_SECRET','ICARRY_USERNAME','ICARRY_PASSWORD']]
+    ['Shiprocket', ['SHIPROCKET_TOKEN','SHIPROCKET_EMAIL']]
   ];
   const lines = [];
   lines.push('Tiny Shiny Chatbot - API Settings Backup');
@@ -846,39 +836,13 @@ async function getShiprocketTracking(order) {
   return { ok: false, reason: 'No Shiprocket tracking data found.' };
 }
 
-async function getICarryTracking(order) {
-  const enabled = String(process.env.ICARRY_ENABLED || 'false').toLowerCase() === 'true';
-  const trackingUrl = String(process.env.ICARRY_TRACKING_URL || '').trim();
-  if (!enabled || !trackingUrl || !order) return { ok: false, skipped: true, reason: 'iCarry tracking is disabled or URL missing.' };
-  const ids = [];
-  (order.tracking || []).forEach(t => { if (t.number) ids.push(t.number); });
-  ids.push(String(order.name || order.order_number || order.id || '').replace('#',''));
-  const headers = { 'Content-Type': 'application/json' };
-  if (process.env.ICARRY_API_TOKEN) headers.Authorization = `Bearer ${process.env.ICARRY_API_TOKEN}`;
-  if (process.env.ICARRY_API_KEY) headers['X-API-Key'] = process.env.ICARRY_API_KEY;
-  if (process.env.ICARRY_CLIENT_ID) headers['X-Client-ID'] = process.env.ICARRY_CLIENT_ID;
-  if (process.env.ICARRY_CLIENT_SECRET) headers['X-Client-Secret'] = process.env.ICARRY_CLIENT_SECRET;
-  for (const id of ids.filter(Boolean)) {
-    const sep = trackingUrl.includes('?') ? '&' : '?';
-    const url = `${trackingUrl}${sep}awb=${encodeURIComponent(id)}&order_id=${encodeURIComponent(id)}`;
-    try {
-      const r = await fetch(url, { headers });
-      const text = await r.text().catch(() => '');
-      let data; try { data = JSON.parse(text); } catch { data = text.slice(0, 1000); }
-      if (r.ok) return { ok: true, status: r.status, data, query: id };
-    } catch (e) { /* try next id */ }
-  }
-  return { ok: false, reason: 'No iCarry tracking data found.' };
-}
-
-function buildOrderReply(simple, shiprocket, icarry) {
+function buildOrderReply(simple, shiprocket) {
   const items = (simple.line_items || []).map(i => `${i.title} x ${i.quantity}`).join(', ');
   const tracking = (simple.tracking || []).length
     ? simple.tracking.map(t => `${t.company ? t.company + ' ' : ''}${t.number || ''}${t.status ? ' ('+t.status+')' : ''}${t.url ? ' - ' + t.url : ''}`).join('\n')
     : 'Tracking details are not added in Shopify yet.';
   let shipLine = '';
   if (shiprocket?.ok) shipLine = `\nShiprocket: ${JSON.stringify(shiprocket.data).slice(0, 700)}`;
-  if (icarry?.ok) shipLine += `\niCarry: ${JSON.stringify(icarry.data).slice(0, 700)}`;
   return `Order ${simple.name || simple.order_number}\nCustomer: ${simple.customer_name || '-'}\nPayment status: ${simple.financial_status || '-'}\nOrder/Fulfillment status: ${simple.cancelled_at ? 'cancelled' : simple.fulfillment_status}\nTotal: ${simple.currency} ${simple.total_price || '-'}\nItems: ${items || '-'}\nTracking: ${tracking}${shipLine}`;
 }
 async function getShopifyOrderStatus({ orderId, phone }) {
@@ -903,9 +867,8 @@ async function getShopifyOrderStatus({ orderId, phone }) {
     if (matched) {
       const simple = simplifyOrder(matched);
       const shiprocket = await getShiprocketTracking(simple).catch(e => ({ ok: false, error: e.message }));
-      const icarry = await getICarryTracking(simple).catch(e => ({ ok: false, error: e.message }));
       const trackingLinks = (simple.tracking || []).filter(t => t.url).map(t => ({ label: t.number ? `Track ${t.number}` : 'Track Shipment', url: t.url }));
-      return { ok: true, order: simple, shiprocket, icarry, trackingLinks, reply: buildOrderReply(simple, shiprocket, icarry) };
+      return { ok: true, order: simple, shiprocket, trackingLinks, reply: buildOrderReply(simple, shiprocket) };
     }
   }
   return { ok: false, message: 'No matching order found for this mobile/order number.' };
@@ -1320,10 +1283,10 @@ app.post('/api/chatbot-flows', (req,res)=>{
 app.delete('/api/chatbot-flows/:id', (req,res)=>{ const flows=readChatbotFlows().filter(f=>String(f.id)!==String(req.params.id)); res.json({ ok:true, flows:writeChatbotFlows(flows) }); });
 app.get('/api/shipping-settings', (req,res)=>{
   const s=readJson(settingsPath,{});
-  res.json({ ok:true, shipping:{ provider:(s.shippingProvider||'shiprocket'), shiprocketEnabled:!!(process.env.SHIPROCKET_TOKEN||process.env.SHIPROCKET_EMAIL), icarryEnabled:String(process.env.ICARRY_ENABLED||'').toLowerCase()==='true', icarryTrackingUrl:process.env.ICARRY_TRACKING_URL||'' } });
+  res.json({ ok:true, shipping:{ provider:'shiprocket', shiprocketEnabled:!!(process.env.SHIPROCKET_TOKEN||process.env.SHIPROCKET_EMAIL) } });
 });
 app.post('/api/shipping-settings', (req,res)=>{
-  const provider=String(req.body?.provider||'shiprocket').toLowerCase()==='icarry'?'icarry':'shiprocket';
+  const provider='shiprocket';
   const current=readJson(settingsPath,{});
   writeJson(settingsPath,{...current, shippingProvider:provider});
   res.json({ ok:true, shipping:{ provider } });
@@ -1936,7 +1899,7 @@ app.get('/api/shopify/sales-analysis', requireAdmin, async (req,res)=>{
 
 
 
-// ---------- NDR: Shiprocket + iCarry + WhatsApp automation ----------
+// ---------- NDR: Shiprocket + WhatsApp automation ----------
 function defaultNdrSettings(){
   return {
     beforeDeliveryEnabled:true,
@@ -1959,7 +1922,7 @@ function seedNdrFromLeads(){
   const ndr=readJson(ndrPath,[]);
   if(ndr.length) return ndr;
   const sample=leads.filter(x=>x.orderName||x.orderId||x.phone).slice(0,8).map((x,i)=>({
-    id:safeId('ndr'), provider:i%2?'icarry':'shiprocket', awb:x.awb||x.trackingNumber||'', orderNo:x.orderName||x.orderId||'', customerName:x.customerName||x.name||'Customer', phone:normalizeWhatsAppPhone(x.phone||x.customerPhone||''), courier:x.courier||'', reason:x.reason||'Delivery attempt pending / customer unreachable', status:'pending', attempts:Number(x.attempts||1), ndrAt:x.createdAt||nowIso(), trackingLink:x.trackingLink||'', whatsappStatus:'not_sent', logs:[{at:nowIso(), text:'NDR item created from available lead/order data'}]
+    id:safeId('ndr'), provider:'shiprocket', awb:x.awb||x.trackingNumber||'', orderNo:x.orderName||x.orderId||'', customerName:x.customerName||x.name||'Customer', phone:normalizeWhatsAppPhone(x.phone||x.customerPhone||''), courier:x.courier||'', reason:x.reason||'Delivery attempt pending / customer unreachable', status:'pending', attempts:Number(x.attempts||1), ndrAt:x.createdAt||nowIso(), trackingLink:x.trackingLink||'', whatsappStatus:'not_sent', logs:[{at:nowIso(), text:'NDR item created from available lead/order data'}]
   }));
   if(sample.length) writeJson(ndrPath,sample);
   return sample;
@@ -1968,7 +1931,7 @@ app.get('/api/ndr', requireAdmin, (req,res)=>{
   const rows=seedNdrFromLeads();
   const settings=readNdrSettings();
   const summary={total:rows.length,pending:rows.filter(x=>x.status==='pending').length,reattempt:rows.filter(x=>String(x.status).includes('reattempt')).length,resolved:rows.filter(x=>x.status==='resolved').length,rto:rows.filter(x=>String(x.status).toLowerCase()==='rto').length,whatsappSent:rows.filter(x=>String(x.whatsappStatus).includes('sent')).length};
-  res.json({ok:true, ndr:rows, settings, summary, providers:{shiprocket:Boolean(process.env.SHIPROCKET_TOKEN||process.env.SHIPROCKET_EMAIL), icarry:String(process.env.ICARRY_ENABLED||'').toLowerCase()==='true' || Boolean(process.env.ICARRY_API_TOKEN||process.env.ICARRY_API_KEY)}});
+  res.json({ok:true, ndr:rows, settings, summary, providers:{shiprocket:Boolean(process.env.SHIPROCKET_TOKEN||process.env.SHIPROCKET_EMAIL)}});
 });
 app.post('/api/ndr/settings', requireAdmin, (req,res)=>{ const next=Object.assign(readNdrSettings(), req.body||{}, {updatedAt:nowIso()}); writeJson(ndrSettingsPath,next); res.json({ok:true, settings:next}); });
 app.post('/api/ndr/sync', requireAdmin, async (req,res)=>{
@@ -1976,7 +1939,7 @@ app.post('/api/ndr/sync', requireAdmin, async (req,res)=>{
   // API placeholders: keep existing rows and mark last sync; real provider credentials are shown in status.
   const synced=rows.map(x=>Object.assign({},x,{lastSyncAt:nowIso()}));
   writeJson(ndrPath,synced);
-  res.json({ok:true, message:'NDR sync completed from saved data. Shiprocket/iCarry live API fields will populate when provider endpoints return NDR data.', count:synced.length, ndr:synced});
+  res.json({ok:true, message:'NDR sync completed from saved data. Shiprocket live API fields will populate when provider endpoint returns NDR data.', count:synced.length, ndr:synced});
 });
 app.post('/api/ndr/:id/status', requireAdmin, (req,res)=>{ const rows=readJson(ndrPath,[]); const idx=rows.findIndex(x=>String(x.id)===String(req.params.id)); if(idx<0) return res.status(404).json({ok:false,error:'NDR not found'}); rows[idx]=Object.assign({},rows[idx],req.body||{},{updatedAt:nowIso()}); rows[idx].logs=[{at:nowIso(),text:'Status updated to '+(rows[idx].status||'updated')}].concat(rows[idx].logs||[]); writeJson(ndrPath,rows); res.json({ok:true, item:rows[idx]}); });
 app.post('/api/ndr/:id/whatsapp', requireAdmin, async (req,res)=>{
@@ -2001,6 +1964,24 @@ async function fetchLikeNdrSend(id,type){
   const send=await sendWhatsAppTextManual({to,message}).catch(e=>({ok:false,error:e.message}));
   item.whatsappStatus=send.ok?'sent':'failed'; item.lastWhatsappAt=nowIso(); item.logs=[{at:nowIso(),text:'Bulk NDR WhatsApp '+(send.ok?'sent':'failed')}].concat(item.logs||[]); writeJson(ndrPath,rows); return {ok:!!send.ok,id,send};
 }
+
+
+app.get('/api/connection-status', requireAdmin, (req, res) => {
+  const cfg = readEnvFile();
+  const settings = readJson(settingsPath, {});
+  const has = (...keys) => keys.some(k => String(cfg[k] || process.env[k] || settings[k] || '').trim());
+  const rows = [
+    { key:'shopify', name:'Shopify', connected: has('SHOPIFY_STORE_DOMAIN') && has('SHOPIFY_ADMIN_ACCESS_TOKEN'), details: has('SHOPIFY_STORE_DOMAIN') ? 'Store saved' : 'Store missing' },
+    { key:'whatsapp', name:'WhatsApp Cloud API', connected: has('WHATSAPP_CLOUD_TOKEN') && has('WHATSAPP_PHONE_NUMBER_ID'), details: has('WHATSAPP_PHONE_NUMBER_ID') ? 'Phone ID saved' : 'Phone ID missing' },
+    { key:'meta', name:'Meta Ads', connected: has('META_ACCESS_TOKEN') && has('META_AD_ACCOUNT_ID'), details: has('META_AD_ACCOUNT_ID') ? 'Ad account saved' : 'Ad account missing' },
+    { key:'instagram', name:'Instagram', connected: has('META_ACCESS_TOKEN') && has('META_INSTAGRAM_ACCOUNT_ID'), details: has('META_INSTAGRAM_ACCOUNT_ID') ? 'Instagram account saved' : 'Instagram account missing' },
+    { key:'messenger', name:'Facebook Messenger', connected: has('META_ACCESS_TOKEN') && has('META_FACEBOOK_PAGE_ID'), details: has('META_FACEBOOK_PAGE_ID') ? 'Page ID saved' : 'Page ID missing' },
+    { key:'shiprocket', name:'Shiprocket', connected: has('SHIPROCKET_TOKEN') || (has('SHIPROCKET_EMAIL') && has('SHIPROCKET_PASSWORD')), details: has('SHIPROCKET_TOKEN') ? 'Token saved' : (has('SHIPROCKET_EMAIL') ? 'Login saved' : 'Credentials missing') },
+    { key:'google', name:'Google Sheet', connected: has('GOOGLE_SHEETS_WEBHOOK_URL') || has('GOOGLE_SHEET_URL'), details: has('GOOGLE_SHEET_URL') ? 'Sheet link saved' : 'Sheet not configured' },
+    { key:'mongodb', name:'MongoDB Storage', connected: !!mongoReady, details: mongoReady ? `${mongoDbName}/${mongoCollectionName}` : (mongoUri ? 'Configured but not connected' : 'Not configured') }
+  ];
+  res.json({ ok:true, checkedAt: nowIso(), rows });
+});
 
 app.get('/api/storage/status', (req, res) => res.json({ ok: true, storage: mongoReady ? 'mongodb' : 'json-file', mongodb: { configured: Boolean(mongoUri), connected: mongoReady, database: mongoReady ? mongoDbName : '', collection: mongoReady ? mongoCollectionName : '' } }));
 app.get('/api/faqs', (req, res) => res.json({ ok: true, faqs: readJson(faqPath, []) }));

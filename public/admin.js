@@ -138,6 +138,17 @@ function notifyNewWhatsappMessage(m){
     n.onclick = () => { window.focus(); selectedWhatsappInboxId=phone; showTab('whatsappInboxPanel'); renderWhatsappInbox(); n.close(); };
   }
 }
+
+function updateNotificationStatusDot(){
+  const dot=$('notificationStatusDot');
+  if(!dot || !('Notification' in window)) return;
+  const p=Notification.permission;
+  dot.classList.remove('enabled','blocked','unknown');
+  if(p==='granted'){ dot.classList.add('enabled'); dot.title='Notifications: Enabled'; }
+  else if(p==='denied'){ dot.classList.add('blocked'); dot.title='Notifications: Blocked'; }
+  else { dot.classList.add('unknown'); dot.title='Notifications: Permission Required'; }
+}
+
 function checkNewInboundNotifications(messages=[]){
   const inbound = messages.filter(m=>m.direction==='inbound' && (m.status==='unread' || !m.status));
   if(!whatsappInboxInitialized){
@@ -157,7 +168,7 @@ function checkNewInboundNotifications(messages=[]){
 async function load(){
   setThemeColor(localStorage.getItem('tsgAdminThemeColor') || '#d63384');
   initAutoRefreshControls();
-  initDesktopNotificationButton();
+  initDesktopNotificationButton(); updateNotificationStatusDot();
   const [s,f,cfg] = await Promise.all([
     fetch('/api/settings',{credentials:'include',cache:'no-store'}).then(r=>r.json()),
     fetch('/api/faqs',{credentials:'include'}).then(r=>r.json()),
@@ -1181,7 +1192,7 @@ document.addEventListener('click', e=>{ if(e.target.id==='refreshShopifySales') 
 
 
 
-// ---------- NDR panel: Shiprocket + iCarry + WhatsApp automation ----------
+// ---------- NDR panel: Shiprocket + WhatsApp automation ----------
 function renderNdrMoney(v){ return '₹' + Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:0}); }
 function ndrFilteredRows(){
   const provider=($('ndrProviderFilter')?.value||'all').toLowerCase();
@@ -1205,12 +1216,42 @@ function fillNdrSettings(){
   if($('ndrBeforeMessage')) ndrBeforeMessage.value=s.beforeMessage||'';
   if($('ndrFailedMessage')) ndrFailedMessage.value=s.failedMessage||'';
 }
+function setNdrTab(status){
+  window.ndrActiveStatusTab=status||'pending';
+  document.querySelectorAll('[data-ndr-status-tab]').forEach(b=>b.classList.toggle('active', b.dataset.ndrStatusTab===window.ndrActiveStatusTab));
+  renderNdr();
+}
+function ndrTrackingHtml(r){
+  const logs=(r.logs||[]).map(l=>`<div class="activity-log-row"><b>${esc(l.text||'')}</b><small>${esc(l.at||'')}</small></div>`).join('');
+  return `<div class="tracking-popup-body"><h3>${esc(r.orderNo||r.orderNumber||'-')} Tracking Status</h3>
+    <div class="tracking-grid"><span>Provider</span><b>${esc(r.provider||'shiprocket')}</b><span>AWB</span><b>${esc(r.awb||'-')}</b><span>Order Date</span><b>${esc((r.orderDate||r.createdAt||r.ndrAt||'').slice(0,10)||'-')}</b><span>NDR Date</span><b>${esc((r.ndrAt||r.updatedAt||'').slice(0,16)||'-')}</b><span>Attempts</span><b>${esc(r.attempts||r.ndrAttempt||1)}</b><span>Reason</span><b>${esc(r.reason||'-')}</b><span>Current Status</span><b>${esc(r.status||'pending')}</b></div>
+    <h4>Delivery Attempt Information</h4><p>${esc(r.attemptInfo||r.deliveryAttemptInfo||r.reason||'Delivery attempt pending / customer unreachable')}</p>
+    <h4>Activity / Tracking Log</h4><div class="activity-log-list">${logs || '<p class="hint">No tracking logs yet.</p>'}</div></div>`;
+}
+function openNdrTracking(id){
+  const r=(ndrRows||[]).find(x=>String(x.id)===String(id)); if(!r) return;
+  let m=$('ndrTrackingModal');
+  if(!m){ m=document.createElement('div'); m.id='ndrTrackingModal'; m.className='modal-overlay hidden'; document.body.appendChild(m); }
+  m.innerHTML=`<div class="modal-card ndr-tracking-modal"><div class="section-head mini"><div>${ndrTrackingHtml(r)}</div><button class="ghost-btn" type="button" data-close-ndr-modal="1">Close</button></div></div>`;
+  m.classList.remove('hidden');
+}
 function renderNdr(){
-  const rows=ndrFilteredRows();
-  const summary={total:rows.length,pending:rows.filter(x=>String(x.status).includes('pending')).length,reattempt:rows.filter(x=>String(x.status).includes('reattempt')).length,rto:rows.filter(x=>String(x.status).toLowerCase()==='rto').length,whatsappSent:rows.filter(x=>String(x.whatsappStatus).includes('sent')).length};
-  if($('ndrSummary')) ndrSummary.innerHTML=[['Total NDR',summary.total],['Pending',summary.pending],['Reattempt',summary.reattempt],['RTO',summary.rto],['WhatsApp Sent',summary.whatsappSent]].map(x=>`<div class="sales-kpi"><span>${esc(x[0])}</span><b>${esc(x[1])}</b></div>`).join('');
-  if($('ndrTable')) ndrTable.innerHTML=`<table class="customer-table ndr-table"><thead><tr><th>Provider</th><th>AWB</th><th>Order</th><th>Customer</th><th>Phone</th><th>Reason</th><th>Status</th><th>WhatsApp</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc(r.provider||'')}</td><td>${esc(r.awb||'-')}</td><td>${esc(r.orderNo||r.orderNumber||'-')}</td><td>${esc(r.customerName||'-')}</td><td>${esc(r.phone||'-')}</td><td>${esc(r.reason||'-')}</td><td>${esc(r.status||'pending')}</td><td>${esc(r.whatsappStatus||'not_sent')}</td><td><button class="ghost-btn compact-btn" data-ndr-wa="${esc(r.id)}" data-ndr-type="before">Before</button><button class="primary-btn compact-btn" data-ndr-wa="${esc(r.id)}" data-ndr-type="failed">NDR Msg</button><button class="ghost-btn compact-btn" data-ndr-reattempt="${esc(r.id)}">Reattempt</button></td></tr>`).join(''):'<tr><td colspan="9">No NDR data. Sync Shiprocket / iCarry click karein.</td></tr>'}</tbody></table>`;
-  const logs=[]; rows.forEach(r=>(r.logs||[]).slice(0,4).forEach(l=>logs.push({at:l.at||r.updatedAt||'', text:`${r.orderNo||r.awb||''}: ${l.text||''}`})));
+  const rowsAll=ndrFilteredRows();
+  const active=(window.ndrActiveStatusTab||'pending');
+  document.querySelectorAll('[data-ndr-status-tab]').forEach(b=>b.classList.toggle('active', b.dataset.ndrStatusTab===active));
+  const rows=rowsAll.filter(r=> active==='pending' ? String(r.status||'pending').toLowerCase().includes('pending') : String(r.status||'').toLowerCase().includes(active));
+  const total=rowsAll.length;
+  const reattempt=rowsAll.filter(x=>String(x.status||'').toLowerCase().includes('reattempt')).length;
+  const delivered=rowsAll.filter(x=>String(x.status||'').toLowerCase().includes('resolved')||String(x.status||'').toLowerCase().includes('delivered')).length;
+  const rto=rowsAll.filter(x=>String(x.status||'').toLowerCase().includes('rto')).length;
+  const orderCount=Math.max(total, (shopifySalesOrders||[]).length || total);
+  if($('ndrSummary')) ndrSummary.innerHTML=`
+    <div class="ndr-kpi"><b>${total}</b><em>${orderCount?Math.round(total/orderCount*100):0}%</em><span>Total NDR Cases out of ${orderCount} orders</span></div>
+    <div class="ndr-kpi"><b>${reattempt}</b><em>${total?Math.round(reattempt/total*100):0}%</em><span>Reattempt requested / action pending</span></div>
+    <div class="ndr-kpi"><b>${delivered}</b><em>${total?Math.round(delivered/total*100):0}%</em><span>Orders delivered after reattempt</span></div>
+    <div class="ndr-kpi"><b>${rto}</b><em>${total?Math.round(rto/total*100):0}%</em><span>Orders RTO after max reattempts</span></div>`;
+  if($('ndrTable')) ndrTable.innerHTML=`<table class="customer-table ndr-table enhanced-ndr-table"><thead><tr><th>Latest NDR</th><th>Order</th><th>Order Date</th><th>Shipping</th><th>Payment & Customer</th><th>Non Delivery Info</th><th>Latest Customer Response</th><th>Shiprocket Attempted</th><th>Action</th></tr></thead><tbody>${rows.length?rows.map(r=>`<tr><td>${esc((r.ndrAt||r.updatedAt||'').slice(0,16)||'-')}</td><td><button class="link-btn" data-ndr-track="${esc(r.id)}">${esc(r.orderNo||r.orderNumber||'-')}</button><br/><small>AWB: ${esc(r.awb||'-')}</small></td><td>${esc((r.orderDate||r.createdAt||r.ndrAt||'').slice(0,10)||'-')}</td><td>${esc(r.provider||'shiprocket')}<br/><small>${esc(r.courier||'')}</small></td><td><b>${esc(r.customerName||'-')}</b><br/><small>${esc(r.phone||'-')}</small></td><td>${esc(r.reason||'-')}<br/><small>Attempt: ${esc(r.attempts||r.ndrAttempt||1)}</small></td><td>${esc(r.customerResponse||r.latestCustomerResponse||'-')}</td><td>${esc(r.attemptInfo||r.deliveryAttemptInfo||r.status||'pending')}</td><td><button class="ghost-btn compact-btn" data-ndr-wa="${esc(r.id)}" data-ndr-type="before">Before</button><button class="primary-btn compact-btn" data-ndr-wa="${esc(r.id)}" data-ndr-type="failed">NDR Msg</button><button class="ghost-btn compact-btn" data-ndr-reattempt="${esc(r.id)}">Reattempt</button></td></tr>`).join(''):'<tr><td colspan="9"><div class="empty-ndr-state"><b>No data available</b><br/>Sync Shiprocket ya filters change karein.</div></td></tr>'}</tbody></table>`;
+  const logs=[]; rowsAll.forEach(r=>(r.logs||[]).slice(0,4).forEach(l=>logs.push({at:l.at||r.updatedAt||'', text:`${r.orderNo||r.awb||''}: ${l.text||''}`})));
   if($('ndrLogs')) ndrLogs.innerHTML=logs.slice(0,80).map(l=>`<div class="activity-log-row"><b>${esc(l.text)}</b><small>${esc(l.at)}</small></div>`).join('') || '<p class="hint">No NDR activity logs yet.</p>';
 }
 async function loadNdr(){
@@ -1261,3 +1302,13 @@ load().catch(err=>{console.error(err); if(String(err).includes('401')) location.
     fetch('/api/settings',{credentials:'include',cache:'no-store'}).then(r=>r.json()).then(d=>applyAdminFontSize((d.settings||{}).adminFontSize || localStorage.getItem('tsgAdminFontSize') || 'medium')).catch(()=>applyAdminFontSize(localStorage.getItem('tsgAdminFontSize') || 'medium'));
   },0);
 })();
+
+
+// Final patch event helpers
+window.addEventListener('focus', updateNotificationStatusDot);
+document.addEventListener('click', e=>{
+  const statusTab=e.target.closest('[data-ndr-status-tab]'); if(statusTab){ setNdrTab(statusTab.dataset.ndrStatusTab); }
+  const track=e.target.closest('[data-ndr-track]'); if(track){ openNdrTracking(track.dataset.ndrTrack); }
+  if(e.target.closest('[data-close-ndr-modal]')){ const m=$('ndrTrackingModal'); if(m) m.classList.add('hidden'); }
+  if(e.target && e.target.id==='enableDesktopNotifications'){ setTimeout(updateNotificationStatusDot,500); }
+});

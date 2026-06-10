@@ -31,7 +31,7 @@
           </select>
         </label>
         <button id="installPwaBtn" type="button" class="ghost-btn">Install App</button>
-        <button id="enableDesktopNotifications" type="button" class="ghost-btn">Enable Notifications</button>
+        <button id="enableDesktopNotifications" type="button" class="ghost-btn"><span id="notificationStatusDot" class="notify-dot unknown" title="Notification status"></span> Enable Notifications</button>
         <a class="ghost-btn header-api-settings" href="/api-settings.html">API Settings</a>
         <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
       </div>
@@ -171,16 +171,22 @@
 
     <section class="panel tab-panel ndr-panel" id="ndrPanel">
       <div class="section-head">
-        <div><h2>NDR</h2><p>Shiprocket + iCarry NDR data, delivery attempt tracking aur WhatsApp automation.</p></div>
-        <div class="inline-actions"><button id="refreshNdr" class="ghost-btn" type="button">Refresh NDR</button><button id="syncNdr" class="primary-btn" type="button">Sync Shiprocket / iCarry</button><button id="exportNdrCsv" class="ghost-btn" type="button">Export CSV</button></div>
+        <div><h2>Non-Delivery Report (NDR)</h2><p>Shiprocket NDR data, delivery attempt tracking aur WhatsApp automation.</p></div>
+        <div class="inline-actions"><button id="refreshNdr" class="ghost-btn" type="button">Refresh NDR</button><button id="syncNdr" class="primary-btn" type="button">Sync Shiprocket</button><button id="exportNdrCsv" class="ghost-btn" type="button">Export CSV</button></div>
       </div>
       <div class="form-grid four ndr-filters">
-        <label>Provider <select id="ndrProviderFilter"><option value="all">All</option><option value="shiprocket">Shiprocket</option><option value="icarry">iCarry</option></select></label>
+        <label>Provider <select id="ndrProviderFilter"><option value="all">All</option><option value="shiprocket">Shiprocket</option></select></label>
         <label>Status <select id="ndrStatusFilter"><option value="all">All</option><option value="pending">Pending</option><option value="reattempt">Reattempt</option><option value="resolved">Resolved</option><option value="rto">RTO</option></select></label>
         <label>Reason <input id="ndrReasonFilter" placeholder="Customer unavailable, refused, address issue"/></label>
         <label>Search <input id="ndrSearch" placeholder="AWB, order, customer, phone"/></label>
       </div>
-      <div class="ndr-summary-grid" id="ndrSummary"></div>
+      <div class="ndr-summary-grid ndr-kpi-row" id="ndrSummary"></div>
+      <div class="ndr-tabs" id="ndrStatusTabs">
+        <button class="ndr-tab active" data-ndr-status-tab="pending">Take Action</button>
+        <button class="ndr-tab" data-ndr-status-tab="reattempt">Re-Attempt Requested</button>
+        <button class="ndr-tab" data-ndr-status-tab="resolved">Delivered</button>
+        <button class="ndr-tab" data-ndr-status-tab="rto">RTO Requested</button>
+      </div>
       <div class="ndr-automation-card">
         <h3>NDR WhatsApp Automation</h3>
         <div class="form-grid four">
@@ -325,7 +331,7 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
       <h3>Shipping / Tracking Provider</h3>
       <div class="form-grid three">
         <label>Shipping Provider
-          <select id="waShippingProvider"><option value="shiprocket">Shiprocket</option><option value="icarry">iCarry</option></select>
+          <select id="waShippingProvider"><option value="shiprocket">Shiprocket</option></select>
         </label>
         <label>Tracking Reply Keywords <input id="waTrackingKeywords" value="track,tracking,order status,where is my order"/></label>
         <label>Support Handover Keywords <input id="waSupportKeywords" value="support,agent,human,call me,help me"/></label>
@@ -380,7 +386,7 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
               <button id="sendWhatsappInboxReply" class="primary-btn">Send</button>
             </div>
             <div class="reply-bottom-actions">
-              <button id="enableDesktopNotifications2" type="button" class="ghost-btn compact-btn">Enable Notifications</button>
+              <button id="enableDesktopNotifications2" type="button" class="ghost-btn compact-btn"><span id="notificationStatusDot" class="notify-dot unknown" title="Notification status"></span> Enable Notifications</button>
               <button id="markWhatsappInboxRead" class="ghost-btn compact-btn">Mark Read</button>
               <pre id="whatsappInboxResult"></pre>
             </div>

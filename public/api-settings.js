@@ -1,4 +1,4 @@
-const keys = ['WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER','ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS','SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER','SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI','WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG','CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG','GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD','ICARRY_ENABLED','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_ID','ICARRY_CLIENT_SECRET','ICARRY_USERNAME','ICARRY_PASSWORD','ICARRY_TRACKING_URL','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG','META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST'];
+const keys = ['WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER','ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS','SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER','SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI','WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG','CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG','GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG','META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST'];
 let whatsappTemplates = [];
 let whatsappTemplateMappings = {};
 let selectedTemplateId = '';
@@ -202,8 +202,17 @@ function applyThemeColor(value){ const color=normalizeColor(value); document.doc
 function setThemeColor(value){ const color=normalizeColor(value); applyThemeColor(color); if($('themeColor')) $('themeColor').value=color; if($('themeHex')) $('themeHex').value=color.toUpperCase(); if($('themeColorPreview')) $('themeColorPreview').textContent=colorNames[color] || color.toUpperCase(); if($('themeColorPreset')) $('themeColorPreset').value=colorOptions.includes(color)?color:'custom'; }
 async function loadTheme(){ try{ const data=await fetch('/api/settings',{credentials:'include',cache:'no-store'}).then(r=>r.json()); const settings=data.settings||{}; const color=settings.themeColor || localStorage.getItem('tsgAdminThemeColor') || '#d63384'; setThemeColor(color); if($('botName')) $('botName').value=settings.botName || 'Tiny Shiny Assistant'; applyApiFontSize(settings.apiFontSize || localStorage.getItem('tsgApiFontSize') || 'medium'); if($('chatbotEnabled')) { $('chatbotEnabled').checked = settings.chatbotEnabled !== false; if($('chatbotStatusText')) $('chatbotStatusText').textContent = $('chatbotEnabled').checked ? 'ON' : 'OFF'; } }catch{ setThemeColor(localStorage.getItem('tsgAdminThemeColor') || '#d63384'); } }
 async function logout(){ try{ await fetch('/api/admin/logout',{method:'POST',credentials:'include',cache:'no-store'}); }catch(e){} window.location.replace('/login.html?logout=1&t='+Date.now()); }
+
+async function loadConnectionStatus(){
+  const grid=$('connectionStatusGrid'); if(!grid) return;
+  const d=await fetch('/api/connection-status',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,rows:[]}));
+  if(!d.ok){ grid.innerHTML=`<div class="connection-item not"><b>Status load failed</b><span>${esc(d.error||'Error')}</span></div>`; return; }
+  grid.innerHTML=(d.rows||[]).map(x=>`<div class="connection-item ${x.connected?'ok':'not'}"><div><b>${esc(x.name)}</b><span>${esc(x.details||'')}</span></div><em>${x.connected?'Connected':'Not Connected'}</em></div>`).join('');
+  if($('connectionStatusTime')) connectionStatusTime.textContent='Last checked: '+(d.checkedAt||new Date().toISOString());
+}
+
 async function loadConfig(){
-  await loadTheme();
+  await loadTheme(); await loadConnectionStatus();
   const data = await fetch('/api/config',{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if(!data.ok) return alert('Could not load API settings');
   const cfg = data.config || {};
@@ -373,3 +382,5 @@ async function saveNdrApiSettings(){
 }
 document.addEventListener('click', e=>{ if(e.target.id==='saveNdrApiSettings') saveNdrApiSettings(); });
 setTimeout(()=>loadNdrApiSettings().catch(()=>{}),0);
+
+document.addEventListener('click', e=>{ if(e.target && e.target.id==='refreshConnectionStatus') loadConnectionStatus(); });
