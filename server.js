@@ -7,6 +7,7 @@ require('dotenv').config();
 let MongoClient = null;
 try { ({ MongoClient } = require('mongodb')); } catch (err) { console.warn('MongoDB package not installed; JSON file storage fallback active.'); }
 
+const APP_BUILD_VERSION = '20260610124214';
 const app = express();
 const PORT = process.env.PORT || 5057;
 
@@ -1036,6 +1037,16 @@ app.post('/webhooks/whatsapp', async (req, res) => {
   }
 });
 
+
+app.use((req,res,next)=>{
+  if (/\/(admin|api-settings|whatsapp)(\.html)?$/.test(req.path) || /\/(admin|api-settings)\.html$/.test(req.path)) {
+    res.set('Cache-Control','no-store, no-cache, must-revalidate, proxy-revalidate');
+    res.set('Pragma','no-cache');
+    res.set('Expires','0');
+  }
+  next();
+});
+app.get('/api/app-version', (req,res)=>res.json({ok:true, version: APP_BUILD_VERSION, ts: new Date().toISOString()}));
 app.use(express.static(path.join(__dirname, 'public')));
 app.get('/whatsapp', requireAdmin, (req,res)=>res.sendFile(path.join(__dirname,'public','whatsapp.html')));
 app.get('/whatsapp.html', requireAdmin, (req,res)=>res.sendFile(path.join(__dirname,'public','whatsapp.html')));
@@ -1883,6 +1894,41 @@ app.get('/r/c/:id', (req,res)=>{ const id=req.params.id; const url=req.query.u ?
 
 
 
+
+async function fetchMetaInsights({since, until} = {}){
+  const env = readEnvFile();
+  const token = String(env.META_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN || '').trim();
+  let ad = String(env.META_AD_ACCOUNT_ID || process.env.META_AD_ACCOUNT_ID || '').trim();
+  if(!token || token==='********' || !ad) return {ok:false, connected:false, error:'Meta token/ad account missing', campaigns:[], summary:{spend:0,clicks:0,impressions:0}};
+  ad = ad.startsWith('act_') ? ad : ('act_' + ad.replace(/^act_/,''));
+  const sinceDate = since ? String(since).slice(0,10) : new Date(Date.now()-30*86400000).toISOString().slice(0,10);
+  const untilDate = until ? String(until).slice(0,10) : new Date().toISOString().slice(0,10);
+  const params = new URLSearchParams({
+    fields:'campaign_name,campaign_id,spend,impressions,clicks,cpc,cpm,ctr,actions,action_values',
+    level:'campaign',
+    time_range: JSON.stringify({since:sinceDate, until:untilDate}),
+    limit:'250',
+    access_token: token
+  });
+  const url = `https://graph.facebook.com/v20.0/${ad}/insights?${params.toString()}`;
+  try{
+    const r = await fetch(url);
+    const j = await r.json().catch(()=>({}));
+    if(!r.ok){
+      return {ok:false, connected:true, adAccountId:ad, error:`Meta Insights error ${r.status}: ${j.error?.message || JSON.stringify(j).slice(0,220)}`, raw:j, campaigns:[], summary:{spend:0,clicks:0,impressions:0}};
+    }
+    const rows = Array.isArray(j.data) ? j.data : [];
+    const campaigns = rows.map(x=>{
+      const spend=Number(x.spend||0)||0, clicks=Number(x.clicks||0)||0, impressions=Number(x.impressions||0)||0;
+      return {name:x.campaign_name||x.campaign_id||'Meta Campaign', campaignId:x.campaign_id||'', spend, clicks, impressions, cpc:Number(x.cpc||0)||0, cpm:Number(x.cpm||0)||0, ctr:Number(x.ctr||0)||0, revenue:0, orders:0, costPerOrder:0, roas:0};
+    });
+    const summary = campaigns.reduce((a,c)=>{ a.spend+=c.spend; a.clicks+=c.clicks; a.impressions+=c.impressions; return a; }, {spend:0,clicks:0,impressions:0});
+    return {ok:true, connected:true, adAccountId:ad, campaigns, summary, count:campaigns.length};
+  }catch(e){
+    return {ok:false, connected:true, adAccountId:ad, error:'Meta Insights fetch failed: '+e.message, campaigns:[], summary:{spend:0,clicks:0,impressions:0}};
+  }
+}
+
 function sumByMap(rows, keyFn, amountFn){
   const map=new Map();
   for(const row of rows){ const k=keyFn(row)||'Unknown'; const cur=map.get(k)||{name:k,orders:0,qty:0,revenue:0,sales:0}; cur.orders+=1; cur.revenue+=Number(amountFn(row)||0); cur.sales=cur.revenue; map.set(k,cur); }
@@ -1893,48 +1939,58 @@ app.get('/api/shopify/sales-analysis', requireAdmin, async (req,res)=>{
     const config=readEnvFile();
     const settings=readJson(settingsPath,{});
     const days=Math.max(1, Math.min(Number(req.query.range || req.query.Range || 30)||30, 365));
-    const since=new Date(Date.now()-days*24*60*60*1000).toISOString();
+    const fromDate = req.query.from ? new Date(String(req.query.from)+'T00:00:00.000Z') : new Date(Date.now()-days*24*60*60*1000);
+    const toDate = req.query.to ? new Date(String(req.query.to)+'T23:59:59.999Z') : new Date();
+    const since=fromDate.toISOString();
+    const until=toDate.toISOString();
     const defaultShip=Number(config.DEFAULT_SHIPPING_COST || settings.defaultShippingCost || 0)||0;
     const defaultMetaCost=Number(config.META_DEFAULT_COST_PER_ORDER || settings.metaDefaultCostPerOrder || 0)||0;
-    const query=`created_at_min=${encodeURIComponent(since)}&status=any&limit=250&fields=id,name,order_number,created_at,email,phone,customer,billing_address,shipping_address,financial_status,fulfillment_status,total_price,currency,cancelled_at,cancel_reason,tags,source_name,discount_codes,line_items`;
-    const r=await shopifyFetch('orders.json?'+query).catch(e=>({ok:false,error:e.message,orders:[]}));
+    const query=`created_at_min=${encodeURIComponent(since)}&created_at_max=${encodeURIComponent(until)}&status=any&limit=250&fields=id,name,order_number,created_at,email,phone,customer,billing_address,shipping_address,financial_status,fulfillment_status,total_price,total_discounts,currency,cancelled_at,cancel_reason,tags,source_name,discount_codes,refunds,line_items`;
+    const r=await shopifyFetch('orders.json?'+query).catch(e=>({ok:false,error:e.message,json:{orders:[]}}));
     let rawOrders=(r.json&&r.json.orders)||r.orders||[];
     const paymentFilter=String(req.query.payment||'').toLowerCase();
     const statusFilter=String(req.query.status||'').toLowerCase();
     const campaignFilter=String(req.query.campaign||'').toLowerCase();
-    const campaigns=readJson(broadcastCampaignsPath,[]);
-    const clicks=readJson(linkClicksPath,[]);
+    const metaLive=await fetchMetaInsights({since, until}).catch(e=>({ok:false,connected:false,error:e.message,campaigns:[],summary:{spend:0,clicks:0,impressions:0}}));
+    const liveMetaSpend=Number(metaLive.summary?.spend||0)||0;
     let orders=rawOrders.map(o=>{
       const amount=Number(o.total_price||0)||0;
       const tagStr=String(o.tags||'').toLowerCase();
-      const isCod=tagStr.includes('cod') || String(o.financial_status||'').toLowerCase().includes('pending');
-      const metaCost=defaultMetaCost;
+      const financial=String(o.financial_status||'').toLowerCase();
+      const isCod=tagStr.includes('cod') || financial.includes('pending') || financial.includes('cod');
+      const refundAmount=(o.refunds||[]).reduce((s,rf)=>s+Number(rf.transactions?.[0]?.amount||rf.total_refunded||0),0);
+      const isReturn=refundAmount>0 || financial.includes('refund') || String(o.tags||'').toLowerCase().includes('return');
+      const metaCost=0;
       const shippingCost=defaultShip;
-      const estimatedProfit=amount-shippingCost-metaCost;
+      const estimatedProfit=amount-shippingCost-metaCost-refundAmount;
       const city=(o.shipping_address&&o.shipping_address.city)||(o.billing_address&&o.billing_address.city)||'';
       const province=(o.shipping_address&&o.shipping_address.province)||(o.billing_address&&o.billing_address.province)||'';
-      return { id:o.id, name:o.name||('#'+(o.order_number||'')), date:String(o.created_at||'').slice(0,10), createdAt:o.created_at, payment:isCod?'COD':'Prepaid', amount, shippingCost, metaCost, estimatedProfit, status:o.cancelled_at?'cancelled':(o.fulfillment_status||o.financial_status||'open'), city:[city,province].filter(Boolean).join(', ')||'Unknown', line_items:o.line_items||[], tags:o.tags||'' };
+      return { id:o.id, name:o.name||('#'+(o.order_number||'')), date:String(o.created_at||'').slice(0,10), createdAt:o.created_at, payment:isCod?'COD':'Prepaid', amount, refundAmount, shippingCost, metaCost, estimatedProfit, status:o.cancelled_at?'cancelled':(isReturn?'returned':(o.fulfillment_status||o.financial_status||'open')), city:[city,province].filter(Boolean).join(', ')||'Unknown', line_items:o.line_items||[], tags:o.tags||'', cancelled:!!o.cancelled_at, returned:isReturn };
     });
     if(paymentFilter) orders=orders.filter(o=>paymentFilter==='cod'?o.payment==='COD':o.payment==='Prepaid');
-    if(statusFilter) orders=orders.filter(o=>String(o.status||'').toLowerCase().includes(statusFilter));
+    if(statusFilter && statusFilter!=='all') orders=orders.filter(o=>String(o.status||'').toLowerCase().includes(statusFilter));
     if(campaignFilter) orders=orders.filter(o=>String(o.tags||'').toLowerCase().includes(campaignFilter));
     const totalSales=orders.reduce((s,o)=>s+o.amount,0), totalOrders=orders.length;
-    const metaSpend=orders.reduce((s,o)=>s+o.metaCost,0);
+    const cancelledOrders=orders.filter(o=>o.cancelled || String(o.status).toLowerCase().includes('cancel')).length;
+    const returnOrders=orders.filter(o=>o.returned || String(o.status).toLowerCase().includes('return') || String(o.status).toLowerCase().includes('refund')).length;
+    const netOrders=Math.max(0,totalOrders-cancelledOrders-returnOrders);
+    const netSales=orders.reduce((s,o)=>s + (o.cancelled?0:(o.amount-Number(o.refundAmount||0))),0);
+    const metaSpend=liveMetaSpend || (defaultMetaCost * netOrders);
+    const perOrderMetaCost=netOrders ? metaSpend/netOrders : 0;
+    orders=orders.map(o=>Object.assign(o,{metaCost:perOrderMetaCost, estimatedProfit:(o.cancelled?0:o.amount)-o.shippingCost-perOrderMetaCost-Number(o.refundAmount||0)}));
     const dailyMap=new Map();
-    for(const o of orders){ const cur=dailyMap.get(o.date)||{date:o.date,sales:0,orders:0}; cur.sales+=o.amount; cur.orders+=1; dailyMap.set(o.date,cur); }
+    for(const o of orders){ const cur=dailyMap.get(o.date)||{date:o.date,sales:0,orders:0,netSales:0}; cur.sales+=o.amount; cur.netSales+=(o.cancelled?0:o.amount-Number(o.refundAmount||0)); cur.orders+=1; dailyMap.set(o.date,cur); }
     const daily=Array.from(dailyMap.values()).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
     const productMap=new Map();
-    for(const o of orders){ for(const li of (o.line_items||[])){ const title=li.title||li.name||'Product'; const cur=productMap.get(title)||{title,qty:0,revenue:0}; cur.qty+=Number(li.quantity||0); cur.revenue+=Number(li.price||0)*Number(li.quantity||1); productMap.set(title,cur); } }
+    for(const o of orders){ for(const li of (o.line_items||[])){ const title=li.title||li.name||'Product'; const sku=li.sku || li.variant_sku || ''; const key=(sku||title); const cur=productMap.get(key)||{sku, title, qty:0, revenue:0}; cur.qty+=Number(li.quantity||0); cur.revenue+=Number(li.price||0)*Number(li.quantity||1); productMap.set(key,cur); } }
     const products=Array.from(productMap.values()).sort((a,b)=>b.revenue-a.revenue);
     const cities=sumByMap(orders,o=>o.city,o=>o.amount);
-    const campaignStats=campaigns.map(c=>{
-      const spend=Number(c.spend||c.metaSpend||0)||0;
-      const revenue=Number(c.revenue||0)||0;
-      const corders=Number(c.orders||c.orderCount||0)||0;
-      return { name:c.name||c.templateName||'WhatsApp Campaign', spend, orders:corders, revenue, costPerOrder:corders?spend/corders:0, roas:spend?revenue/spend:0, clicks:clicks.filter(x=>x.campaignId===c.id).length };
+    const campaigns=(metaLive.campaigns&&metaLive.campaigns.length?metaLive.campaigns:readJson(broadcastCampaignsPath,[]).map(c=>({name:c.name||c.templateName||'WhatsApp Campaign', spend:Number(c.spend||c.metaSpend||0)||0, orders:Number(c.orders||c.orderCount||0)||0, revenue:Number(c.revenue||0)||0, clicks:0}))).map(c=>{
+      const spend=Number(c.spend||0)||0; const corders=Number(c.orders||0)||0; const revenue=Number(c.revenue||0)||0;
+      return Object.assign({},c,{spend, orders:corders, revenue, costPerOrder:corders?spend/corders:0, roas:spend?revenue/spend:0});
     }).slice(0,100);
-    const summary={ totalSales, totalOrders, averageOrderValue:totalOrders?totalSales/totalOrders:0, codOrders:orders.filter(o=>o.payment==='COD').length, prepaidOrders:orders.filter(o=>o.payment==='Prepaid').length, cancelledOrders:orders.filter(o=>String(o.status).toLowerCase().includes('cancel')).length, metaSpend, costPerOrder:totalOrders?metaSpend/totalOrders:0, roas:metaSpend?totalSales/metaSpend:0, estimatedProfit:orders.reduce((s,o)=>s+o.estimatedProfit,0) };
-    res.json({ok:true, days, summary, daily, orders, products, cities, campaigns:campaignStats, meta:{connected:Boolean(config.META_ACCESS_TOKEN&&config.META_AD_ACCOUNT_ID), adAccountId:config.META_AD_ACCOUNT_ID||''}, debug:{shopifyConnected:Boolean(config.SHOPIFY_STORE_DOMAIN&&config.SHOPIFY_ADMIN_ACCESS_TOKEN), requestedSince:since, rawOrdersFound:rawOrders.length, filteredOrders:orders.length, source:r.ok===false?'shopify-error':'live-shopify', error:r.ok===false?(r.error||r.message||JSON.stringify(r.json||{}).slice(0,240)):''}, source:r.ok===false?'cache/error':'shopify', error:r.ok===false?(r.error||r.message||''):''});
+    const summary={ totalSales, netSales, totalOrders, cancelledOrders, returnOrders, netOrders, averageOrderValue:netOrders?netSales/netOrders:(totalOrders?totalSales/totalOrders:0), codOrders:orders.filter(o=>o.payment==='COD').length, prepaidOrders:orders.filter(o=>o.payment==='Prepaid').length, metaSpend, costPerOrder:netOrders?metaSpend/netOrders:0, roas:metaSpend?netSales/metaSpend:0, estimatedProfit:orders.reduce((s,o)=>s+o.estimatedProfit,0) };
+    res.json({ok:true, days, from:String(since).slice(0,10), to:String(until).slice(0,10), summary, daily, orders, products, cities, campaigns, meta:{connected:Boolean(config.META_ACCESS_TOKEN&&config.META_AD_ACCOUNT_ID), live:!!metaLive.ok, adAccountId:config.META_AD_ACCOUNT_ID||'', error:metaLive.ok?'':metaLive.error, campaignsFound:metaLive.count||0, spendFound:liveMetaSpend}, debug:{shopifyConnected:Boolean(config.SHOPIFY_STORE_DOMAIN&&config.SHOPIFY_ADMIN_ACCESS_TOKEN), requestedSince:since, requestedUntil:until, rawOrdersFound:rawOrders.length, filteredOrders:orders.length, source:r.ok===false?'shopify-error':'live-shopify', error:r.ok===false?(r.error||r.message||JSON.stringify(r.json||{}).slice(0,240)):''}, source:r.ok===false?'cache/error':'shopify', error:r.ok===false?(r.error||r.message||''):''});
   }catch(e){ res.status(500).json({ok:false,error:e.message}); }
 });
 

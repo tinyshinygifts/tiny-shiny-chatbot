@@ -628,3 +628,14 @@ body:has(.api-top-actions) .brand-logo.small{width:76px!important;height:76px!im
 .whatsapp-only-page .wati-center{min-height:0;}
 .whatsapp-only-page .wa-message-area{height:auto;min-height:0;flex:1;}
 .whatsapp-only-page .wati-composer{flex:0 0 auto;}
+
+/* build 20260610124415 */
+.notify-dot{display:inline-block;width:10px;height:10px;border-radius:999px;margin-right:8px;box-shadow:0 0 0 4px rgba(0,0,0,.04);vertical-align:middle}
+.notify-dot.enabled{background:#16a34a;box-shadow:0 0 0 4px #dcfce7}
+.notify-dot.blocked{background:#dc2626;box-shadow:0 0 0 4px #fee2e2}
+.notify-dot.unknown,.notify-dot.pending{background:#f59e0b;box-shadow:0 0 0 4px #fef3c7}
+.sales-filters.form-grid.four{grid-template-columns:repeat(6,minmax(160px,1fr));}
+@media(max-width:1400px){.sales-filters.form-grid.four{grid-template-columns:repeat(3,minmax(180px,1fr));}}
+@media(max-width:760px){.sales-filters.form-grid.four{grid-template-columns:1fr;}}
+.sales-table td:first-child,.sales-table th:first-child{white-space:nowrap;max-width:160px;overflow:hidden;text-overflow:ellipsis;}
+.sales-table td:nth-child(2){max-width:420px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}

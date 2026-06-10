@@ -140,13 +140,35 @@ function notifyNewWhatsappMessage(m){
 }
 
 function updateNotificationStatusDot(){
+  const btn=$('enableDesktopNotifications') || $('enableNotificationsBtn') || $('enableDesktopNotifications2');
   const dot=$('notificationStatusDot');
-  if(!dot || !('Notification' in window)) return;
+  if(!('Notification' in window)){
+    if(btn) btn.innerHTML='<span class="notify-dot blocked"></span> Notifications Not Supported';
+    return;
+  }
   const p=Notification.permission;
-  dot.classList.remove('enabled','blocked','unknown');
-  if(p==='granted'){ dot.classList.add('enabled'); dot.title='Notifications: Enabled'; }
-  else if(p==='denied'){ dot.classList.add('blocked'); dot.title='Notifications: Blocked'; }
-  else { dot.classList.add('unknown'); dot.title='Notifications: Permission Required'; }
+  const cls=p==='granted'?'enabled':(p==='denied'?'blocked':'unknown');
+  const text=p==='granted'?'Notifications ON':(p==='denied'?'Notifications Blocked':'Enable Notifications');
+  if(dot){ dot.classList.remove('enabled','blocked','unknown','pending'); dot.classList.add(cls); dot.title='Notifications: '+text; }
+  if(btn){
+    let d=btn.querySelector('.notify-dot') || dot;
+    btn.innerHTML=`<span id="notificationStatusDot" class="notify-dot ${cls}" title="Notifications: ${text}"></span> ${text}`;
+  }
+}
+
+
+async function enableDesktopNotifications(){
+  if(!('Notification' in window)){ alert('Is browser me desktop notifications support nahi hai.'); return; }
+  try{
+    const permission = await Notification.requestPermission();
+    updateNotificationStatusDot();
+    if(permission==='granted'){
+      const n = new Notification('Tiny Shiny notifications enabled', {body:'New WhatsApp message par desktop popup aayega.', icon:'/tiny-shiny-logo.jpg', tag:'tsg-test'});
+      n.onclick=()=>{ window.focus(); n.close(); };
+    } else if(permission==='denied'){
+      alert('Notifications blocked hain. Browser address bar ke lock icon / Site settings me jaakar Notifications Allow karo.');
+    }
+  }catch(e){ alert('Notification permission error: '+e.message); }
 }
 
 function checkNewInboundNotifications(messages=[]){
@@ -1206,6 +1228,7 @@ document.addEventListener('click', e=>{ if(e.target.id==='saveMessengerSettings'
 
 
 // ---------- Shopify Sales Analysis / Meta campaign reports ----------
+function shortText(s,n=60){ s=String(s||''); return s.length>n ? s.slice(0,n-3)+'...' : s; }
 function renderSalesMoney(v){ return '₹' + Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:0}); }
 function salesPercent(v){ return Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:1}) + '%'; }
 function tableHtml(headers, rows){ return `<table class="customer-table sales-table"><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join(''):'<tr><td colspan="'+headers.length+'">No data</td></tr>'}</tbody></table>`; }
@@ -1217,13 +1240,13 @@ function renderPaymentDonut(d){ const cod=Number(d.codOrders||0), prepaid=Number
 function renderShopifySalesAnalysis(){
   const d=shopifySalesAnalysis||{}; const s=d.summary||{};
   if($('salesSummary')) salesSummary.innerHTML=[
-    ['Total Sales',renderSalesMoney(s.totalSales)],['Orders',s.totalOrders||0],['Average Order Value',renderSalesMoney(s.averageOrderValue)],['Meta Spend',renderSalesMoney(s.metaSpend)],['Cost / Order',renderSalesMoney(s.costPerOrder)],['ROAS',Number(s.roas||0).toFixed(2)+'x'],['Estimated Profit',renderSalesMoney(s.estimatedProfit)],['Cancelled',s.cancelledOrders||0]
+    ['Total Sales',renderSalesMoney(s.totalSales)],['Total Orders',s.totalOrders||0],['Cancelled',s.cancelledOrders||0],['Return Orders',s.returnOrders||0],['Net Orders',s.netOrders||0],['Net Sales',renderSalesMoney(s.netSales||s.totalSales)],['Average Order Value',renderSalesMoney(s.averageOrderValue)],['Meta Spend',renderSalesMoney(s.metaSpend)],['Cost / Net Order',renderSalesMoney(s.costPerOrder)],['ROAS',Number(s.roas||0).toFixed(2)+'x'],['Estimated Profit',renderSalesMoney(s.estimatedProfit)]
   ].map(x=>`<div class="sales-kpi"><span>${esc(x[0])}</span><b>${esc(x[1])}</b></div>`).join('');
   if($('salesDailyChart')) salesDailyChart.innerHTML=renderMiniBars(d.daily||[],'sales','date');
   if($('salesPaymentChart')) salesPaymentChart.innerHTML=renderPaymentDonut(s);
   if($('salesCampaignTable')) salesCampaignTable.innerHTML=tableHtml(['Campaign','Spend','Orders','Revenue','Cost / Order','ROAS'], (d.campaigns||[]).map(c=>[esc(c.name||'Unknown'),renderSalesMoney(c.spend),esc(c.orders||0),renderSalesMoney(c.revenue),renderSalesMoney(c.costPerOrder),Number(c.roas||0).toFixed(2)+'x']));
   if($('salesOrderCostTable')) salesOrderCostTable.innerHTML=tableHtml(['Order','Date','Payment','Amount','Shipping','Meta Cost','Net Profit'], (d.orders||[]).slice(0,60).map(o=>[esc(o.name||o.id),esc(o.date||''),esc(o.payment||''),renderSalesMoney(o.amount),renderSalesMoney(o.shippingCost),renderSalesMoney(o.metaCost),renderSalesMoney(o.estimatedProfit)]));
-  if($('salesProductTable')) salesProductTable.innerHTML=tableHtml(['Product','Qty','Revenue'], (d.products||[]).slice(0,50).map(p=>[esc(p.title),esc(p.qty),renderSalesMoney(p.revenue)]));
+  if($('salesProductTable')) salesProductTable.innerHTML=tableHtml(['SKU','Product','Qty','Revenue'], (d.products||[]).slice(0,50).map(p=>[esc(p.sku||'-'),`<span title="${esc(p.title)}">${esc(shortText(p.title,58))}</span>`,esc(p.qty),renderSalesMoney(p.revenue)]));
   if($('salesCityTable')) salesCityTable.innerHTML=tableHtml(['City / State','Orders','Revenue'], (d.cities||[]).slice(0,50).map(c=>[esc(c.name),esc(c.orders),renderSalesMoney(c.revenue)]));
 }
 async function loadShopifySalesAnalysis(){
@@ -1238,7 +1261,7 @@ function exportShopifySalesCsv(){
   const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
   const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='shopify-sales-analysis.csv'; a.click(); URL.revokeObjectURL(a.href);
 }
-document.addEventListener('change', e=>{ if(['salesRange','salesPaymentFilter','salesStatusFilter'].includes(e.target.id)) loadShopifySalesAnalysis(); });
+document.addEventListener('change', e=>{ if(['salesRange','salesPaymentFilter','salesStatusFilter','salesFromDate','salesToDate'].includes(e.target.id)) loadShopifySalesAnalysis(); });
 document.addEventListener('input', e=>{ if(e.target.id==='salesCampaignFilter') clearTimeout(window.__salesFilterTimer), window.__salesFilterTimer=setTimeout(loadShopifySalesAnalysis,350); });
 document.addEventListener('click', e=>{ if(e.target.id==='refreshShopifySales') loadShopifySalesAnalysis(); if(e.target.id==='exportShopifySalesCsv') exportShopifySalesCsv(); });
 
@@ -1372,3 +1395,25 @@ document.addEventListener('click', e=>{
   const em=e.target.closest('[data-pick-emoji]');
   if(em){ insertEmojiToReply(em.dataset.pickEmoji); const p=document.getElementById('emojiPickerPanel'); if(p) p.classList.add('hidden'); }
 });
+
+document.addEventListener('click', e=>{
+  if(e.target && ['enableDesktopNotifications','enableDesktopNotifications2','enableNotificationsBtn'].includes(e.target.id)){
+    enableDesktopNotifications();
+  }
+});
+document.addEventListener('visibilitychange', updateNotificationStatusDot);
+setTimeout(updateNotificationStatusDot, 500);
+
+async function checkAppVersionAndReload(){
+  try{
+    const d=await fetch('/api/app-version?ts='+Date.now(),{cache:'no-store'}).then(r=>r.json());
+    if(!d.ok || !d.version) return;
+    const old=localStorage.getItem('tsgAppVersion');
+    if(old && old!==d.version){
+      if(confirm('New update available. Reload now?')) location.reload(true);
+    }
+    localStorage.setItem('tsgAppVersion', d.version);
+  }catch(e){}
+}
+setInterval(checkAppVersionAndReload, 60000);
+setTimeout(checkAppVersionAndReload, 1500);

@@ -1,43 +1,14 @@
-const CACHE_NAME = 'tiny-shiny-chatbot-pwa-v1';
-const STATIC_ASSETS = [
-  '/admin.html',
-  '/admin.js',
-  '/style.css',
-  '/manifest.json',
-  '/offline.html',
-  '/tiny-shiny-logo.jpg',
-  '/icons/icon-192.png',
-  '/icons/icon-512.png',
-  '/icons/maskable-192.png',
-  '/icons/maskable-512.png'
-];
-
-self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(STATIC_ASSETS.filter(Boolean))).then(() => self.skipWaiting()));
-});
-
+const CACHE_NAME = 'tiny-shiny-cache-20260610124415';
+self.addEventListener('install', event => self.skipWaiting());
 self.addEventListener('activate', event => {
-  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(key => key !== CACHE_NAME).map(key => caches.delete(key)))).then(() => self.clients.claim()));
+  event.waitUntil(caches.keys().then(keys => Promise.all(keys.filter(k => k !== CACHE_NAME).map(k => caches.delete(k)))).then(() => self.clients.claim()));
 });
-
 self.addEventListener('fetch', event => {
-  const request = event.request;
-  const url = new URL(request.url);
-  if (request.method !== 'GET') return;
-  if (url.pathname.startsWith('/api/') || url.pathname.startsWith('/webhooks/')) return;
-  if (request.mode === 'navigate') {
-    event.respondWith(fetch(request).then(response => {
-      const copy = response.clone();
-      caches.open(CACHE_NAME).then(cache => cache.put(request, copy)).catch(() => {});
-      return response;
-    }).catch(() => caches.match(request).then(cached => cached || caches.match('/offline.html'))));
+  const req = event.request;
+  const url = new URL(req.url);
+  if (url.pathname.includes('admin') || url.pathname.includes('api-settings') || url.pathname.includes('whatsapp') || url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.startsWith('/api/')) {
+    event.respondWith(fetch(req, {cache:'no-store'}).catch(() => caches.match(req)));
     return;
   }
-  event.respondWith(caches.match(request).then(cached => cached || fetch(request).then(response => {
-    if (response && response.status === 200 && url.origin === location.origin) {
-      const copy = response.clone();
-      caches.open(CACHE_NAME).then(cache => cache.put(request, copy)).catch(() => {});
-    }
-    return response;
-  }).catch(() => cached)));
+  event.respondWith(fetch(req).catch(() => caches.match(req)));
 });
