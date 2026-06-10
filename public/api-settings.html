@@ -127,6 +127,21 @@
       <p class="hint">DOB login is only a recovery option. Use a strong password and change DOB after first login.</p>
     </section>
 
+    <section class="panel meta-ads-settings-panel">
+      <h2>Meta Ads / Campaign Reporting</h2>
+      <p>Shopify Sales Analysis me Meta spend, campaign report, cost per order aur ROAS ke liye.</p>
+      <div class="form-grid two">
+        <label>Meta Access Token <input id="META_ACCESS_TOKEN" type="password" placeholder="EAAG..."/></label>
+        <label>Meta Ad Account ID <input id="META_AD_ACCOUNT_ID" placeholder="act_1234567890"/></label>
+        <label>Facebook Page ID <input id="META_FACEBOOK_PAGE_ID" placeholder="Facebook Page ID"/></label>
+        <label>Instagram Account ID <input id="META_INSTAGRAM_ACCOUNT_ID" placeholder="Instagram Business Account ID"/></label>
+        <label>Default Meta Cost Per Order ₹ <input id="META_DEFAULT_COST_PER_ORDER" type="number" min="0" step="0.01" placeholder="0"/></label>
+        <label>Default Shipping Cost ₹ <input id="DEFAULT_SHIPPING_COST" type="number" min="0" step="0.01" placeholder="0"/></label>
+      </div>
+      <p class="hint">Note: live Meta spend pull karne ke liye token + ad account ID required hoga. Agar token nahi hai to dashboard campaign/cost estimate aur saved broadcast data se report banayega.</p>
+      <pre id="metaAdsResult"></pre>
+    </section>
+
     <section class="panel">
       <h2>Shopify API</h2>
       <p>Use this for order tracking and draft order creation. You can either paste an Admin token or use OAuth Connect.</p>

@@ -29,6 +29,7 @@ let whatsappInboxMessages = [];
 let selectedWhatsappInboxId = "";
 let selectedPromoProductId = '';
 let googleSheetUrl = '';
+let shopifySalesAnalysis = null;
 let adminAutoRefreshTimer = null;
 let adminAutoRefreshBusy = false;
 let whatsappInboxInitialized = false;
@@ -50,9 +51,10 @@ function showTab(id){
   document.querySelectorAll('.tab-panel').forEach(p=>p.classList.toggle('active', p.id===id));
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.tab===id));
   localStorage.setItem('tsgAdminActiveTab', id);
+  if(id === 'shopifySalesPanel' && typeof loadShopifySalesAnalysis === 'function') setTimeout(()=>loadShopifySalesAnalysis().catch(()=>{}),0);
 }
 
-function activeTabId(){ return localStorage.getItem('tsgAdminActiveTab') || 'basicPanel'; }
+function activeTabId(){ return localStorage.getItem('tsgAdminActiveTab') || 'whatsappInboxPanel'; }
 function initAutoRefreshControls(){
   const sel = $('autoRefreshInterval');
   if(!sel) return;
@@ -79,7 +81,9 @@ async function refreshAdminDataAuto(){
     await loadMessages().catch(()=>{});
     if(active === 'crmPanel') await loadCrm().catch(()=>{});
     if(active === 'shopifyCustomersPanel') await loadShopifyCustomers().catch(()=>{});
+    if(active === 'shopifySalesPanel') await loadShopifySalesAnalysis().catch(()=>{});
     if(active === 'phase2Panel') await loadPhase2Analytics().catch(()=>{});
+    if(active === 'shopifySalesPanel') await loadShopifySalesAnalysis().catch(()=>{});
     if(active === 'instagramInboxPanel') await loadInstagram().catch(()=>{});
     if(active === 'imagePanel') await loadMediaCustomers().catch(()=>{});
   } finally { adminAutoRefreshBusy = false; }
@@ -126,10 +130,10 @@ function notifyNewWhatsappMessage(m){
   const phone=inboxPhone(m);
   const body=messageText(m) || 'New customer message';
   const name=m.customerName||m.profileName||phone||'Customer';
-  showAdminToast({ title:'New WhatsApp Message', body:`${name}: ${body}`, phone, onOpenPhone:phone });
+  showAdminToast({ title:'New Customer Message', body:`${name}: ${body}`, phone, onOpenPhone:phone });
   playNotifySound();
   if('Notification' in window && Notification.permission==='granted'){
-    const n = new Notification('New WhatsApp Message', { body:`${name} (${phone}): ${body}`.slice(0,220), icon:'/tiny-shiny-logo.jpg', tag:'wa-'+phone, renotify:true, requireInteraction:true });
+    const n = new Notification('New Customer Message', { body:`${name} (${phone}): ${body}`.slice(0,220), icon:'/tiny-shiny-logo.jpg', tag:'wa-'+phone, renotify:true, requireInteraction:true });
     n.onclick = () => { window.focus(); selectedWhatsappInboxId=phone; showTab('whatsappInboxPanel'); renderWhatsappInbox(); n.close(); };
   }
 }
@@ -164,9 +168,9 @@ async function load(){
   if(googleSheetUrl === '********') googleSheetUrl = '';
   updateGoogleSheetTab();
   faqs=f.faqs||[]; renderFaqs();
-  await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages(), loadShopifyCustomers().catch(()=>{}), loadWhatsappInbox(), loadBroadcasts().catch(()=>{}), loadWhatsappChatbotSettings().catch(()=>{}), loadChatbotFlows().catch(()=>{}), loadShippingSettings().catch(()=>{}), loadTeamInboxMeta().catch(()=>{}), loadPhase2Analytics().catch(()=>{}), loadDrips().catch(()=>{}), loadInstagram().catch(()=>{})]);
+  await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages(), loadShopifyCustomers().catch(()=>{}), loadShopifySalesAnalysis().catch(()=>{}), loadWhatsappInbox(), loadBroadcasts().catch(()=>{}), loadWhatsappChatbotSettings().catch(()=>{}), loadChatbotFlows().catch(()=>{}), loadShippingSettings().catch(()=>{}), loadTeamInboxMeta().catch(()=>{}), loadPhase2Analytics().catch(()=>{}), loadDrips().catch(()=>{}), loadInstagram().catch(()=>{})]);
   const active = localStorage.getItem('tsgAdminActiveTab') || 'basicPanel';
-  showTab($(active) ? active : 'basicPanel');
+  showTab($(active) ? active : 'whatsappInboxPanel');
 }
 function updateGoogleSheetTab(){
   const link = $('googleSheetOpenLink'); const help=$('googleSheetHelp');
@@ -1108,6 +1112,45 @@ document.addEventListener('click', e=>{ if(e.target.id==='saveMessengerSettings'
   });
 })();
 
+
+
+
+// ---------- Shopify Sales Analysis / Meta campaign reports ----------
+function renderSalesMoney(v){ return '₹' + Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:0}); }
+function salesPercent(v){ return Number(v||0).toLocaleString('en-IN',{maximumFractionDigits:1}) + '%'; }
+function tableHtml(headers, rows){ return `<table class="customer-table sales-table"><thead><tr>${headers.map(h=>`<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.length?rows.map(r=>`<tr>${r.map(c=>`<td>${c}</td>`).join('')}</tr>`).join(''):'<tr><td colspan="'+headers.length+'">No data</td></tr>'}</tbody></table>`; }
+function renderMiniBars(items, valueKey='sales', labelKey='date'){
+  const max=Math.max(1,...items.map(x=>Number(x[valueKey]||0)));
+  return `<div class="bar-chart">${items.map(x=>`<div class="bar-row"><span>${esc(x[labelKey]||'')}</span><div><i style="width:${Math.max(3,Number(x[valueKey]||0)/max*100)}%"></i></div><b>${renderSalesMoney(x[valueKey])}</b></div>`).join('')}</div>`;
+}
+function renderPaymentDonut(d){ const cod=Number(d.codOrders||0), prepaid=Number(d.prepaidOrders||0), total=Math.max(1,cod+prepaid); const codPct=Math.round(cod/total*100); return `<div class="donut" style="--p:${codPct}"><b>${codPct}%</b><span>COD</span></div><div class="donut-legend"><span><i></i> COD: ${cod}</span><span><i></i> Prepaid: ${prepaid}</span></div>`; }
+function renderShopifySalesAnalysis(){
+  const d=shopifySalesAnalysis||{}; const s=d.summary||{};
+  if($('salesSummary')) salesSummary.innerHTML=[
+    ['Total Sales',renderSalesMoney(s.totalSales)],['Orders',s.totalOrders||0],['Average Order Value',renderSalesMoney(s.averageOrderValue)],['Meta Spend',renderSalesMoney(s.metaSpend)],['Cost / Order',renderSalesMoney(s.costPerOrder)],['ROAS',Number(s.roas||0).toFixed(2)+'x'],['Estimated Profit',renderSalesMoney(s.estimatedProfit)],['Cancelled',s.cancelledOrders||0]
+  ].map(x=>`<div class="sales-kpi"><span>${esc(x[0])}</span><b>${esc(x[1])}</b></div>`).join('');
+  if($('salesDailyChart')) salesDailyChart.innerHTML=renderMiniBars(d.daily||[],'sales','date');
+  if($('salesPaymentChart')) salesPaymentChart.innerHTML=renderPaymentDonut(s);
+  if($('salesCampaignTable')) salesCampaignTable.innerHTML=tableHtml(['Campaign','Spend','Orders','Revenue','Cost / Order','ROAS'], (d.campaigns||[]).map(c=>[esc(c.name||'Unknown'),renderSalesMoney(c.spend),esc(c.orders||0),renderSalesMoney(c.revenue),renderSalesMoney(c.costPerOrder),Number(c.roas||0).toFixed(2)+'x']));
+  if($('salesOrderCostTable')) salesOrderCostTable.innerHTML=tableHtml(['Order','Date','Payment','Amount','Shipping','Meta Cost','Net Profit'], (d.orders||[]).slice(0,60).map(o=>[esc(o.name||o.id),esc(o.date||''),esc(o.payment||''),renderSalesMoney(o.amount),renderSalesMoney(o.shippingCost),renderSalesMoney(o.metaCost),renderSalesMoney(o.estimatedProfit)]));
+  if($('salesProductTable')) salesProductTable.innerHTML=tableHtml(['Product','Qty','Revenue'], (d.products||[]).slice(0,50).map(p=>[esc(p.title),esc(p.qty),renderSalesMoney(p.revenue)]));
+  if($('salesCityTable')) salesCityTable.innerHTML=tableHtml(['City / State','Orders','Revenue'], (d.cities||[]).slice(0,50).map(c=>[esc(c.name),esc(c.orders),renderSalesMoney(c.revenue)]));
+}
+async function loadShopifySalesAnalysis(){
+  const params=new URLSearchParams();
+  ['salesRange','salesCampaignFilter','salesPaymentFilter','salesStatusFilter'].forEach(id=>{ if($(id) && $(id).value) params.set(id.replace('sales','').toLowerCase(), $(id).value); });
+  const d=await fetch('/api/shopify/sales-analysis?'+params.toString(),{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  shopifySalesAnalysis=d; renderShopifySalesAnalysis();
+  if($('shopifySalesResult') && !d.ok) shopifySalesResult.textContent=JSON.stringify(d,null,2); else if($('shopifySalesResult')) shopifySalesResult.textContent='';
+}
+function exportShopifySalesCsv(){
+  const d=shopifySalesAnalysis||{}; const rows=[['Order','Date','Payment','Amount','Shipping','Meta Cost','Estimated Profit']].concat((d.orders||[]).map(o=>[o.name||o.id,o.date||'',o.payment||'',o.amount||0,o.shippingCost||0,o.metaCost||0,o.estimatedProfit||0]));
+  const csv=rows.map(r=>r.map(v=>'"'+String(v).replace(/"/g,'""')+'"').join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='shopify-sales-analysis.csv'; a.click(); URL.revokeObjectURL(a.href);
+}
+document.addEventListener('change', e=>{ if(['salesRange','salesPaymentFilter','salesStatusFilter'].includes(e.target.id)) loadShopifySalesAnalysis(); });
+document.addEventListener('input', e=>{ if(e.target.id==='salesCampaignFilter') clearTimeout(window.__salesFilterTimer), window.__salesFilterTimer=setTimeout(loadShopifySalesAnalysis,350); });
+document.addEventListener('click', e=>{ if(e.target.id==='refreshShopifySales') loadShopifySalesAnalysis(); if(e.target.id==='exportShopifySalesCsv') exportShopifySalesCsv(); });
 
 load().catch(err=>{console.error(err); if(String(err).includes('401')) location.href='/login.html';});
 

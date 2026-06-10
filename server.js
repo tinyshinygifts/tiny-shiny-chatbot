@@ -127,9 +127,10 @@ const apiKeys = [
   'SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD',
   'ICARRY_ENABLED','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_ID','ICARRY_CLIENT_SECRET','ICARRY_USERNAME','ICARRY_PASSWORD','ICARRY_TRACKING_URL',
   'ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG',
-  'COD_CONFIRMATION_WHATSAPP_ENABLED','COD_ORDER_CONFIRMATION_TEMPLATE_NAME','COD_ORDER_CONFIRMATION_TEMPLATE_LANG','COD_AUTO_CANCEL_ENABLED'
+  'COD_CONFIRMATION_WHATSAPP_ENABLED','COD_ORDER_CONFIRMATION_TEMPLATE_NAME','COD_ORDER_CONFIRMATION_TEMPLATE_LANG','COD_AUTO_CANCEL_ENABLED',
+  'META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST'
 ];
-const secretKeys = new Set(['SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_SECRET','ICARRY_PASSWORD']);
+const secretKeys = new Set(['META_ACCESS_TOKEN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_SECRET','ICARRY_PASSWORD']);
 function readEnvFileWithoutMongo() {
   const out = {};
   const text = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
@@ -206,6 +207,14 @@ function writeEnvFile(next) {
     'GOOGLE_SHEET_URL=' + (merged.GOOGLE_SHEET_URL || ''),
     'GOOGLE_SHEETS_SECRET=' + (merged.GOOGLE_SHEETS_SECRET || ''),
     '',
+    '# Meta Ads reporting - optional for Shopify Sales Analysis.',
+    'META_ACCESS_TOKEN=' + (merged.META_ACCESS_TOKEN || ''),
+    'META_AD_ACCOUNT_ID=' + (merged.META_AD_ACCOUNT_ID || ''),
+    'META_FACEBOOK_PAGE_ID=' + (merged.META_FACEBOOK_PAGE_ID || ''),
+    'META_INSTAGRAM_ACCOUNT_ID=' + (merged.META_INSTAGRAM_ACCOUNT_ID || ''),
+    'META_DEFAULT_COST_PER_ORDER=' + (merged.META_DEFAULT_COST_PER_ORDER || '0'),
+    'DEFAULT_SHIPPING_COST=' + (merged.DEFAULT_SHIPPING_COST || '0'),
+    '',
     '# Shiprocket API - optional for tracking link/status.',
     'SHIPROCKET_TOKEN=' + (merged.SHIPROCKET_TOKEN || ''),
     'SHIPROCKET_EMAIL=' + (merged.SHIPROCKET_EMAIL || ''),
@@ -262,7 +271,8 @@ function configBackupText(env) {
     ['Shopify API', ['SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER','SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI','SHOPIFY_WEBHOOK_SECRET']],
     ['WhatsApp Cloud API', ['WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG']],
     ['Customer WhatsApp Follow-up', ['CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG',
-  'COD_CONFIRMATION_WHATSAPP_ENABLED','COD_ORDER_CONFIRMATION_TEMPLATE_NAME','COD_ORDER_CONFIRMATION_TEMPLATE_LANG','COD_AUTO_CANCEL_ENABLED']],
+  'COD_CONFIRMATION_WHATSAPP_ENABLED','COD_ORDER_CONFIRMATION_TEMPLATE_NAME','COD_ORDER_CONFIRMATION_TEMPLATE_LANG','COD_AUTO_CANCEL_ENABLED',
+  'META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST']],
     ['Google Sheets', ['GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET']],
     ['Shiprocket API', ['SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD']],
     ['iCarry API', ['ICARRY_ENABLED','ICARRY_TRACKING_URL','ICARRY_API_TOKEN','ICARRY_API_KEY','ICARRY_CLIENT_ID','ICARRY_CLIENT_SECRET','ICARRY_USERNAME','ICARRY_PASSWORD']]
@@ -1864,6 +1874,63 @@ app.get('/api/quickreply/reports', (req,res)=>{
   res.json({ok:true, report:{clicks:clicks.length, campaigns, leads:leads.length, recoveredRevenue:campaigns.reduce((s,c)=>s+Number(c.revenue||0),0)}});
 });
 app.get('/r/c/:id', (req,res)=>{ const id=req.params.id; const url=req.query.u ? String(req.query.u) : 'https://www.tinyshinygifts.com'; appendJson(linkClicksPath,{id:safeId('click'),campaignId:id, url, phone:req.query.p||'', createdAt:nowIso(), userAgent:req.headers['user-agent']||''}); res.redirect(url); });
+
+
+
+function sumByMap(rows, keyFn, amountFn){
+  const map=new Map();
+  for(const row of rows){ const k=keyFn(row)||'Unknown'; const cur=map.get(k)||{name:k,orders:0,qty:0,revenue:0,sales:0}; cur.orders+=1; cur.revenue+=Number(amountFn(row)||0); cur.sales=cur.revenue; map.set(k,cur); }
+  return Array.from(map.values()).sort((a,b)=>Number(b.revenue||0)-Number(a.revenue||0));
+}
+app.get('/api/shopify/sales-analysis', requireAdmin, async (req,res)=>{
+  try{
+    const config=readEnvFile();
+    const settings=readJson(settingsPath,{});
+    const days=Math.max(1, Math.min(Number(req.query.range || req.query.Range || 30)||30, 365));
+    const since=new Date(Date.now()-days*24*60*60*1000).toISOString();
+    const defaultShip=Number(config.DEFAULT_SHIPPING_COST || settings.defaultShippingCost || 0)||0;
+    const defaultMetaCost=Number(config.META_DEFAULT_COST_PER_ORDER || settings.metaDefaultCostPerOrder || 0)||0;
+    const query=`created_at_min=${encodeURIComponent(since)}&status=any&limit=250&fields=id,name,order_number,created_at,email,phone,customer,billing_address,shipping_address,financial_status,fulfillment_status,total_price,currency,cancelled_at,cancel_reason,tags,source_name,discount_codes,line_items`;
+    const r=await shopifyFetch('orders.json?'+query).catch(e=>({ok:false,error:e.message,orders:[]}));
+    let rawOrders=r.orders||[];
+    const paymentFilter=String(req.query.payment||'').toLowerCase();
+    const statusFilter=String(req.query.status||'').toLowerCase();
+    const campaignFilter=String(req.query.campaign||'').toLowerCase();
+    const campaigns=readJson(broadcastCampaignsPath,[]);
+    const clicks=readJson(linkClicksPath,[]);
+    let orders=rawOrders.map(o=>{
+      const amount=Number(o.total_price||0)||0;
+      const tagStr=String(o.tags||'').toLowerCase();
+      const isCod=tagStr.includes('cod') || String(o.financial_status||'').toLowerCase().includes('pending');
+      const metaCost=defaultMetaCost;
+      const shippingCost=defaultShip;
+      const estimatedProfit=amount-shippingCost-metaCost;
+      const city=(o.shipping_address&&o.shipping_address.city)||(o.billing_address&&o.billing_address.city)||'';
+      const province=(o.shipping_address&&o.shipping_address.province)||(o.billing_address&&o.billing_address.province)||'';
+      return { id:o.id, name:o.name||('#'+(o.order_number||'')), date:String(o.created_at||'').slice(0,10), createdAt:o.created_at, payment:isCod?'COD':'Prepaid', amount, shippingCost, metaCost, estimatedProfit, status:o.cancelled_at?'cancelled':(o.fulfillment_status||o.financial_status||'open'), city:[city,province].filter(Boolean).join(', ')||'Unknown', line_items:o.line_items||[], tags:o.tags||'' };
+    });
+    if(paymentFilter) orders=orders.filter(o=>paymentFilter==='cod'?o.payment==='COD':o.payment==='Prepaid');
+    if(statusFilter) orders=orders.filter(o=>String(o.status||'').toLowerCase().includes(statusFilter));
+    if(campaignFilter) orders=orders.filter(o=>String(o.tags||'').toLowerCase().includes(campaignFilter));
+    const totalSales=orders.reduce((s,o)=>s+o.amount,0), totalOrders=orders.length;
+    const metaSpend=orders.reduce((s,o)=>s+o.metaCost,0);
+    const dailyMap=new Map();
+    for(const o of orders){ const cur=dailyMap.get(o.date)||{date:o.date,sales:0,orders:0}; cur.sales+=o.amount; cur.orders+=1; dailyMap.set(o.date,cur); }
+    const daily=Array.from(dailyMap.values()).sort((a,b)=>String(a.date).localeCompare(String(b.date)));
+    const productMap=new Map();
+    for(const o of orders){ for(const li of (o.line_items||[])){ const title=li.title||li.name||'Product'; const cur=productMap.get(title)||{title,qty:0,revenue:0}; cur.qty+=Number(li.quantity||0); cur.revenue+=Number(li.price||0)*Number(li.quantity||1); productMap.set(title,cur); } }
+    const products=Array.from(productMap.values()).sort((a,b)=>b.revenue-a.revenue);
+    const cities=sumByMap(orders,o=>o.city,o=>o.amount);
+    const campaignStats=campaigns.map(c=>{
+      const spend=Number(c.spend||c.metaSpend||0)||0;
+      const revenue=Number(c.revenue||0)||0;
+      const corders=Number(c.orders||c.orderCount||0)||0;
+      return { name:c.name||c.templateName||'WhatsApp Campaign', spend, orders:corders, revenue, costPerOrder:corders?spend/corders:0, roas:spend?revenue/spend:0, clicks:clicks.filter(x=>x.campaignId===c.id).length };
+    }).slice(0,100);
+    const summary={ totalSales, totalOrders, averageOrderValue:totalOrders?totalSales/totalOrders:0, codOrders:orders.filter(o=>o.payment==='COD').length, prepaidOrders:orders.filter(o=>o.payment==='Prepaid').length, cancelledOrders:orders.filter(o=>String(o.status).toLowerCase().includes('cancel')).length, metaSpend, costPerOrder:totalOrders?metaSpend/totalOrders:0, roas:metaSpend?totalSales/metaSpend:0, estimatedProfit:orders.reduce((s,o)=>s+o.estimatedProfit,0) };
+    res.json({ok:true, days, summary, daily, orders, products, cities, campaigns:campaignStats, meta:{connected:Boolean(config.META_ACCESS_TOKEN&&config.META_AD_ACCOUNT_ID), adAccountId:config.META_AD_ACCOUNT_ID||''}, source:r.ok===false?'cache/error':'shopify', error:r.ok===false?r.error:''});
+  }catch(e){ res.status(500).json({ok:false,error:e.message}); }
+});
 
 app.get('/api/storage/status', (req, res) => res.json({ ok: true, storage: mongoReady ? 'mongodb' : 'json-file', mongodb: { configured: Boolean(mongoUri), connected: mongoReady, database: mongoReady ? mongoDbName : '', collection: mongoReady ? mongoCollectionName : '' } }));
 app.get('/api/faqs', (req, res) => res.json({ ok: true, faqs: readJson(faqPath, []) }));

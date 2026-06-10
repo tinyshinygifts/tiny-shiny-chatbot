@@ -57,6 +57,7 @@
       <button class="tab-btn" data-tab="crmPanel">CRM Dashboard</button>
       <button class="tab-btn active" data-tab="whatsappInboxPanel">Chat Inbox</button>
       <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
+      <button class="tab-btn" data-tab="shopifySalesPanel">Shopify Sales Analysis</button>
       <button class="tab-btn" data-tab="bulkBroadcastPanel">Bulk WhatsApp Broadcast</button>
       <button class="tab-btn" data-tab="phase2Panel">Campaign Analytics</button>
       <button class="tab-btn" data-tab="dripPanel">Drip Campaigns</button>
@@ -147,6 +148,31 @@
       <div id="shopifyCustomersList" class="customer-table-wrap"></div>
     </section>
 
+
+    <section class="panel tab-panel sales-analysis-panel" id="shopifySalesPanel">
+      <div class="section-head">
+        <div><h2>Shopify Sales Analysis</h2><p>Shopify sales, Meta campaign report, per order cost and profit analysis with graphs.</p></div>
+        <div class="inline-actions"><button id="refreshShopifySales" class="ghost-btn">Refresh Sales</button><button id="exportShopifySalesCsv" class="ghost-btn">Export CSV</button></div>
+      </div>
+      <div class="form-grid four sales-filters">
+        <label>Date Range
+          <select id="salesRange"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 365 days</option></select>
+        </label>
+        <label>Campaign <input id="salesCampaignFilter" placeholder="Meta campaign name"/></label>
+        <label>Payment <select id="salesPaymentFilter"><option value="">All</option><option value="cod">COD</option><option value="prepaid">Prepaid</option></select></label>
+        <label>Order Status <select id="salesStatusFilter"><option value="">All</option><option value="paid">Paid</option><option value="pending">Pending</option><option value="cancelled">Cancelled</option><option value="fulfilled">Fulfilled</option></select></label>
+      </div>
+      <div id="salesSummary" class="sales-summary-grid"></div>
+      <div class="sales-grid">
+        <div class="sales-card"><h3>Daily Sales Graph</h3><div id="salesDailyChart" class="mini-chart"></div></div>
+        <div class="sales-card"><h3>COD vs Prepaid</h3><div id="salesPaymentChart" class="donut-wrap"></div></div>
+        <div class="sales-card"><h3>Campaign Report</h3><div id="salesCampaignTable" class="table-wrap"></div></div>
+        <div class="sales-card"><h3>Per Order Cost / Profit</h3><div id="salesOrderCostTable" class="table-wrap"></div></div>
+        <div class="sales-card"><h3>Product Wise Sales</h3><div id="salesProductTable" class="table-wrap"></div></div>
+        <div class="sales-card"><h3>City / State Sales</h3><div id="salesCityTable" class="table-wrap"></div></div>
+      </div>
+      <pre id="shopifySalesResult"></pre>
+    </section>
 
     <section class="panel tab-panel" id="bulkBroadcastPanel">
       <div class="section-head">
