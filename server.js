@@ -1398,7 +1398,8 @@ app.post('/api/whatsapp-inbox/reply', requireAdmin, async (req, res) => {
       results.push({ type:'text', result: await sendWhatsAppTextManual({ to, message:text }).catch(e => ({ ok:false, error:e.message })) });
     }
     const ok = results.some(r => r.result && r.result.ok);
-    appendJson(whatsappInboxPath, { id:crypto.randomUUID(), direction:'outbound', to, customerName:'Business', type: documentUrl?'document':(imageUrl||imageIds.length?'image':'text'), text, documentUrl, documentName, imageUrl: imageUrl || (Array.isArray(imageIds)&&imageIds.length ? (readJson(mediaImagesPath,[]).find(x=>String(x.id)===String(imageIds[0]))?.url || '') : ''), createdAt:nowIso(), status:ok?'sent':'failed', raw:{results} });
+    const savedImageUrl = imageUrl || (Array.isArray(imageIds)&&imageIds.length ? (readJson(mediaImagesPath,[]).find(x=>String(x.id)===String(imageIds[0]))?.url || '') : '');
+    appendJson(whatsappInboxPath, { id:crypto.randomUUID(), direction:'outbound', to, customerName:'Business', type: documentUrl?'document':(savedImageUrl?'image':'text'), text: text || (savedImageUrl?'Image sent':(documentUrl?'Document sent':'')), documentUrl, documentName, imageUrl:savedImageUrl, media:savedImageUrl?{type:'image',url:savedImageUrl}:documentUrl?{type:'document',url:documentUrl,filename:documentName}:null, createdAt:nowIso(), status:ok?'sent':'failed', raw:{results} });
     res.json({ ok, results });
   } catch(e) { res.status(500).json({ ok:false, error:e.message }); }
 });
@@ -1514,8 +1515,48 @@ app.post('/api/broadcast/campaigns', async (req,res)=>{
 });
 app.post('/api/broadcast/optout', (req,res)=>{ const item=addOptout(req.body?.phone || '', 'admin', req.body?.reason || 'Manual opt-out'); res.json({ ok:!!item, item, optouts:readOptouts() }); });
 
-function defaultChatbotSettings(){ return { enabled:true, businessHours:false, menuEnabled:true, catalogEnabled:true, mainCatalogLink:'https://www.tinyshinygifts.com/collections/all', rakhiCatalogLink:'https://www.tinyshinygifts.com/collections/rakhi', homeDecorCatalogLink:'https://www.tinyshinygifts.com/collections/home-decor', divineCatalogLink:'https://www.tinyshinygifts.com/collections/divine', candlesCatalogLink:'https://www.tinyshinygifts.com/collections/candles', newArrivalsLink:'https://www.tinyshinygifts.com/collections/new-arrivals', afterHoursMessage:'Thanks for your message. Our team will reply soon.', menuText:'Please choose:\n1. Track Order\n2. Catalog\n3. Shipping Charges\n4. Return Policy\n5. Talk to Support' }; }
-function getChatbotSettings(){ const s=readJson(settingsPath,{}); return { ...defaultChatbotSettings(), ...(s.whatsappChatbot||{}) }; }
+
+function defaultCatalogCategories(){
+  return [
+    {id:'all', name:'Shop All', link:'https://www.tinyshinygifts.com/collections/all', active:true},
+    {id:'new-arrivals', name:'New Arrivals', link:'https://www.tinyshinygifts.com/collections/new-arrivals', active:true},
+    {id:'home-decor', name:'Home Decor', link:'https://www.tinyshinygifts.com/collections/home-decor', active:true},
+    {id:'god-statue', name:'God Idols & Statues', link:'https://www.tinyshinygifts.com/collections/god-statue', active:true},
+    {id:'candles-and-diyas', name:"Candle's And Diya's", link:'https://www.tinyshinygifts.com/collections/candles-and-diyas', active:true},
+    {id:'rakhi', name:'Rakhi', link:'https://www.tinyshinygifts.com/collections/rakhi', active:true},
+    {id:'krishna-poshak', name:'Krishna Poshak', link:'https://www.tinyshinygifts.com/collections/krishna-poshak', active:true},
+    {id:'pooja-samagri', name:'Pooja Samagri', link:'https://www.tinyshinygifts.com/collections/pooja-samagri', active:true},
+    {id:'gifts', name:'Gifts', link:'https://www.tinyshinygifts.com/collections/gifts', active:true},
+    {id:'hangings', name:"Hanging's", link:'https://www.tinyshinygifts.com/collections/hangings', active:true},
+    {id:'christmas', name:'Christmas', link:'https://www.tinyshinygifts.com/collections/christmas', active:false}
+  ];
+}
+function normalizeCatalogCategories(list){
+  const base=defaultCatalogCategories();
+  const arr=Array.isArray(list)&&list.length?list:base;
+  return arr.map((x,i)=>({id:String(x.id||x.name||('cat'+i)).toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,''), name:String(x.name||'Category'), link:String(x.link||''), active:x.active!==false}));
+}
+function activeCatalogCategories(cfg){
+  return normalizeCatalogCategories(cfg.catalogCategories).filter(x=>x.active && x.link);
+}
+function catalogMenuText(cfg){
+  const cats=activeCatalogCategories(cfg);
+  if(!cats.length) return `Please check our catalog:\n${cfg.mainCatalogLink||'https://www.tinyshinygifts.com/collections/all'}`;
+  return 'Please choose a category:\n\n' + cats.map((c,i)=>`${i+1}. ${c.name}`).join('\n') + '\n\nReply with category number or name.';
+}
+function catalogCategoryReply(text,cfg){
+  const cats=activeCatalogCategories(cfg);
+  const low=String(text||'').trim().toLowerCase();
+  if(!low) return '';
+  const n=parseInt(low,10);
+  let cat = Number.isFinite(n) && n>0 ? cats[n-1] : null;
+  if(!cat) cat=cats.find(c=>c.id===low || c.name.toLowerCase()===low || c.name.toLowerCase().includes(low));
+  if(!cat) return '';
+  return `${cat.name}:\n${cat.link}`;
+}
+
+function defaultChatbotSettings(){ return { enabled:true, businessHours:false, menuEnabled:true, catalogEnabled:true, mainCatalogLink:'https://www.tinyshinygifts.com/collections/all', catalogCategories:defaultCatalogCategories(), afterHoursMessage:'Thanks for your message. Our team will reply soon.', menuText:'Please choose:\n1. Track Order\n2. Catalog\n3. Shipping Charges\n4. Return Policy\n5. Talk to Support' }; }
+function getChatbotSettings(){ const s=readJson(settingsPath,{}); const cfg={ ...defaultChatbotSettings(), ...(s.whatsappChatbot||{}) }; cfg.catalogCategories=normalizeCatalogCategories(cfg.catalogCategories); return cfg; }
 app.get('/api/whatsapp-chatbot/settings',(req,res)=>res.json({ ok:true, settings:getChatbotSettings() }));
 app.post('/api/whatsapp-chatbot/settings',(req,res)=>{ const current=readJson(settingsPath,{}); const next={ ...defaultChatbotSettings(), ...(req.body||{}) }; writeJson(settingsPath,{ ...current, whatsappChatbot:next }); res.json({ ok:true, settings:next }); });
 function faqAnswerFor(text=''){
@@ -1531,7 +1572,9 @@ async function handleWhatsappChatbotMessage(item={}){
   const low=text.toLowerCase();
   let reply='';
   if(/\b(catalog|catalogue|products?|collection|price list)\b/i.test(low)){
-    reply=`Please check our latest Tiny Shiny Gifts catalog:\n${cfg.mainCatalogLink}\n\nCategories:\n1. Rakhi: ${cfg.rakhiCatalogLink}\n2. Home Decor: ${cfg.homeDecorCatalogLink}\n3. Divine: ${cfg.divineCatalogLink}\n4. Candles: ${cfg.candlesCatalogLink}\n5. New Arrivals: ${cfg.newArrivalsLink}`;
+    reply=catalogMenuText(cfg);
+  } else if((reply=catalogCategoryReply(text,cfg))) {
+    // category selection matched
   } else if(/^(hi|hello|hey|namaste|menu|help)$/i.test(low)) {
     reply=cfg.menuText;
   } else if(/\b(support|agent|human|call me|help me)\b/i.test(low)) {

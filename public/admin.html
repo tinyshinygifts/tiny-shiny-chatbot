@@ -7,7 +7,7 @@
   <link rel="icon" href="/tiny-shiny-logo.jpg"/>
   <link rel="manifest" href="/manifest.json"/>
   <meta name="theme-color" content="#d63384"/>
-  <link rel="stylesheet" href="/style.css?v=20260610140732"/>
+  <link rel="stylesheet" href="/style.css?v=20260610141928"/>
 </head>
 <body>
   <main class="admin-wrap admin-fixed-layout">
@@ -60,7 +60,6 @@
       <button class="tab-btn" data-tab="leadPanel">Leads</button>
       <button class="tab-btn" data-tab="activityPanel">Visitor Activity</button>
       <button class="tab-btn" data-tab="messagePanel">Buy Messages</button>
-      <button class="tab-btn" data-tab="imagePanel">Image Messages</button>
       <button class="tab-btn" id="openGoogleSheetTab" data-tab="googleSheetPanel">Google Sheet</button>
     </section>
 
@@ -250,7 +249,17 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
       <div class="broadcast-summary" id="broadcastSummary">0 contacts selected</div>
       <div id="broadcastContactsList" class="broadcast-contacts-list"></div>
       <h3>Campaign History / Delivery Status</h3>
-      <pre id="broadcastResult"></pre>
+      
+      <div class="broadcast-image-library" id="broadcastImageLibraryBox">
+        <h3>Image Messages</h3>
+        <p class="hint">Image upload/library ab Bulk WhatsApp Broadcast ke andar configure hoga.</p>
+        <div class="form-grid two">
+          <label>Broadcast Image URL <input id="broadcastImageUrl" placeholder="https://... image link"/></label>
+          <label>Image Caption <input id="broadcastImageCaption" placeholder="Caption / offer text"/></label>
+        </div>
+        <div id="broadcastImageLibrary" class="image-library-inline"></div>
+      </div>
+<pre id="broadcastResult"></pre>
       <div id="broadcastCampaignsList" class="broadcast-campaigns-list"></div>
     </section>
 
@@ -339,7 +348,16 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
         <label>Support Handover Keywords <input id="waSupportKeywords" value="support,agent,human,call me,help me"/></label>
       </div>
       <p class="hint">Keywords: catalog, catalogue, products, collection, price list. STOP/UNSUBSCRIBE reply se customer broadcast opt-out ho jayega.</p>
-      <pre id="waBotResult"></pre>
+      
+      <div class="catalog-category-box">
+        <h3>Catalog Categories</h3>
+        <p class="hint">Customer catalog select karega to sirf checked/active categories jayengi.</p>
+        <div id="catalogCategoriesTable" class="catalog-categories-table"></div>
+        <div class="inline-actions">
+          <button id="addCatalogCategory" type="button" class="ghost-btn compact-btn">+ Add Category</button>
+        </div>
+      </div>
+<pre id="waBotResult"></pre>
     </section>
 
 
@@ -543,6 +561,6 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
       <pre id="modalShopifyResult"></pre>
     </div>
   </div>
-  <script src="/admin.js?v=20260610140732"></script>
+  <script src="/admin.js?v=20260610141928"></script>
 </body>
 </html>

@@ -771,6 +771,38 @@ async function createBroadcast(){
   if($('broadcastResult')) broadcastResult.textContent=JSON.stringify(res,null,2);
   await loadBroadcasts();
 }
+
+function defaultCatalogCategoriesUi(){
+  return [
+    {id:'all', name:'Shop All', link:'https://www.tinyshinygifts.com/collections/all', active:true},
+    {id:'new-arrivals', name:'New Arrivals', link:'https://www.tinyshinygifts.com/collections/new-arrivals', active:true},
+    {id:'home-decor', name:'Home Decor', link:'https://www.tinyshinygifts.com/collections/home-decor', active:true},
+    {id:'god-statue', name:'God Idols & Statues', link:'https://www.tinyshinygifts.com/collections/god-statue', active:true},
+    {id:'candles-and-diyas', name:"Candle's And Diya's", link:'https://www.tinyshinygifts.com/collections/candles-and-diyas', active:true},
+    {id:'rakhi', name:'Rakhi', link:'https://www.tinyshinygifts.com/collections/rakhi', active:true},
+    {id:'krishna-poshak', name:'Krishna Poshak', link:'https://www.tinyshinygifts.com/collections/krishna-poshak', active:true},
+    {id:'pooja-samagri', name:'Pooja Samagri', link:'https://www.tinyshinygifts.com/collections/pooja-samagri', active:true},
+    {id:'gifts', name:'Gifts', link:'https://www.tinyshinygifts.com/collections/gifts', active:true},
+    {id:'hangings', name:"Hanging's", link:'https://www.tinyshinygifts.com/collections/hangings', active:true},
+    {id:'christmas', name:'Christmas', link:'https://www.tinyshinygifts.com/collections/christmas', active:false}
+  ];
+}
+function renderCatalogCategories(){
+  const box=$('catalogCategoriesTable'); if(!box) return;
+  const cats=(waBotSettings.catalogCategories&&waBotSettings.catalogCategories.length?waBotSettings.catalogCategories:defaultCatalogCategoriesUi());
+  waBotSettings.catalogCategories=cats;
+  box.innerHTML=cats.map((c,i)=>`<div class="catalog-cat-row">
+    <label class="checkline"><input type="checkbox" data-cat-active="${i}" ${c.active!==false?'checked':''}/> Active</label>
+    <input data-cat-name="${i}" value="${esc(c.name||'')}" placeholder="Category name"/>
+    <input data-cat-link="${i}" value="${esc(c.link||'')}" placeholder="Collection link"/>
+    <button type="button" class="ghost-btn compact-btn" data-cat-remove="${i}">Remove</button>
+  </div>`).join('');
+}
+function collectCatalogCategories(){
+  const cats=waBotSettings.catalogCategories||defaultCatalogCategoriesUi();
+  return cats.map((c,i)=>({id:(c.id||c.name||('cat'+i)), name:document.querySelector(`[data-cat-name="${i}"]`)?.value||c.name||'', link:document.querySelector(`[data-cat-link="${i}"]`)?.value||c.link||'', active:!!document.querySelector(`[data-cat-active="${i}"]`)?.checked}));
+}
+
 async function loadWhatsappChatbotSettings(){
   const d=await fetch('/api/whatsapp-chatbot/settings',{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,settings:{}}));
   waBotSettings=d.settings||{};
@@ -860,12 +892,14 @@ async function mockInstagramMessage(){
 
 function setupPwaInstall(){
   if('serviceWorker' in navigator){ navigator.serviceWorker.register('/service-worker.js').catch(()=>{}); }
-  window.addEventListener('beforeinstallprompt', ev => { ev.preventDefault(); deferredInstallPrompt = ev; const btn=$('installPwaBtn'); if(btn) btn.style.display='inline-flex'; });
-  const btn=$('installPwaBtn');
-  if(btn){ btn.addEventListener('click', async () => {
+  window.addEventListener('beforeinstallprompt', ev => { ev.preventDefault(); deferredInstallPrompt = ev; [$('installPwaBtn'),$('installAppBtn')].filter(Boolean).forEach(btn=>{ btn.style.display='inline-flex'; btn.textContent='Install WhatsApp App'; }); });
+  const btn=$('installPwaBtn') || $('installAppBtn');
+  const allBtns=[$('installPwaBtn'),$('installAppBtn')].filter(Boolean);
+  allBtns.forEach(b=>b.style.display='inline-flex');
+  if(btn){ allBtns.forEach(btnEl=>btnEl.addEventListener('click', async () => {
     if(deferredInstallPrompt){ deferredInstallPrompt.prompt(); await deferredInstallPrompt.userChoice.catch(()=>{}); deferredInstallPrompt=null; }
-    else alert('Chrome menu se Add to Home Screen / Install App select kar sakte ho.');
-  }); }
+    else alert('Mobile/Desktop Chrome menu ⋮ se Add to Home Screen / Install App select karo. Agar button prompt nahi de raha to browser PWA prompt ready nahi hai.');
+  })); }
 }
 setupPwaInstall();
 
@@ -971,16 +1005,25 @@ function buildSocialGroups(messages, channel){
 }
 
 function fileToDataUrl(file){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=()=>reject(r.error||new Error('File read failed')); r.readAsDataURL(file); }); }
-function setAttachmentLabel(){ const el=$('whatsappAttachmentLabel'); if(el) el.textContent=selectedWhatsappAttachment ? ('Attached: '+(selectedWhatsappAttachment.originalName||selectedWhatsappAttachment.filename||selectedWhatsappAttachment.type)) : ''; }
+function setAttachmentLabel(){
+  const el=$('whatsappAttachmentLabel'); if(!el) return;
+  if(!selectedWhatsappAttachment){ el.innerHTML=''; return; }
+  const name=selectedWhatsappAttachment.originalName||selectedWhatsappAttachment.filename||selectedWhatsappAttachment.type||'file';
+  const url=selectedWhatsappAttachment.absoluteUrl||selectedWhatsappAttachment.url||'';
+  const isImg=String(selectedWhatsappAttachment.mime||'').startsWith('image/') || selectedWhatsappAttachment.type==='image';
+  el.innerHTML = `${isImg?'Image ready':'Document ready'}: ${esc(name)} ${isImg&&url?`<img src="${esc(url)}" class="attachment-thumb" alt="">`:''}`;
+}
 async function uploadWhatsappMediaFile(file, type){
   if(!file) return;
   const dataUrl=await fileToDataUrl(file);
+  if($('whatsappInboxResult')) whatsappInboxResult.textContent='Uploading '+type+'...';
+  if($('whatsappReplyResult')){ whatsappReplyResult.classList.remove('hidden'); whatsappReplyResult.textContent='Uploading '+type+'...'; }
   const d=await fetch('/api/whatsapp-inbox/upload-media',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({dataUrl,filename:file.name,type})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
-  if(!d.ok){ alert(d.error||'Upload failed'); return; }
+  if(!d.ok){ if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2); alert(d.error||'Upload failed'); return; }
   selectedWhatsappAttachment=Object.assign({},d.file,{absoluteUrl:d.url,type, originalName:file.name});
   setAttachmentLabel();
-  const label=$('whatsappAttachmentLabel');
-  if(label && String(d.file.mime||'').startsWith('image/')) label.innerHTML=`Attached image: ${esc(file.name)} <img src="${esc(d.url)}" class="attachment-thumb" alt="">`;
+  if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify({ok:true,message:type+' ready to send',file:d.file,url:d.url},null,2);
+  if($('whatsappReplyResult')) whatsappReplyResult.textContent=type+' ready to send';
 }
 function insertEmojiToReply(emoji){
   const txt=$('whatsappReplyText'); if(!txt) return;
@@ -1484,3 +1527,17 @@ document.addEventListener('click', e=>{
 document.addEventListener('click', e=>{
   if(e.target.closest('[data-close-mobile-info]')) document.body.classList.remove('wa-mobile-info-open');
 });
+
+document.addEventListener('click', e=>{
+  if(e.target.id==='addCatalogCategory'){ waBotSettings.catalogCategories=waBotSettings.catalogCategories||defaultCatalogCategoriesUi(); waBotSettings.catalogCategories.push({id:'custom-'+Date.now(),name:'New Category',link:'https://www.tinyshinygifts.com/collections/',active:true}); renderCatalogCategories(); }
+  if(e.target.dataset.catRemove!==undefined){ waBotSettings.catalogCategories.splice(Number(e.target.dataset.catRemove),1); renderCatalogCategories(); }
+});
+document.addEventListener('input', e=>{ if(e.target.dataset.catName!==undefined || e.target.dataset.catLink!==undefined || e.target.dataset.catActive!==undefined){ waBotSettings.catalogCategories=collectCatalogCategories(); }});
+document.addEventListener('change', e=>{ if(e.target.dataset.catActive!==undefined){ waBotSettings.catalogCategories=collectCatalogCategories(); }});
+
+function renderBroadcastImageLibrary(){
+  const box=$('broadcastImageLibrary'); if(!box) return;
+  box.innerHTML=(mediaImages||[]).slice(0,20).map(img=>`<button type="button" class="broadcast-img-choice" data-use-broadcast-img="${esc(img.url||'')}"><img src="${esc(img.url||'')}" alt=""><span>${esc(img.title||img.filename||'Image')}</span></button>`).join('') || '<p class="hint">No saved images yet.</p>';
+}
+document.addEventListener('click', e=>{ const b=e.target.closest('[data-use-broadcast-img]'); if(b && $('broadcastImageUrl')) broadcastImageUrl.value=b.dataset.useBroadcastImg; });
+setInterval(renderBroadcastImageLibrary, 3000);
