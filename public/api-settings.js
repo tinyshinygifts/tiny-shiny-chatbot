@@ -3,6 +3,8 @@ let whatsappTemplates = [];
 let whatsappTemplateMappings = {};
 let selectedTemplateId = '';
 let faqs = [];
+let lastApiConnectionRows = [];
+let lastApiErrorLogKey = '';
 function $(id){ return document.getElementById(id); }
 function show(el, data){ el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); }
 const templateTargetLabels = {customer_followup:'Customer Follow-up', order_confirmation:'Order Confirmation', test_whatsapp:'Test WhatsApp / Owner'};
@@ -207,16 +209,62 @@ async function loadConnectionStatus(){
   const grid=$('connectionStatusGrid'); if(!grid) return;
   const d=await fetch('/api/connection-status',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,rows:[]}));
   if(!d.ok){ grid.innerHTML=`<div class="connection-item not"><b>Status load failed</b><span>${esc(d.error||'Error')}</span></div>`; return; }
+  lastApiConnectionRows = d.rows || [];
   const summary=d.summary||{};
   const summaryHtml=`<div class="api-status-summary"><b>Total APIs: ${summary.total||0}</b><span class="ok-dot">Connected: ${summary.connected||0}</span><span class="warn-dot">Error: ${summary.error||0}</span><span class="bad-dot">Not Connected: ${summary.notConnected||0}</span></div>`;
-  grid.innerHTML=summaryHtml+(d.rows||[]).map(x=>{
+  grid.innerHTML=summaryHtml+lastApiConnectionRows.map(x=>{
     const status=x.status || (x.connected?'connected':'not_connected');
     const label=status==='connected'?'Connected':(status==='error'?'Connected but Error':'Not Connected');
     const cls=status==='connected'?'ok':(status==='error'?'warn':'not');
-    const logs=(x.logs||[]).map(l=>`<li>${esc(l)}</li>`).join('');
-    return `<div class="connection-item ${cls}"><div><b><span class="status-light ${cls}"></span>${esc(x.name)}</b><span>${esc(x.details||'')}</span>${logs?`<ul class="api-log-list">${logs}</ul>`:''}</div><em>${label}</em></div>`;
+    const logs=(x.logs||[]).slice(0,2).map(l=>`<li>${esc(l)}</li>`).join('');
+    const clickable=status==='error' || (x.logs||[]).length;
+    return `<button type="button" class="connection-item ${cls} ${clickable?'clickable':''}" data-api-log-key="${esc(x.key)}">
+      <div><b><span class="status-light ${cls}"></span>${esc(x.name)}</b><span>${esc(x.details||'')}</span>${logs?`<ul class="api-log-list">${logs}</ul>`:''}<small>${clickable?'Click for full log':''}</small></div><em>${label}</em>
+    </button>`;
   }).join('');
   if($('connectionStatusTime')) connectionStatusTime.textContent='Last checked: '+(d.checkedAt||new Date().toISOString());
+}
+
+
+function apiStatusHindi(row){
+  const status=row?.status || (row?.connected?'connected':'not_connected');
+  if(status==='connected') return 'API working hai. Live test successful.';
+  if(status==='error') {
+    if(String(row?.key)==='meta') return 'Token saved hai, lekin Ad Account ka ads_read / ads_management access nahi mila ya token valid user/ad account se linked nahi hai.';
+    return 'API details saved hain, lekin live test fail ho raha hai.';
+  }
+  return 'Required API settings missing hain.';
+}
+function openApiErrorLog(key){
+  const row=(lastApiConnectionRows||[]).find(x=>String(x.key)===String(key));
+  if(!row) return;
+  lastApiErrorLogKey=key;
+  const modal=$('apiErrorLogModal'), title=$('apiErrorLogTitle'), body=$('apiErrorLogBody');
+  if(!modal||!body) return;
+  if(title) title.textContent=(row.name||'API')+' Log';
+  const logs=(row.logs||[]).map(l=>`<li>${esc(l)}</li>`).join('') || '<li>No log available.</li>';
+  const status=row.status || (row.connected?'connected':'not_connected');
+  const cls=status==='connected'?'ok':(status==='error'?'warn':'not');
+  body.innerHTML=`<div class="api-log-summary ${cls}">
+    <p><b>Status:</b> ${esc(status==='connected'?'Connected':(status==='error'?'Connected but Error':'Not Connected'))}</p>
+    <p><b>Reason:</b> ${esc(apiStatusHindi(row))}</p>
+    <p><b>Details:</b> ${esc(row.details||'-')}</p>
+  </div>
+  <h3>Full Logs</h3>
+  <ul class="api-full-log-list">${logs}</ul>
+  ${String(row.key)==='meta'?`<div class="api-fix-box"><b>Meta Ads Suggested Fix</b><ol>
+    <li>Ad Account ID format <b>act_XXXXXXXX</b> rakho.</li>
+    <li>Token me <b>ads_read</b> permission add karo.</li>
+    <li>Business Settings me same user/system user ko Ad Account access do.</li>
+    <li>Permission update ke baad <b>Test Again</b> click karo.</li>
+  </ol></div>`:''}`;
+  modal.classList.remove('hidden');
+}
+function closeApiErrorLog(){ const m=$('apiErrorLogModal'); if(m) m.classList.add('hidden'); }
+function copyApiErrorLog(){
+  const row=(lastApiConnectionRows||[]).find(x=>String(x.key)===String(lastApiErrorLogKey));
+  const text=row ? `${row.name}\nStatus: ${row.status}\nDetails: ${row.details||''}\nLogs:\n${(row.logs||[]).join('\n')}` : '';
+  navigator.clipboard?.writeText(text).then(()=>alert('Error log copied')).catch(()=>alert(text));
 }
 
 async function loadConfig(){
@@ -392,3 +440,11 @@ document.addEventListener('click', e=>{ if(e.target.id==='saveNdrApiSettings') s
 setTimeout(()=>loadNdrApiSettings().catch(()=>{}),0);
 
 document.addEventListener('click', e=>{ if(e.target && e.target.id==='refreshConnectionStatus') loadConnectionStatus(); });
+
+document.addEventListener('click', e=>{
+  const apiLogBtn=e.target.closest('[data-api-log-key]');
+  if(apiLogBtn){ openApiErrorLog(apiLogBtn.dataset.apiLogKey); return; }
+  if(e.target && e.target.id==='closeApiErrorLog') closeApiErrorLog();
+  if(e.target && e.target.id==='copyApiErrorLog') copyApiErrorLog();
+  if(e.target && e.target.id==='testApiAgain') loadConnectionStatus();
+});

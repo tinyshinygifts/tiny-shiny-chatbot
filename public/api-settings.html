@@ -353,5 +353,20 @@ URL | Shop Now | https://www.tinyshinygifts.com"></textarea></label>
     </section>
   </main>
   <script src="/api-settings.js"></script>
+
+  <div id="apiErrorLogModal" class="modal hidden api-error-log-modal">
+    <div class="modal-card wide">
+      <div class="modal-head">
+        <h2 id="apiErrorLogTitle">API Error Log</h2>
+        <button type="button" class="ghost-btn" id="closeApiErrorLog">×</button>
+      </div>
+      <div id="apiErrorLogBody" class="api-error-log-body"></div>
+      <div class="modal-actions">
+        <button type="button" class="ghost-btn" id="copyApiErrorLog">Copy Error</button>
+        <button type="button" class="primary-btn" id="testApiAgain">Test Again</button>
+      </div>
+    </div>
+  </div>
+
 </body>
 </html>

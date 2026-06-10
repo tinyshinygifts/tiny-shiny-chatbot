@@ -884,7 +884,16 @@ document.addEventListener('click',async e=>{
 // ---------- Final WATI style unified Team Inbox override ----------
 let messengerMessages = [];
 let selectedWhatsappAttachment = null;
-const quickEmojis = ['😊','🙏','👍','🎁','✨','✅','🚚','📦','💖','🙂'];
+const emojiCategories = {
+  smileys:['😀','😃','😄','😁','😊','🙂','😍','🥰','😘','😎','🤩','😇','😔','😢'],
+  love:['❤️','💕','💖','💝','💐','🌹','🥰','😍'],
+  thanks:['🙏','🙌','👏','👍','👌','✅','🤝'],
+  gifts:['🎁','🛍️','✨','⭐','🎉','🎊','🔥'],
+  delivery:['🚚','📦','🛵','📍','⏰','✅','❌'],
+  payment:['💰','💳','₹','🧾','💵'],
+  review:['⭐','⭐⭐⭐⭐⭐','👍','📸','💬']
+};
+const quickEmojis = Object.values(emojiCategories).flat();
 let teamInboxChannelFilter = localStorage.getItem('tsgTeamInboxChannel') || 'all';
 function channelOfGroup(g){ return g.channel || (String(g.phone||'').startsWith('instagram:')?'instagram':String(g.phone||'').startsWith('messenger:')?'messenger':'whatsapp'); }
 function channelLabel(ch){ return ch==='instagram'?'Instagram':(ch==='messenger'?'Messenger':'WhatsApp'); }
@@ -915,13 +924,27 @@ async function uploadWhatsappMediaFile(file, type){
   selectedWhatsappAttachment=Object.assign({},d.file,{absoluteUrl:d.url,type});
   setAttachmentLabel();
 }
-function addEmojiToReply(){
+function insertEmojiToReply(emoji){
   const txt=$('whatsappReplyText'); if(!txt) return;
-  const emoji=quickEmojis[(Number(localStorage.getItem('tsgEmojiIdx')||0))%quickEmojis.length];
-  localStorage.setItem('tsgEmojiIdx', String((Number(localStorage.getItem('tsgEmojiIdx')||0)+1)%quickEmojis.length));
   const start=txt.selectionStart||txt.value.length, end=txt.selectionEnd||txt.value.length;
   txt.value=txt.value.slice(0,start)+emoji+txt.value.slice(end);
   txt.focus(); txt.selectionStart=txt.selectionEnd=start+emoji.length;
+  const recent=JSON.parse(localStorage.getItem('tsgRecentEmojis')||'[]').filter(x=>x!==emoji);
+  recent.unshift(emoji); localStorage.setItem('tsgRecentEmojis', JSON.stringify(recent.slice(0,18)));
+}
+function addEmojiToReply(){
+  let picker=$('emojiPickerPanel');
+  if(!picker){
+    picker=document.createElement('div'); picker.id='emojiPickerPanel'; picker.className='emoji-picker-panel hidden';
+    document.body.appendChild(picker);
+  }
+  const recent=JSON.parse(localStorage.getItem('tsgRecentEmojis')||'[]');
+  const groups=[['Recent',recent],['Smileys',emojiCategories.smileys],['Love',emojiCategories.love],['Thanks',emojiCategories.thanks],['Gift/Offer',emojiCategories.gifts],['Delivery',emojiCategories.delivery],['Payment',emojiCategories.payment],['Review',emojiCategories.review]];
+  picker.innerHTML=groups.filter(g=>g[1]&&g[1].length).map(([name,arr])=>`<div class="emoji-cat"><b>${esc(name)}</b><div>${arr.map(em=>`<button type="button" data-pick-emoji="${esc(em)}">${esc(em)}</button>`).join('')}</div></div>`).join('');
+  const btn=document.querySelector('[data-wa-emoji], #waEmojiBtn');
+  const r=btn?.getBoundingClientRect();
+  picker.style.left=((r?.left||20))+'px'; picker.style.top=((r?.top||window.innerHeight-260)-230)+'px';
+  picker.classList.toggle('hidden');
 }
 
 function renderChannelTabs(){
@@ -1344,3 +1367,8 @@ document.addEventListener('click', e=>{
 });
 
 document.addEventListener('change', e=>{ if(e.target.id==='whatsappImageFile' && e.target.files?.[0]) uploadWhatsappMediaFile(e.target.files[0],'image'); if(e.target.id==='whatsappDocumentFile' && e.target.files?.[0]) uploadWhatsappMediaFile(e.target.files[0],'document'); });
+
+document.addEventListener('click', e=>{
+  const em=e.target.closest('[data-pick-emoji]');
+  if(em){ insertEmojiToReply(em.dataset.pickEmoji); const p=document.getElementById('emojiPickerPanel'); if(p) p.classList.add('hidden'); }
+});
