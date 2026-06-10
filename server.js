@@ -80,6 +80,17 @@ const whatsappInboxPath = path.join(dataDir, 'whatsapp-inbox.json');
 const shopifyOAuthStatePath = path.join(dataDir, 'shopify-oauth-state.json');
 const broadcastCampaignsPath = path.join(dataDir, 'broadcast-campaigns.json');
 const whatsappOptoutsPath = path.join(dataDir, 'whatsapp-optouts.json');
+const whatsappTeamMetaPath = path.join(dataDir, 'whatsapp-team-meta.json');
+const chatbotFlowsPath = path.join(dataDir, 'chatbot-flows.json');
+const instagramInboxPath = path.join(dataDir, 'instagram-inbox.json');
+const instagramSettingsPath = path.join(dataDir, 'instagram-settings.json');
+const advancedCampaignsPath = path.join(dataDir, 'advanced-campaigns.json');
+const customerSegmentsPath = path.join(dataDir, 'customer-segments.json');
+const dripCampaignsPath = path.join(dataDir, 'drip-campaigns.json');
+const quickReplySettingsPath = path.join(dataDir, 'quickreply-settings.json');
+const linkClicksPath = path.join(dataDir, 'link-clicks.json');
+const automationRulesPath = path.join(dataDir, 'automation-rules.json');
+
 
 // MongoDB persistent storage (Render-safe). When MONGODB_URI is set, JSON data and API settings are loaded from MongoDB and kept synced.
 const mongoUri = process.env.MONGODB_URI || '';
@@ -93,7 +104,7 @@ const mongoJsonCache = new Map();
 function deepClone(value) { return value === undefined ? value : JSON.parse(JSON.stringify(value)); }
 function mongoKeyFromPath(filePath) { return 'json:' + path.basename(String(filePath || 'unknown.json')); }
 function readLocalJson(filePath, fallback) { try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; } }
-function mongoKnownPaths() { return [faqPath, settingsPath, leadsPath, eventsPath, leadMessagesPath, mediaImagesPath, crmPath, whatsappTemplatesPath, whatsappInboxPath, shopifyOAuthStatePath, broadcastCampaignsPath, whatsappOptoutsPath]; }
+function mongoKnownPaths() { return [faqPath, settingsPath, leadsPath, eventsPath, leadMessagesPath, mediaImagesPath, crmPath, whatsappTemplatesPath, whatsappInboxPath, shopifyOAuthStatePath, broadcastCampaignsPath, whatsappOptoutsPath, whatsappTeamMetaPath, chatbotFlowsPath, instagramInboxPath, instagramSettingsPath, advancedCampaignsPath, customerSegmentsPath, dripCampaignsPath, quickReplySettingsPath, linkClicksPath, automationRulesPath]; }
 async function mongoSave(key, value) {
   if (!mongoReady || !mongoCollection) return;
   try { await mongoCollection.updateOne({ key }, { $set: { key, value, updatedAt: new Date() } }, { upsert: true }); }
@@ -1028,6 +1039,14 @@ app.use('/api/whatsapp-templates', requireAdmin);
 app.use('/api/whatsapp-inbox', requireAdmin);
 app.use('/api/broadcast', requireAdmin);
 app.use('/api/whatsapp-chatbot', requireAdmin);
+app.use('/api/chatbot-flows', requireAdmin);
+app.use('/api/team-inbox', requireAdmin);
+app.use('/api/shipping-settings', requireAdmin);
+
+app.use('/api/instagram', requireAdmin);
+app.use('/api/phase2', requireAdmin);
+app.use('/api/quickreply', requireAdmin);
+
 app.post('/api/settings', requireAdmin);
 
 app.get('/api/config', (req, res) => {
@@ -1197,13 +1216,50 @@ function pruneWhatsappInbox(days) {
   if (kept.length !== all.length) writeJson(whatsappInboxPath, kept);
   return kept;
 }
+
+function readTeamInboxMeta(){ return readJson(whatsappTeamMetaPath, {}); }
+function writeTeamInboxMeta(meta){ writeJson(whatsappTeamMetaPath, meta && typeof meta === 'object' ? meta : {}); return readTeamInboxMeta(); }
+function getThreadMeta(phone){ const p=normalizeWhatsAppPhone(phone); return readTeamInboxMeta()[p] || { phone:p, status:'open', agent:'', tags:[], note:'', updatedAt:'' }; }
+function updateThreadMeta(phone, patch={}){
+  const p=normalizeWhatsAppPhone(phone);
+  if(!p) return null;
+  const all=readTeamInboxMeta();
+  const old=all[p] || { phone:p, status:'open', agent:'', tags:[], note:'', createdAt:nowIso() };
+  const next={ ...old, ...patch, phone:p, tags:Array.isArray(patch.tags)?patch.tags:(old.tags||[]), updatedAt:nowIso() };
+  all[p]=next;
+  writeTeamInboxMeta(all);
+  return next;
+}
+function shopifyCustomerByPhone(phone){
+  const p10=phoneLast10(phone);
+  if(!p10) return null;
+  try{
+    const customers = readJson(path.join(dataDir, 'shopify-customers-cache.json'), []);
+    return (customers||[]).find(c=>phoneLast10(c.phone||c.default_address?.phone||c.raw?.phone||c.raw?.default_address?.phone)===p10) || null;
+  }catch{return null;}
+}
+function defaultFlow(){
+  return { id:'default_menu_flow', name:'Default WhatsApp Menu Flow', enabled:true, triggerKeywords:['hi','hello','namaste','menu','help'], blocks:[
+    { id:'start', type:'start', label:'Start', text:'Customer sends hi / menu' },
+    { id:'welcome', type:'message', label:'Welcome Message', text:'Welcome to Tiny Shiny Gifts. Please choose an option:\n1. Track Order\n2. Catalog\n3. COD Help\n4. Talk to Support' },
+    { id:'catalog', type:'catalog', label:'Catalog Link', text:'Send catalog links when customer types catalog/products' },
+    { id:'support', type:'human', label:'Human Support', text:'Tag chat as Human Support Required' }
+  ], edges:[{from:'start',to:'welcome'}], updatedAt:nowIso() };
+}
+function readChatbotFlows(){ const flows=readJson(chatbotFlowsPath, []); return Array.isArray(flows)&&flows.length?flows:[defaultFlow()]; }
+function writeChatbotFlows(flows){ writeJson(chatbotFlowsPath, (Array.isArray(flows)?flows:[]).slice(0,100)); return readChatbotFlows(); }
+
 function groupWhatsappConversations(messages = []) {
   const map = new Map();
   for (const m of messages) {
     const phone = whatsappInboxPhone(m);
     if (!phone) continue;
     const key = phone;
-    if (!map.has(key)) map.set(key, { phone, customerName: '', lastAt: '', unread: 0, messages: [] });
+    if (!map.has(key)) {
+      const meta = getThreadMeta(phone);
+      const shopifyCustomer = shopifyCustomerByPhone(phone);
+      map.set(key, { phone, customerName: shopifyCustomer?.name || '', lastAt: '', unread: 0, messages: [], meta, shopifyCustomer, inShopify: !!shopifyCustomer });
+    }
     const g = map.get(key);
     if (m.customerName && !g.customerName) g.customerName = m.customerName;
     if (m.status === 'unread' && m.direction === 'inbound') g.unread += 1;
@@ -1212,6 +1268,52 @@ function groupWhatsappConversations(messages = []) {
   }
   return [...map.values()].map(g => ({ ...g, messages: g.messages.sort((a,b)=>new Date(a.createdAt||0)-new Date(b.createdAt||0)) })).sort((a,b)=>new Date(b.lastAt||0)-new Date(a.lastAt||0));
 }
+
+app.get('/api/team-inbox/meta', (req, res) => {
+  res.json({ ok:true, meta: readTeamInboxMeta() });
+});
+app.post('/api/team-inbox/thread/:phone', (req, res) => {
+  const phone = normalizeWhatsAppPhone(req.params.phone);
+  if(!phone) return res.status(400).json({ ok:false, error:'Valid phone required' });
+  const body=req.body||{};
+  const patch={};
+  if(body.status) patch.status=String(body.status).toLowerCase();
+  if(Object.prototype.hasOwnProperty.call(body,'agent')) patch.agent=String(body.agent||'');
+  if(Object.prototype.hasOwnProperty.call(body,'note')) patch.note=String(body.note||'');
+  if(Array.isArray(body.tags)) patch.tags=body.tags.map(x=>String(x).trim()).filter(Boolean).slice(0,20);
+  const meta=updateThreadMeta(phone, patch);
+  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'status', statusType:'team_update', to:phone, text:'Team inbox updated', createdAt:nowIso(), raw:{ meta } });
+  res.json({ ok:true, meta });
+});
+app.post('/api/team-inbox/thread/:phone/note', (req, res) => {
+  const phone=normalizeWhatsAppPhone(req.params.phone);
+  const note=String(req.body?.note||'').trim();
+  if(!phone) return res.status(400).json({ok:false,error:'Valid phone required'});
+  const meta=updateThreadMeta(phone,{ note });
+  res.json({ ok:true, meta });
+});
+app.get('/api/chatbot-flows', (req,res)=>res.json({ ok:true, flows:readChatbotFlows() }));
+app.post('/api/chatbot-flows', (req,res)=>{
+  const body=req.body||{};
+  const flows=readChatbotFlows();
+  const flow={ id:body.id||crypto.randomUUID(), name:String(body.name||'Untitled Flow').trim(), enabled: body.enabled!==false, triggerKeywords:Array.isArray(body.triggerKeywords)?body.triggerKeywords:[], blocks:Array.isArray(body.blocks)?body.blocks:[], edges:Array.isArray(body.edges)?body.edges:[], updatedAt:nowIso() };
+  const idx=flows.findIndex(f=>String(f.id)===String(flow.id));
+  if(idx>=0) flows[idx]=flow; else flows.unshift(flow);
+  const saved=writeChatbotFlows(flows);
+  res.json({ ok:true, flow, flows:saved });
+});
+app.delete('/api/chatbot-flows/:id', (req,res)=>{ const flows=readChatbotFlows().filter(f=>String(f.id)!==String(req.params.id)); res.json({ ok:true, flows:writeChatbotFlows(flows) }); });
+app.get('/api/shipping-settings', (req,res)=>{
+  const s=readJson(settingsPath,{});
+  res.json({ ok:true, shipping:{ provider:(s.shippingProvider||'shiprocket'), shiprocketEnabled:!!(process.env.SHIPROCKET_TOKEN||process.env.SHIPROCKET_EMAIL), icarryEnabled:String(process.env.ICARRY_ENABLED||'').toLowerCase()==='true', icarryTrackingUrl:process.env.ICARRY_TRACKING_URL||'' } });
+});
+app.post('/api/shipping-settings', (req,res)=>{
+  const provider=String(req.body?.provider||'shiprocket').toLowerCase()==='icarry'?'icarry':'shiprocket';
+  const current=readJson(settingsPath,{});
+  writeJson(settingsPath,{...current, shippingProvider:provider});
+  res.json({ ok:true, shipping:{ provider } });
+});
+
 app.get('/api/whatsapp-inbox', (req, res) => {
   const days = retentionDays(req.query.days);
   const settings = readJson(settingsPath, {});
@@ -1665,6 +1767,101 @@ app.post('/api/sync-google-sheets', async (req, res) => {
 app.get('/api/leads', (req, res) => res.json({ ok: true, leads: readJson(leadsPath, []) }));
 app.get('/api/visitor-events', (req, res) => res.json({ ok: true, events: readJson(eventsPath, []) }));
 app.get('/api/lead-messages', (req, res) => res.json({ ok: true, messages: readJson(leadMessagesPath, []) }));
+
+
+// ---------- Final WATI/QuickReply/Instagram Phase 2 modules ----------
+function safeId(prefix='id'){ return prefix + '_' + Date.now() + '_' + Math.random().toString(36).slice(2,8); }
+function readInstagramSettings(){
+  return readJson(instagramSettingsPath, { enabled:false, pageId:'', instagramBusinessAccountId:'', accessToken:'', verifyToken:'tinyshiny_instagram_verify', autoReplyEnabled:false, catalogReplyEnabled:true, humanSupportKeywords:'support,help,agent,human', catalogKeywords:'catalog,catalogue,products,collection,price list', mainCatalogLink:'https://www.tinyshinygifts.com/collections/all' });
+}
+function writeInstagramSettings(v){ writeJson(instagramSettingsPath, Object.assign(readInstagramSettings(), v||{}, {updatedAt:nowIso()})); return readInstagramSettings(); }
+function broadcastStats(){
+  const campaigns = readJson(broadcastCampaignsPath, []);
+  const clicks = readJson(linkClicksPath, []);
+  return campaigns.map(c=>({
+    id:c.id, name:c.name, status:c.status||'created', templateName:c.templateName, audienceCount:(c.contacts||[]).length,
+    queuedCount:c.queuedCount||0, sentCount:c.sentCount||0, deliveredCount:c.deliveredCount||0, readCount:c.readCount||0,
+    failedCount:c.failedCount||0, skippedCount:c.skippedCount||0, clickCount:clicks.filter(x=>x.campaignId===c.id).length,
+    revenue:c.revenue||0, createdAt:c.createdAt, updatedAt:c.updatedAt
+  }));
+}
+function buildSegments(){
+  const customers = readJson(crmPath, []);
+  const inbox = readJson(whatsappInboxPath, []);
+  const optouts = readJson(whatsappOptoutsPath, []);
+  const optoutSet = new Set(optouts.map(o=>normalizeWhatsAppPhone(o.phone)).filter(Boolean));
+  return [
+    {id:'all_shopify_crm', name:'All CRM / Shopify Contacts', count:customers.length, rule:'All contacts from CRM/customer cache'},
+    {id:'cod_customers', name:'COD Customers', count:customers.filter(c=>/cod|cash/i.test(String(c.paymentMethod||c.notes||''))).length, rule:'Payment method contains COD/Cash'},
+    {id:'whatsapp_replied', name:'WhatsApp Replied Customers', count:new Set(inbox.filter(m=>m.direction==='inbound').map(m=>normalizeWhatsAppPhone(m.from||m.phone))).size, rule:'At least one inbound WhatsApp message'},
+    {id:'unsubscribed', name:'Unsubscribed / STOP', count:optoutSet.size, rule:'STOP/UNSUBSCRIBE/BAND reply or manual opt-out'},
+    {id:'not_replied', name:'No WhatsApp Reply Yet', count:customers.filter(c=>!inbox.some(m=>phoneLast10(m.from||m.phone)===phoneLast10(c.phone))).length, rule:'No inbound message matched by phone'}
+  ];
+}
+app.get('/api/instagram/settings', (req,res)=>res.json({ok:true, settings:readInstagramSettings()}));
+app.post('/api/instagram/settings', (req,res)=>res.json({ok:true, settings:writeInstagramSettings(req.body||{})}));
+app.get('/api/instagram/inbox', (req,res)=>res.json({ok:true, messages:readJson(instagramInboxPath, [])}));
+app.post('/api/instagram/inbox/mock', (req,res)=>{
+  const body=req.body||{};
+  const msg={id:safeId('ig'), direction:body.direction||'inbound', from:body.from||body.username||'instagram_user', username:body.username||body.from||'instagram_user', text:body.text||'', status:body.status||'unread', createdAt:nowIso(), raw:body};
+  appendJson(instagramInboxPath, msg);
+  appendJson(crmPath, {id:safeId('crm_ig'), source:'instagram', name:msg.username, phone:'', lastMessage:msg.text, status:'New', updatedAt:nowIso(), createdAt:nowIso()});
+  res.json({ok:true, message:msg});
+});
+app.post('/api/instagram/reply', async (req,res)=>{
+  const body=req.body||{};
+  const msg={id:safeId('ig_out'), direction:'outbound', to:body.to||body.username||'', username:body.username||body.to||'', text:body.message||body.text||'', status:'saved', createdAt:nowIso(), note:'API send requires Instagram permissions/token. Saved in inbox as outbound.'};
+  appendJson(instagramInboxPath, msg);
+  res.json({ok:true, message:msg});
+});
+// Instagram webhook verification endpoint must stay public; mounted before static fallback.
+app.get('/webhooks/instagram', (req,res)=>{
+  const settings=readInstagramSettings();
+  const mode=req.query['hub.mode']; const token=req.query['hub.verify_token']; const challenge=req.query['hub.challenge'];
+  if(mode==='subscribe' && token===(settings.verifyToken||'tinyshiny_instagram_verify')) return res.status(200).send(String(challenge||''));
+  return res.status(403).send('Verification failed');
+});
+app.post('/webhooks/instagram', express.json({limit:'5mb'}), (req,res)=>{
+  const body=req.body||{};
+  const entries=Array.isArray(body.entry)?body.entry:[];
+  const saved=[];
+  for(const entry of entries){
+    for(const m of (entry.messaging||entry.changes||[])){
+      const sender=m.sender?.id || m.value?.from?.id || m.value?.sender_id || '';
+      const text=m.message?.text || m.value?.text || m.value?.message || '';
+      if(sender||text){ const msg={id:safeId('ig'), direction:'inbound', from:sender, username:sender, text, status:'unread', createdAt:nowIso(), raw:m}; appendJson(instagramInboxPath,msg); saved.push(msg); }
+    }
+  }
+  res.json({ok:true, saved:saved.length});
+});
+app.get('/api/phase2/analytics', (req,res)=>{
+  const inbox=readJson(whatsappInboxPath,[]), leads=readJson(leadsPath,[]), campaigns=readJson(broadcastCampaignsPath,[]), optouts=readJson(whatsappOptoutsPath,[]), clicks=readJson(linkClicksPath,[]);
+  res.json({ok:true, summary:{
+    whatsappTotal: inbox.length,
+    whatsappInbound: inbox.filter(m=>m.direction==='inbound').length,
+    whatsappOutbound: inbox.filter(m=>m.direction==='outbound').length,
+    whatsappFailed: inbox.filter(m=>String(m.status||m.statusType).toLowerCase()==='failed').length,
+    leads: leads.length,
+    campaigns: campaigns.length,
+    optouts: optouts.length,
+    clicks: clicks.length,
+    campaignStats: broadcastStats()
+  }});
+});
+app.get('/api/phase2/segments', (req,res)=>res.json({ok:true, segments:readJson(customerSegmentsPath, []), autoSegments:buildSegments()}));
+app.post('/api/phase2/segments', (req,res)=>{ const arr=readJson(customerSegmentsPath, []); const seg=Object.assign({id:safeId('seg'), createdAt:nowIso()}, req.body||{}, {updatedAt:nowIso()}); arr.unshift(seg); writeJson(customerSegmentsPath, arr.slice(0,500)); res.json({ok:true, segment:seg, segments:arr}); });
+app.get('/api/phase2/drips', (req,res)=>res.json({ok:true, drips:readJson(dripCampaignsPath, [])}));
+app.post('/api/phase2/drips', (req,res)=>{ const arr=readJson(dripCampaignsPath, []); const drip=Object.assign({id:safeId('drip'), name:'WhatsApp Drip', enabled:true, steps:[], createdAt:nowIso()}, req.body||{}, {updatedAt:nowIso()}); arr.unshift(drip); writeJson(dripCampaignsPath, arr.slice(0,300)); res.json({ok:true, drip, drips:arr}); });
+app.patch('/api/phase2/drips/:id', (req,res)=>{ const arr=readJson(dripCampaignsPath, []); const idx=arr.findIndex(x=>String(x.id)===String(req.params.id)); if(idx<0) return res.status(404).json({ok:false,error:'Drip not found'}); arr[idx]=Object.assign({},arr[idx],req.body||{},{updatedAt:nowIso()}); writeJson(dripCampaignsPath,arr); res.json({ok:true, drip:arr[idx], drips:arr}); });
+app.post('/api/phase2/campaigns/:id/:action', (req,res)=>{ const action=String(req.params.action||'').toLowerCase(); const allowed=['pause','resume','stop','retry']; if(!allowed.includes(action)) return res.status(400).json({ok:false,error:'Invalid action'}); const arr=readJson(broadcastCampaignsPath, []); const idx=arr.findIndex(x=>String(x.id)===String(req.params.id)); if(idx<0) return res.status(404).json({ok:false,error:'Campaign not found'}); arr[idx].status=action==='resume'?'queued':(action==='retry'?'retry_queued':action+'d'); arr[idx].updatedAt=nowIso(); writeJson(broadcastCampaignsPath,arr); res.json({ok:true,campaign:arr[idx]}); });
+app.get('/api/quickreply/settings', (req,res)=>res.json({ok:true, settings:readJson(quickReplySettingsPath, {popupEnabled:true, welcomeDripEnabled:true, abandonedCartEnabled:true, productAbandonEnabled:true, codToPrepaidEnabled:false, reviewFlowEnabled:true, clickTrackingEnabled:true, revenueAttributionEnabled:true, inactiveLeadExclusion:true})}));
+app.post('/api/quickreply/settings', (req,res)=>{ const settings=Object.assign(readJson(quickReplySettingsPath, {}), req.body||{}, {updatedAt:nowIso()}); writeJson(quickReplySettingsPath,settings); res.json({ok:true,settings}); });
+app.get('/api/quickreply/reports', (req,res)=>{
+  const clicks=readJson(linkClicksPath,[]), campaigns=broadcastStats(), leads=readJson(leadsPath,[]);
+  res.json({ok:true, report:{clicks:clicks.length, campaigns, leads:leads.length, recoveredRevenue:campaigns.reduce((s,c)=>s+Number(c.revenue||0),0)}});
+});
+app.get('/r/c/:id', (req,res)=>{ const id=req.params.id; const url=req.query.u ? String(req.query.u) : 'https://www.tinyshinygifts.com'; appendJson(linkClicksPath,{id:safeId('click'),campaignId:id, url, phone:req.query.p||'', createdAt:nowIso(), userAgent:req.headers['user-agent']||''}); res.redirect(url); });
+
 app.get('/api/storage/status', (req, res) => res.json({ ok: true, storage: mongoReady ? 'mongodb' : 'json-file', mongodb: { configured: Boolean(mongoUri), connected: mongoReady, database: mongoReady ? mongoDbName : '', collection: mongoReady ? mongoCollectionName : '' } }));
 app.get('/api/faqs', (req, res) => res.json({ ok: true, faqs: readJson(faqPath, []) }));
 

@@ -9,6 +9,16 @@ let broadcastContacts = [];
 let broadcastCampaigns = [];
 let broadcastTemplates = [];
 let waBotSettings = {};
+let chatbotFlows = [];
+let activeFlowId = '';
+let teamInboxMeta = {};
+let shippingSettings = {};
+let phase2Analytics = {};
+let phase2Segments = [];
+let dripCampaigns = [];
+let quickReplySettings = {};
+let instagramMessages = [];
+let instagramSettings = {};
 let whatsappInboxMessages = [];
 let selectedWhatsappInboxId = "";
 let selectedPromoProductId = '';
@@ -63,6 +73,8 @@ async function refreshAdminDataAuto(){
     await loadMessages().catch(()=>{});
     if(active === 'crmPanel') await loadCrm().catch(()=>{});
     if(active === 'shopifyCustomersPanel') await loadShopifyCustomers().catch(()=>{});
+    if(active === 'phase2Panel') await loadPhase2Analytics().catch(()=>{});
+    if(active === 'instagramInboxPanel') await loadInstagram().catch(()=>{});
     if(active === 'imagePanel') await loadMediaCustomers().catch(()=>{});
   } finally { adminAutoRefreshBusy = false; }
 }
@@ -146,7 +158,7 @@ async function load(){
   if(googleSheetUrl === '********') googleSheetUrl = '';
   updateGoogleSheetTab();
   faqs=f.faqs||[]; renderFaqs();
-  await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages(), loadShopifyCustomers().catch(()=>{}), loadWhatsappInbox(), loadBroadcasts().catch(()=>{}), loadWhatsappChatbotSettings().catch(()=>{})]);
+  await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages(), loadShopifyCustomers().catch(()=>{}), loadWhatsappInbox(), loadBroadcasts().catch(()=>{}), loadWhatsappChatbotSettings().catch(()=>{}), loadChatbotFlows().catch(()=>{}), loadShippingSettings().catch(()=>{}), loadTeamInboxMeta().catch(()=>{}), loadPhase2Analytics().catch(()=>{}), loadDrips().catch(()=>{}), loadInstagram().catch(()=>{})]);
   const active = localStorage.getItem('tsgAdminActiveTab') || 'basicPanel';
   showTab($(active) ? active : 'basicPanel');
 }
@@ -243,6 +255,7 @@ function renderActiveChat(group){
   if(!pane) return;
   if(!group){ pane.className='wa-active-chat empty-state'; pane.innerHTML='Select a customer chat from the left side.'; const action=$('whatsappShopifyAction'); if(action) action.innerHTML=''; return; }
   const linkedCustomer=shopifyCustomerByPhone(group.phone) || group.shopifyCustomer || null;
+  const meta=teamInboxMeta[group.phone] || group.meta || {status:'open',agent:'',tags:[],note:''};
   const known=!!linkedCustomer || shopifyHasPhone(group.phone);
   const name=linkedCustomer?.name || chatNameForGroup(group);
   const messages=group.messages||[];
@@ -262,7 +275,7 @@ function renderActiveChat(group){
   pane.className='wa-active-chat';
   pane.innerHTML=`<div class="wa-chat-header">
     <div class="wa-avatar big">${esc(initials(name,group.phone))}</div>
-    <div class="wa-header-info"><b>${esc(name)}</b><span>${esc(group.phone)} <em class="wa-shopify-badge ${known?'ok':'missing'}">${known?'Shopify Customer':'Not in Shopify'}</em></span></div>
+    <div class="wa-header-info"><b>${esc(name)}</b><span>${esc(group.phone)} <em class="wa-shopify-badge ${known?'ok':'missing'}">${known?'Shopify Customer':'Not in Shopify'}</em> <em class="wa-thread-badge">${esc(meta.status||'open')}</em>${meta.agent?` <em class="wa-agent-badge">${esc(meta.agent)}</em>`:''}</span></div>
     <div class="wa-header-actions">
       ${known?'':`<button class="primary-btn" type="button" data-add-shopify-phone="${esc(group.phone)}" data-add-shopify-name="${esc(name)}">Add to Shopify Customer</button>`}
       <button class="ghost-btn" type="button" data-mark-thread-read="${esc(group.phone)}">Mark Read</button>
@@ -275,6 +288,10 @@ function renderActiveChat(group){
       ? `<span class="wa-shopify-inline ok">Shopify Customer</span>`
       : `<span class="wa-shopify-inline missing">Not in Shopify</span><button class="primary-btn" type="button" data-add-shopify-phone="${esc(group.phone)}" data-add-shopify-name="${esc(name)}">Add to Shopify Customer</button>`;
   }
+  if($('waThreadStatus')) waThreadStatus.value=meta.status||'open';
+  if($('waThreadAgent')) waThreadAgent.value=meta.agent||'';
+  if($('waThreadTags')) waThreadTags.value=(meta.tags||[]).join(', ');
+  if($('waThreadNote')) waThreadNote.value=meta.note||'';
   setTimeout(()=>{ const area=pane.querySelector('.wa-message-area'); if(area) area.scrollTop=area.scrollHeight; },0);
 }
 function renderWhatsappInbox(){
@@ -312,6 +329,7 @@ async function loadWhatsappInbox(silent=false){
   const d=await fetch('/api/whatsapp-inbox?days='+encodeURIComponent(days),{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,messages:[]}));
   if($('whatsappInboxDays')) whatsappInboxDays.value=String(d.days||days);
   whatsappInboxMessages=d.messages||[];
+  teamInboxMeta = (await fetch('/api/team-inbox/meta',{credentials:'include'}).then(r=>r.json()).catch(()=>({meta:{}}))).meta || teamInboxMeta || {};
   if(!shopifyCustomers.length) await loadShopifyCustomers().catch(()=>{});
   checkNewInboundNotifications(whatsappInboxMessages);
   if($('whatsappInboxResult') && !d.ok && !silent) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
@@ -354,6 +372,79 @@ async function sendWhatsappInboxReply(){
   if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
   if(d.ok && $('whatsappReplyText')) whatsappReplyText.value='';
   await loadWhatsappInbox();
+}
+
+
+async function loadTeamInboxMeta(){
+  const d=await fetch('/api/team-inbox/meta',{credentials:'include'}).then(r=>r.json()).catch(()=>({meta:{}}));
+  teamInboxMeta=d.meta||{};
+  return teamInboxMeta;
+}
+async function saveWaThreadMeta(){
+  const phone=selectedWhatsappInboxId || $('whatsappReplyPhone')?.value || '';
+  if(!phone) return alert('Please select a chat first.');
+  const body={
+    status:$('waThreadStatus')?.value||'open',
+    agent:$('waThreadAgent')?.value||'',
+    tags:($('waThreadTags')?.value||'').split(',').map(x=>x.trim()).filter(Boolean),
+    note:$('waThreadNote')?.value||''
+  };
+  const d=await fetch('/api/team-inbox/thread/'+encodeURIComponent(phone),{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('whatsappInboxResult')) whatsappInboxResult.textContent=JSON.stringify(d,null,2);
+  await loadTeamInboxMeta(); await loadWhatsappInbox(true);
+}
+function defaultFlowBlocks(){ return [
+  {id:'start',type:'start',label:'Start',text:'Customer sends hi / menu'},
+  {id:'welcome',type:'message',label:'Welcome Message',text:'Welcome to Tiny Shiny Gifts. Please choose an option:\n1. Track Order\n2. Catalog\n3. COD Help\n4. Talk to Support'},
+  {id:'catalog',type:'catalog',label:'Catalog Link',text:'Send catalog links when customer asks for catalog'},
+  {id:'support',type:'human',label:'Human Support',text:'Tag as Human Support Required'}
+]; }
+function activeFlow(){ return chatbotFlows.find(f=>String(f.id)===String(activeFlowId)) || chatbotFlows[0] || {id:'default_menu_flow',name:'Default WhatsApp Menu Flow',enabled:true,triggerKeywords:['hi','hello','namaste','menu','help'],blocks:defaultFlowBlocks(),edges:[]}; }
+async function loadChatbotFlows(){
+  const d=await fetch('/api/chatbot-flows',{credentials:'include'}).then(r=>r.json()).catch(()=>({flows:[]}));
+  chatbotFlows=d.flows&&d.flows.length?d.flows:[activeFlow()];
+  activeFlowId=activeFlowId || chatbotFlows[0]?.id || '';
+  renderFlowBuilder();
+}
+function renderFlowBuilder(){
+  const flow=activeFlow();
+  if($('flowName')) flowName.value=flow.name||'';
+  if($('flowTriggers')) flowTriggers.value=(flow.triggerKeywords||[]).join(', ');
+  if($('flowEnabled')) flowEnabled.checked=flow.enabled!==false;
+  const canvas=$('flowCanvas'); if(!canvas) return;
+  const blocks=flow.blocks&&flow.blocks.length?flow.blocks:defaultFlowBlocks();
+  canvas.innerHTML=blocks.map((b,i)=>`<div class="flow-block-card" draggable="true" data-flow-index="${i}">
+    <div><b>${esc(b.label||b.type||'Block')}</b><span>${esc(b.type||'message')}</span></div>
+    <input data-flow-edit="label" data-flow-index="${i}" value="${esc(b.label||'')}" placeholder="Block label"/>
+    <textarea data-flow-edit="text" data-flow-index="${i}" placeholder="Message / rule text">${esc(b.text||'')}</textarea>
+    <div class="inline-actions"><button class="ghost-btn" data-flow-move="up" data-flow-index="${i}">↑</button><button class="ghost-btn" data-flow-move="down" data-flow-index="${i}">↓</button><button class="ghost-btn danger-outline" data-flow-remove="${i}">Remove</button></div>
+  </div>`).join('');
+}
+function addFlowBlock(type='message'){
+  const flow=activeFlow();
+  flow.blocks=flow.blocks&&flow.blocks.length?flow.blocks:defaultFlowBlocks();
+  const labels={message:'Message',question:'Question',quick_reply:'Quick Reply Buttons',condition:'Condition / If-Else',catalog:'Catalog Link',order_tracking:'Order Tracking',cod:'COD Confirm / Cancel',human:'Human Support',delay:'Delay / Wait',tag:'Tag Customer'};
+  flow.blocks.push({id:'b_'+Date.now(),type,label:labels[type]||type,text:type==='quick_reply'?'Button 1 | Button 2 | Button 3':''});
+  renderFlowBuilder();
+}
+async function saveChatbotFlow(){
+  const flow=activeFlow();
+  flow.name=$('flowName')?.value||flow.name||'WhatsApp Flow';
+  flow.enabled=!!$('flowEnabled')?.checked;
+  flow.triggerKeywords=($('flowTriggers')?.value||'').split(',').map(x=>x.trim()).filter(Boolean);
+  const d=await fetch('/api/chatbot-flows',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(flow)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('flowBuilderResult')) flowBuilderResult.textContent=JSON.stringify(d,null,2);
+  chatbotFlows=d.flows||chatbotFlows; activeFlowId=d.flow?.id||activeFlowId; renderFlowBuilder();
+}
+async function loadShippingSettings(){
+  const d=await fetch('/api/shipping-settings',{credentials:'include'}).then(r=>r.json()).catch(()=>({shipping:{}}));
+  shippingSettings=d.shipping||{};
+  if($('waShippingProvider')) waShippingProvider.value=shippingSettings.provider||'shiprocket';
+}
+async function saveShippingProvider(){
+  const provider=$('waShippingProvider')?.value||'shiprocket';
+  const d=await fetch('/api/shipping-settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({provider})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  shippingSettings=d.shipping||shippingSettings;
 }
 
 function crmValue(c){ return [c.name,c.phone,c.email,c.productTitle,c.pageUrl,c.orderName,c.lastMessage,c.status].join(' ').toLowerCase(); }
@@ -541,12 +632,84 @@ async function loadWhatsappChatbotSettings(){
   for(const [id,key] of Object.entries(map)) if($(id)) $(id).value=waBotSettings[key]||'';
 }
 async function saveWhatsappChatbotSettings(){
-  const body={ enabled:!!$('waBotEnabled')?.checked, menuEnabled:!!$('waBotMenuEnabled')?.checked, catalogEnabled:!!$('waBotCatalogEnabled')?.checked, menuText:$('waBotMenuText')?.value||'', afterHoursMessage:$('waBotAfterHours')?.value||'', mainCatalogLink:$('waBotMainCatalog')?.value||'', rakhiCatalogLink:$('waBotRakhiCatalog')?.value||'', homeDecorCatalogLink:$('waBotHomeCatalog')?.value||'', divineCatalogLink:$('waBotDivineCatalog')?.value||'', candlesCatalogLink:$('waBotCandlesCatalog')?.value||'', newArrivalsLink:$('waBotNewCatalog')?.value||'' };
+  const body={ enabled:!!$('waBotEnabled')?.checked, menuEnabled:!!$('waBotMenuEnabled')?.checked, catalogEnabled:!!$('waBotCatalogEnabled')?.checked, menuText:$('waBotMenuText')?.value||'', afterHoursMessage:$('waBotAfterHours')?.value||'', mainCatalogLink:$('waBotMainCatalog')?.value||'', rakhiCatalogLink:$('waBotRakhiCatalog')?.value||'', homeDecorCatalogLink:$('waBotHomeCatalog')?.value||'', divineCatalogLink:$('waBotDivineCatalog')?.value||'', candlesCatalogLink:$('waBotCandlesCatalog')?.value||'', newArrivalsLink:$('waBotNewCatalog')?.value||'', trackingKeywords:$('waTrackingKeywords')?.value||'', supportKeywords:$('waSupportKeywords')?.value||'' };
+  await saveShippingProvider();
   const res=await fetch('/api/whatsapp-chatbot/settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if($('waBotResult')) waBotResult.textContent=JSON.stringify(res,null,2);
 }
 
-document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); if(e.target.id==='broadcastCategory') renderBroadcastContacts(); const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
+
+
+async function loadQuickReplySettings(){
+  const d=await fetch('/api/quickreply/settings',{credentials:'include'}).then(r=>r.json()).catch(()=>({settings:{}}));
+  quickReplySettings=d.settings||{};
+  const map={qrPopupEnabled:'popupEnabled',qrAbandonedCartEnabled:'abandonedCartEnabled',qrProductAbandonEnabled:'productAbandonEnabled',qrCodPrepaidEnabled:'codToPrepaidEnabled',qrReviewEnabled:'reviewFlowEnabled',qrClickTrackingEnabled:'clickTrackingEnabled',qrRevenueEnabled:'revenueAttributionEnabled',qrInactiveExclude:'inactiveLeadExclusion'};
+  for(const [id,key] of Object.entries(map)){ if($(id)) $(id).checked=!!quickReplySettings[key]; }
+}
+async function saveQuickReplySettings(){
+  const body={popupEnabled:!!$('qrPopupEnabled')?.checked,abandonedCartEnabled:!!$('qrAbandonedCartEnabled')?.checked,productAbandonEnabled:!!$('qrProductAbandonEnabled')?.checked,codToPrepaidEnabled:!!$('qrCodPrepaidEnabled')?.checked,reviewFlowEnabled:!!$('qrReviewEnabled')?.checked,clickTrackingEnabled:!!$('qrClickTrackingEnabled')?.checked,revenueAttributionEnabled:!!$('qrRevenueEnabled')?.checked,inactiveLeadExclusion:!!$('qrInactiveExclude')?.checked};
+  const d=await fetch('/api/quickreply/settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('phase2Result')) phase2Result.textContent=JSON.stringify(d,null,2);
+  await loadQuickReplySettings();
+}
+function renderPhase2Analytics(){
+  const s=phase2Analytics.summary||{};
+  if($('phase2Summary')) phase2Summary.innerHTML=[['WhatsApp',s.whatsappTotal||0],['Inbound',s.whatsappInbound||0],['Failed',s.whatsappFailed||0],['Campaigns',s.campaigns||0],['Opt-outs',s.optouts||0],['Clicks',s.clicks||0]].map(x=>`<div><b>${esc(x[1])}</b><span>${esc(x[0])}</span></div>`).join('');
+  const segs=phase2Segments||[];
+  if($('phase2Segments')) phase2Segments.innerHTML=segs.map(seg=>`<div class="segment-card"><b>${esc(seg.name)}</b><span>${esc(seg.count||0)} contacts</span><small>${esc(seg.rule||'')}</small></div>`).join('')||'<p>No segments yet.</p>';
+  const campaigns=s.campaignStats||[];
+  if($('phase2CampaignStats')) phase2CampaignStats.innerHTML=`<table class="customer-table"><thead><tr><th>Campaign</th><th>Status</th><th>Audience</th><th>Sent</th><th>Delivered</th><th>Read</th><th>Failed</th><th>Clicks</th><th>Actions</th></tr></thead><tbody>${campaigns.map(c=>`<tr><td>${esc(c.name||c.id)}</td><td>${esc(c.status)}</td><td>${esc(c.audienceCount||0)}</td><td>${esc(c.sentCount||0)}</td><td>${esc(c.deliveredCount||0)}</td><td>${esc(c.readCount||0)}</td><td>${esc(c.failedCount||0)}</td><td>${esc(c.clickCount||0)}</td><td><button class="ghost-btn" data-campaign-action="pause" data-campaign-id="${esc(c.id)}">Pause</button><button class="ghost-btn" data-campaign-action="resume" data-campaign-id="${esc(c.id)}">Resume</button><button class="ghost-btn danger-outline" data-campaign-action="stop" data-campaign-id="${esc(c.id)}">Stop</button></td></tr>`).join('')}</tbody></table>`;
+}
+async function loadPhase2Analytics(){
+  await loadQuickReplySettings().catch(()=>{});
+  const [a,segs]=await Promise.all([fetch('/api/phase2/analytics',{credentials:'include'}).then(r=>r.json()).catch(()=>({summary:{}})),fetch('/api/phase2/segments',{credentials:'include'}).then(r=>r.json()).catch(()=>({autoSegments:[]}))]);
+  phase2Analytics=a||{}; phase2Segments=(segs.autoSegments||[]).concat(segs.segments||[]); renderPhase2Analytics();
+}
+async function campaignAction(id,action){
+  const d=await fetch(`/api/phase2/campaigns/${encodeURIComponent(id)}/${encodeURIComponent(action)}`,{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('phase2Result')) phase2Result.textContent=JSON.stringify(d,null,2); await loadPhase2Analytics();
+}
+function renderDrips(){
+  if(!$('dripList')) return;
+  dripList.innerHTML=(dripCampaigns||[]).map(d=>`<div class="campaign-card"><b>${esc(d.name)}</b><span>${esc(d.trigger||'')}</span><small>${esc(d.enabled?'Enabled':'Disabled')} • ${esc(d.updatedAt||d.createdAt||'')}</small><pre>${esc((d.steps||[]).map(s=>`${s.day||''} | ${s.template||''} | ${s.message||''}`).join('\n'))}</pre></div>`).join('')||'<p>No drip campaigns yet.</p>';
+}
+async function loadDrips(){ const d=await fetch('/api/phase2/drips',{credentials:'include'}).then(r=>r.json()).catch(()=>({drips:[]})); dripCampaigns=d.drips||[]; renderDrips(); }
+function parseDripSteps(text){ return String(text||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{ const [day,template,message]=line.split('|').map(x=>String(x||'').trim()); return {day,template,message}; }); }
+async function saveDrip(){
+  const body={name:$('dripName')?.value||'WhatsApp Drip',trigger:$('dripTrigger')?.value||'new_lead',enabled:!!$('dripEnabled')?.checked,steps:parseDripSteps($('dripSteps')?.value||'')};
+  const d=await fetch('/api/phase2/drips',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('dripResult')) dripResult.textContent=JSON.stringify(d,null,2); await loadDrips();
+}
+function renderInstagram(){
+  if($('igEnabled')) igEnabled.checked=!!instagramSettings.enabled;
+  if($('igAutoReply')) igAutoReply.checked=!!instagramSettings.autoReplyEnabled;
+  if($('igCatalogReply')) igCatalogReply.checked=instagramSettings.catalogReplyEnabled!==false;
+  [['igPageId','pageId'],['igBusinessId','instagramBusinessAccountId'],['igVerifyToken','verifyToken'],['igAccessToken','accessToken'],['igMainCatalog','mainCatalogLink'],['igSupportKeywords','humanSupportKeywords'],['igCatalogKeywords','catalogKeywords']].forEach(([id,key])=>{ if($(id)) $(id).value=instagramSettings[key]||''; });
+  if($('instagramInboxList')) instagramInboxList.innerHTML=(instagramMessages||[]).map(m=>`<div class="ig-msg ${m.direction==='outbound'?'outbound':'inbound'}"><b>${esc(m.username||m.from||m.to)}</b><small>${esc(m.createdAt||'')}</small><p>${esc(m.text||'')}</p><button class="ghost-btn" data-ig-reply-to="${esc(m.username||m.from||m.to)}">Reply</button></div>`).join('')||'<p>No Instagram DM yet. Webhook se messages yaha aayenge.</p>';
+}
+async function loadInstagram(){
+  const [set, inbox]=await Promise.all([fetch('/api/instagram/settings',{credentials:'include'}).then(r=>r.json()).catch(()=>({settings:{}})),fetch('/api/instagram/inbox',{credentials:'include'}).then(r=>r.json()).catch(()=>({messages:[]}))]);
+  instagramSettings=set.settings||{}; instagramMessages=inbox.messages||[]; renderInstagram();
+}
+async function saveInstagramSettings(){
+  const body={enabled:!!$('igEnabled')?.checked,autoReplyEnabled:!!$('igAutoReply')?.checked,catalogReplyEnabled:!!$('igCatalogReply')?.checked,pageId:$('igPageId')?.value||'',instagramBusinessAccountId:$('igBusinessId')?.value||'',verifyToken:$('igVerifyToken')?.value||'tinyshiny_instagram_verify',accessToken:$('igAccessToken')?.value||'',mainCatalogLink:$('igMainCatalog')?.value||'',humanSupportKeywords:$('igSupportKeywords')?.value||'',catalogKeywords:$('igCatalogKeywords')?.value||''};
+  const d=await fetch('/api/instagram/settings',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('instagramResult')) instagramResult.textContent=JSON.stringify(d,null,2); await loadInstagram();
+}
+async function sendInstagramReply(){
+  const body={to:$('igReplyTo')?.value||'',message:$('igReplyText')?.value||''};
+  if(!body.to||!body.message) return alert('Instagram username/ID and message required.');
+  const d=await fetch('/api/instagram/reply',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('instagramResult')) instagramResult.textContent=JSON.stringify(d,null,2); if(d.ok && $('igReplyText')) igReplyText.value=''; await loadInstagram();
+}
+async function mockInstagramMessage(){
+  const text=prompt('Test Instagram message text','catalog'); if(text===null) return;
+  const username=prompt('Instagram username/ID','instagram_customer')||'instagram_customer';
+  const d=await fetch('/api/instagram/inbox/mock',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({username,text})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('instagramResult')) instagramResult.textContent=JSON.stringify(d,null,2); await loadInstagram();
+}
+
+document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); if(e.target.id==='broadcastCategory') renderBroadcastContacts(); if(e.target.dataset.flowEdit){ const flow=activeFlow(); const i=Number(e.target.dataset.flowIndex); if(flow.blocks&&flow.blocks[i]){ flow.blocks[i][e.target.dataset.flowEdit]=e.target.value; } } const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
 document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; } if(e.target.id==='broadcastSelectAll'){ document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=e.target.checked); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); renderBroadcastContacts(); }); } });
 document.addEventListener('click',async e=>{
 
@@ -593,6 +756,23 @@ document.addEventListener('click',async e=>{
   if(e.target.id==='sendBroadcastNow') createBroadcast();
   if(e.target.id==='refreshBroadcasts') loadBroadcasts();
   if(e.target.id==='saveWhatsappChatbot') saveWhatsappChatbotSettings();
+  if(e.target.id==='saveWaThreadMeta') saveWaThreadMeta();
+  if(e.target.id==='saveChatbotFlow') saveChatbotFlow();
+  if(e.target.id==='addFlowBlock') addFlowBlock('message');
+  if(e.target.dataset.flowBlock) addFlowBlock(e.target.dataset.flowBlock);
+  if(e.target.dataset.flowRemove!==undefined){ const flow=activeFlow(); flow.blocks.splice(Number(e.target.dataset.flowRemove),1); renderFlowBuilder(); }
+  if(e.target.dataset.flowMove){ const flow=activeFlow(); const i=Number(e.target.dataset.flowIndex); const j=e.target.dataset.flowMove==='up'?i-1:i+1; if(flow.blocks && flow.blocks[i] && flow.blocks[j]){ [flow.blocks[i],flow.blocks[j]]=[flow.blocks[j],flow.blocks[i]]; renderFlowBuilder(); } }
+  if(e.target.id==='refreshPhase2Analytics') loadPhase2Analytics();
+  if(e.target.id==='saveQuickReplySettings') saveQuickReplySettings();
+  if(e.target.dataset.campaignAction) campaignAction(e.target.dataset.campaignId, e.target.dataset.campaignAction);
+  if(e.target.id==='refreshDrips') loadDrips();
+  if(e.target.id==='saveDripCampaign') saveDrip();
+  if(e.target.id==='refreshInstagramInbox') loadInstagram();
+  if(e.target.id==='saveInstagramSettings') saveInstagramSettings();
+  if(e.target.id==='sendInstagramReply') sendInstagramReply();
+  if(e.target.id==='mockInstagramMessage') mockInstagramMessage();
+  if(e.target.dataset.igReplyTo){ if($('igReplyTo')) igReplyTo.value=e.target.dataset.igReplyTo; showTab('instagramInboxPanel'); }
+
   if(e.target.id==='refreshLeads') loadLeads(); if(e.target.id==='refreshEvents') loadEvents(); if(e.target.id==='refreshMsgs') loadMessages();
 });
 load().catch(err=>{console.error(err); if(String(err).includes('401')) location.href='/login.html';});

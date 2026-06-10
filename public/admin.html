@@ -47,7 +47,11 @@
       <button class="tab-btn" data-tab="crmPanel">CRM Dashboard</button>
       <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
       <button class="tab-btn" data-tab="bulkBroadcastPanel">Bulk WhatsApp Broadcast</button>
+      <button class="tab-btn" data-tab="phase2Panel">Campaign Analytics</button>
+      <button class="tab-btn" data-tab="dripPanel">Drip Campaigns</button>
+      <button class="tab-btn" data-tab="instagramInboxPanel">Instagram Inbox</button>
       <button class="tab-btn" data-tab="whatsappChatbotPanel">WhatsApp Chatbot</button>
+      <button class="tab-btn" data-tab="chatbotFlowBuilderPanel">Chatbot Flow Builder</button>
       <button class="tab-btn" data-tab="whatsappInboxPanel">WhatsApp Inbox</button>
       <button class="tab-btn" data-tab="newProductsPanel">New Products</button>
       <button class="tab-btn" data-tab="leadPanel">Leads</button>
@@ -154,6 +158,57 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
       <div id="broadcastCampaignsList" class="broadcast-campaigns-list"></div>
     </section>
 
+    
+
+    <section class="panel tab-panel" id="phase2Panel">
+      <div class="section-head"><div><h2>Campaign Analytics & Segments</h2><p>QuickReply/WATI style reports, segmentation, opt-out, clicks aur revenue attribution.</p></div><div class="inline-actions"><button id="refreshPhase2Analytics" class="ghost-btn">Refresh Analytics</button><button id="saveQuickReplySettings" class="primary-btn">Save QuickReply Features</button></div></div>
+      <div class="form-grid four feature-toggle-grid">
+        <label class="checkline"><input id="qrPopupEnabled" type="checkbox"/> WhatsApp Pop-up Lead Capture</label>
+        <label class="checkline"><input id="qrAbandonedCartEnabled" type="checkbox"/> Abandoned Cart Recovery</label>
+        <label class="checkline"><input id="qrProductAbandonEnabled" type="checkbox"/> Product Abandonment</label>
+        <label class="checkline"><input id="qrCodPrepaidEnabled" type="checkbox"/> COD to Prepaid Conversion</label>
+        <label class="checkline"><input id="qrReviewEnabled" type="checkbox"/> Review / Feedback Flow</label>
+        <label class="checkline"><input id="qrClickTrackingEnabled" type="checkbox"/> Click Tracking</label>
+        <label class="checkline"><input id="qrRevenueEnabled" type="checkbox"/> Revenue Attribution</label>
+        <label class="checkline"><input id="qrInactiveExclude" type="checkbox"/> Exclude Inactive Leads</label>
+      </div>
+      <div id="phase2Summary" class="stat-panel mini-stats"></div>
+      <h3>Auto Segments</h3><div id="phase2Segments" class="segment-grid"></div>
+      <h3>Campaign Performance</h3><div id="phase2CampaignStats" class="customer-table-wrap"></div>
+      <pre id="phase2Result"></pre>
+    </section>
+
+    <section class="panel tab-panel" id="dripPanel">
+      <div class="section-head"><div><h2>Drip Campaigns / Automation Rules</h2><p>Multi-day WhatsApp journeys: welcome, product reminder, coupon, last reminder.</p></div><div class="inline-actions"><button id="refreshDrips" class="ghost-btn">Refresh Drips</button><button id="saveDripCampaign" class="primary-btn">Save Drip</button></div></div>
+      <div class="form-grid three">
+        <label>Drip Name <input id="dripName" value="Welcome + Product Reminder"/></label>
+        <label>Trigger <select id="dripTrigger"><option value="new_lead">New Lead</option><option value="abandoned_cart">Abandoned Cart</option><option value="product_view">Product View</option><option value="delivered_order">Delivered Order</option><option value="cod_order">COD Order</option></select></label>
+        <label class="checkline"><input id="dripEnabled" type="checkbox" checked/> Drip Enabled</label>
+      </div>
+      <label>Drip Steps <textarea id="dripSteps" placeholder="Day 0 | welcome_template | Welcome message
+Day 1 | product_followup | Product reminder
+Day 3 | festival_offer | Coupon reminder"></textarea></label>
+      <div id="dripList" class="broadcast-campaigns-list"></div><pre id="dripResult"></pre>
+    </section>
+
+    <section class="panel tab-panel" id="instagramInboxPanel">
+      <div class="section-head"><div><h2>Instagram Inbox / Chatbot</h2><p>Instagram Business DM settings, inbox, auto reply, catalog reply aur CRM lead save.</p></div><div class="inline-actions"><button id="refreshInstagramInbox" class="ghost-btn">Refresh Instagram</button><button id="saveInstagramSettings" class="primary-btn">Save Instagram Settings</button></div></div>
+      <div class="form-grid three">
+        <label class="checkline"><input id="igEnabled" type="checkbox"/> Enable Instagram Module</label>
+        <label class="checkline"><input id="igAutoReply" type="checkbox"/> Auto Reply</label>
+        <label class="checkline"><input id="igCatalogReply" type="checkbox"/> Catalog Reply</label>
+        <label>Instagram Page ID <input id="igPageId" placeholder="Meta Page ID"/></label>
+        <label>Instagram Business Account ID <input id="igBusinessId" placeholder="IG Business Account ID"/></label>
+        <label>Webhook Verify Token <input id="igVerifyToken" value="tinyshiny_instagram_verify"/></label>
+      </div>
+      <div class="form-grid two">
+        <label>Access Token <input id="igAccessToken" placeholder="Paste Instagram/Page token"/></label>
+        <label>Main Catalog Link <input id="igMainCatalog" placeholder="https://www.tinyshinygifts.com/collections/all"/></label>
+      </div>
+      <div class="form-grid two"><label>Human Support Keywords <input id="igSupportKeywords" value="support,help,agent,human"/></label><label>Catalog Keywords <input id="igCatalogKeywords" value="catalog,catalogue,products,collection"/></label></div>
+      <div class="ig-layout"><div><h3>DM Inbox</h3><div id="instagramInboxList" class="inbox-list"></div></div><div><h3>Reply / Test</h3><label>Reply To Username/ID <input id="igReplyTo"/></label><label>Message <textarea id="igReplyText"></textarea></label><button id="sendInstagramReply" class="primary-btn">Save / Send Instagram Reply</button><button id="mockInstagramMessage" class="ghost-btn">Add Test DM</button><pre id="instagramResult"></pre></div></div>
+    </section>
+
     <section class="panel tab-panel" id="whatsappChatbotPanel">
       <div class="section-head">
         <div><h2>WhatsApp Chatbot</h2><p>Incoming WhatsApp replies ke liye auto replies, FAQ aur catalog automation.</p></div>
@@ -179,10 +234,51 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
         <label>Candles <input id="waBotCandlesCatalog" placeholder="Candles collection link"/></label>
         <label>New Arrivals <input id="waBotNewCatalog" placeholder="New arrivals link"/></label>
       </div>
+      <h3>Shipping / Tracking Provider</h3>
+      <div class="form-grid three">
+        <label>Shipping Provider
+          <select id="waShippingProvider"><option value="shiprocket">Shiprocket</option><option value="icarry">iCarry</option></select>
+        </label>
+        <label>Tracking Reply Keywords <input id="waTrackingKeywords" value="track,tracking,order status,where is my order"/></label>
+        <label>Support Handover Keywords <input id="waSupportKeywords" value="support,agent,human,call me,help me"/></label>
+      </div>
       <p class="hint">Keywords: catalog, catalogue, products, collection, price list. STOP/UNSUBSCRIBE reply se customer broadcast opt-out ho jayega.</p>
       <pre id="waBotResult"></pre>
     </section>
 
+
+
+    <section class="panel tab-panel" id="chatbotFlowBuilderPanel">
+      <div class="section-head">
+        <div><h2>Chatbot Flow Builder</h2><p>Interakt/WATI style no-code flow: blocks add karo, order set karo, save karo.</p></div>
+        <div class="inline-actions"><button id="addFlowBlock" class="ghost-btn">Add Block</button><button id="saveChatbotFlow" class="primary-btn">Save Flow</button></div>
+      </div>
+      <div class="flow-builder-shell">
+        <aside class="flow-toolbox">
+          <h3>Blocks</h3>
+          <button class="flow-palette" data-flow-block="message">Message</button>
+          <button class="flow-palette" data-flow-block="question">Question</button>
+          <button class="flow-palette" data-flow-block="quick_reply">Quick Reply Buttons</button>
+          <button class="flow-palette" data-flow-block="condition">Condition / If-Else</button>
+          <button class="flow-palette" data-flow-block="catalog">Catalog Link</button>
+          <button class="flow-palette" data-flow-block="order_tracking">Order Tracking</button>
+          <button class="flow-palette" data-flow-block="cod">COD Confirm / Cancel</button>
+          <button class="flow-palette" data-flow-block="human">Human Support</button>
+          <button class="flow-palette" data-flow-block="delay">Delay / Wait</button>
+          <button class="flow-palette" data-flow-block="tag">Tag Customer</button>
+        </aside>
+        <main class="flow-canvas-wrap">
+          <div class="form-grid three">
+            <label>Flow Name <input id="flowName" value="Default WhatsApp Menu Flow"/></label>
+            <label>Trigger Keywords <input id="flowTriggers" value="hi,hello,namaste,menu,help"/></label>
+            <label class="checkline"><input id="flowEnabled" type="checkbox" checked/> Flow Enabled</label>
+          </div>
+          <div id="flowCanvas" class="flow-canvas"></div>
+          <p class="hint">Blocks ko upar/neeche move kar sakte ho. Phase 1 me linear flow save hota hai; next phase me arrow connector add karenge.</p>
+          <pre id="flowBuilderResult"></pre>
+        </main>
+      </div>
+    </section>
 
     <section class="panel tab-panel compact-inbox whatsapp-web-panel" id="whatsappInboxPanel">
       <div class="section-head whatsapp-inbox-head">
@@ -215,6 +311,13 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
           <div id="whatsappActiveChat" class="wa-active-chat empty-state">
             Select a customer chat from the left side.
           </div>
+          <div class="wa-team-controls">
+            <label>Status <select id="waThreadStatus"><option value="open">Open</option><option value="pending">Pending</option><option value="resolved">Resolved</option></select></label>
+            <label>Assign Agent <input id="waThreadAgent" placeholder="Agent name"/></label>
+            <label>Tags <input id="waThreadTags" placeholder="COD, Urgent, Return"/></label>
+            <button id="saveWaThreadMeta" class="ghost-btn">Save Chat Info</button>
+          </div>
+          <label class="wa-internal-note">Internal Note <textarea id="waThreadNote" placeholder="Private note for team, customer ko nahi jayega"></textarea></label>
           <div class="wa-reply-dock">
             <div id="whatsappShopifyAction" class="wa-shopify-action"></div>
             <div class="form-grid two compact-reply-grid">
