@@ -1628,33 +1628,6 @@ async function handleWhatsappChatbotMessage(item={}){
   const send=await sendWhatsAppTextManual({ to:item.from, message:reply }).catch(e=>({ ok:false, error:e.message }));
   appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:item.from, customerName:item.customerName, type:'text', text:reply, createdAt:nowIso(), status:send.ok?'sent':'failed', raw:{ source:'whatsapp_chatbot', result:send } });
   return { ok:!!send.ok, reply, result:send };
-}){
-  if(!item || item.direction!=='inbound') return { ok:false, skipped:true };
-  const cfg=getChatbotSettings();
-  if(!cfg.enabled) return { ok:false, skipped:true, reason:'WhatsApp chatbot disabled' };
-  const text=String(item.text||'').trim();
-  const low=text.toLowerCase();
-  let reply='';
-  if(/\b(catalog|catalogue|products?|collection|price list)\b/i.test(low)){
-    reply=catalogMenuText(cfg);
-  } else if((reply=catalogCategoryReply(text,cfg))) {
-    // category selection matched
-  } else if(/^(hi|hello|hey|namaste|menu|help)$/i.test(low)) {
-    reply=cfg.menuText;
-  } else if(/\b(support|agent|human|call me|help me)\b/i.test(low)) {
-    appendJson(leadsPath,{ id:crypto.randomUUID(), type:'human_support_required', createdAt:nowIso(), phone:item.from, message:text, status:'Human Support Required' });
-    reply='Our support team has been notified. We will reply shortly.';
-  } else if(/\b(shipping|delivery charge|cod charge)\b/i.test(low)) {
-    reply=faqAnswerFor('shipping') || 'Shipping charges depend on order value and payment mode. Please share your product/order details for exact charges.';
-  } else if(/\b(return|refund|exchange)\b/i.test(low)) {
-    reply=faqAnswerFor('return') || 'Please share your order number. Our team will help you with return/exchange details.';
-  } else {
-    reply=faqAnswerFor(text);
-  }
-  if(!reply) return { ok:false, skipped:true, reason:'No chatbot rule matched' };
-  const send=await sendWhatsAppTextManual({ to:item.from, message:reply }).catch(e=>({ ok:false, error:e.message }));
-  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:item.from, customerName:item.customerName, type:'text', text:reply, createdAt:nowIso(), status:send.ok?'sent':'failed', raw:{ source:'whatsapp_chatbot', result:send } });
-  return { ok:!!send.ok, reply, result:send };
 }
 
 app.post('/api/test-whatsapp', async (req, res) => {
