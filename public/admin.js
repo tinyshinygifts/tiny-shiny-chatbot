@@ -1039,7 +1039,7 @@ function contactPanelHtml(group, name, known, linkedCustomer, meta){
   if(linkedCustomer) logs.unshift({at:linkedCustomer.lastOrderDate||'', text:`Shopify customer • Orders: ${linkedCustomer.ordersCount||0}`});
   if(!known && ch==='whatsapp') logs.unshift({at:'', text:'Not in Shopify - add customer from button above'});
   const logHtml=logs.map(l=>`<div class="activity-log-row"><b>${esc(l.text)}</b><small>${esc(l.at?timeShort(l.at):'')}</small></div>`).join('') || '<p class="hint">No activity log yet.</p>';
-  return `<div class="contact-head"><span class="wa-avatar ${esc(ch)}">${esc(initials(name,displayId))}</span><div><h3>${esc(name)}</h3>${channelBadge(ch)} <span class="status-pill ${esc(meta.status||'open')}">${esc(meta.status||'open')}</span></div></div>
+  return `<button type="button" class="mobile-info-close" data-close-mobile-info>×</button><div class="contact-head"><span class="wa-avatar ${esc(ch)}">${esc(initials(name,displayId))}</span><div><h3>${esc(name)}</h3>${channelBadge(ch)} <span class="status-pill ${esc(meta.status||'open')}">${esc(meta.status||'open')}</span></div></div>
   <div class="contact-info-list">
     <div><b>Channel</b><span>${esc(channelLabel(ch))}</span></div>
     <div><b>${ch==='whatsapp'?'Phone':'User ID'}</b><span>${esc(displayId)}</span></div>
@@ -1073,7 +1073,7 @@ function renderActiveChat(group){
     return `${dateSep}<div class="wa-bubble ${dir}">${extra?`<img src="${esc(extra)}" alt="" class="wa-bubble-img"/>`:''}<div class="wa-message-text">${esc(txt || '[message]')}</div><div class="wa-msg-time">${esc(timeShort(m.createdAt))}${dir==='outbound'?' ✓✓':''}</div></div>`;
   }).join('');
   pane.className='wa-active-chat wati-chat-window';
-  pane.innerHTML=`<div class="wati-chat-header"><button type="button" class="ghost-btn compact-btn mobile-chat-back" data-mobile-chat-back>← Chats</button><div class="contact-head"><span class="wa-avatar ${esc(ch)}">${esc(initials(name,group.phone))}</span><div><h3>${esc(name)}</h3><span>${channelBadge(ch)} ${esc(String(group.phone).replace(/^instagram:/,'').replace(/^messenger:/,''))}</span></div></div><div class="inline-actions"><button class="ghost-btn compact-btn" type="button" data-mark-thread-read="${esc(group.phone)}">Mark Read</button><button class="ghost-btn compact-btn mobile-info-btn" type="button" data-mobile-info>Info</button></div></div><div class="wa-message-area wati-message-area">${bubbles || '<div class="wa-date-sep">No messages yet</div>'}</div>`; document.body.classList.add('wa-mobile-chat-open');
+  pane.innerHTML=`<div class="wati-chat-header mobile-wa-topbar"><button type="button" class="mobile-back-btn" data-mobile-chat-back>←</button><span class="wa-avatar ${esc(ch)}">${esc(initials(name,group.phone))}</span><div class="mobile-chat-title"><h3>${esc(name)}</h3><span><i></i> Online • ${channelBadge(ch)} ${esc(String(group.phone).replace(/^instagram:/,'').replace(/^messenger:/,''))}</span></div><div class="inline-actions"><button class="ghost-btn compact-btn desktop-only-action" type="button" data-mark-thread-read="${esc(group.phone)}">Mark Read</button><button class="mobile-icon-btn" type="button" data-mobile-info>⌾</button><button class="mobile-icon-btn" type="button">⋮</button></div></div><div class="wa-message-area wati-message-area">${bubbles || '<div class="wa-date-sep">No messages yet</div>'}</div>`; document.body.classList.add('wa-mobile-chat-open');
   if(action){ action.innerHTML = ch==='whatsapp' ? (known ? `<span class="wa-shopify-inline ok">Shopify Customer</span>` : `<span class="wa-shopify-inline missing">Not in Shopify</span><button class="primary-btn compact-btn" type="button" data-add-shopify-phone="${esc(group.phone)}" data-add-shopify-name="${esc(name)}">Add to Shopify Customer</button>`) : `<span class="wa-shopify-inline ok">${esc(channelLabel(ch))} Lead</span>`; }
   if(right) right.innerHTML=contactPanelHtml(group,name,known,linkedCustomer,meta);
   if($('waThreadStatus')) waThreadStatus.value=meta.status||'open';
@@ -1479,4 +1479,8 @@ document.addEventListener('click', e=>{
 document.addEventListener('click', e=>{
   if(e.target.closest('[data-mobile-chat-back]')){ document.body.classList.remove('wa-mobile-chat-open','wa-mobile-info-open'); selectedWhatsappInboxId=''; renderWhatsappInbox(); }
   if(e.target.closest('[data-mobile-info]')) document.body.classList.toggle('wa-mobile-info-open');
+});
+
+document.addEventListener('click', e=>{
+  if(e.target.closest('[data-close-mobile-info]')) document.body.classList.remove('wa-mobile-info-open');
 });

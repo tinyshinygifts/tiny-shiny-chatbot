@@ -694,9 +694,11 @@ async function sendWhatsAppTextManual({ to, message = '' }) {
 }
 function absoluteUrl(req, urlPath) {
   if (/^https?:\/\//i.test(String(urlPath || ''))) return urlPath;
+  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  // Uploaded media exists on this chatbot app server, so always use current app host for /uploads.
+  if (String(urlPath || '').startsWith('/uploads/')) return `${proto}://${req.get('host')}${urlPath}`;
   const site = String(process.env.WEBSITE_URL || '').replace(/\/$/, '');
   if (site && !site.includes('localhost')) return site + urlPath;
-  const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http';
   return `${proto}://${req.get('host')}${urlPath}`;
 }
 function saveMediaFromDataUrl({ dataUrl, filename }) {
