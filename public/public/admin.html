@@ -1,0 +1,600 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Chatbot Admin - Tiny Shiny Gifts</title>
+  <link rel="icon" href="/tiny-shiny-logo.jpg"/>
+  <link rel="manifest" href="/manifest.json?v=20260610143416"/>
+  <meta name="theme-color" content="#d63384"/>
+  <link rel="stylesheet" href="/style.css?v=20260611133000"/>
+</head>
+<body>
+  <main class="admin-wrap admin-fixed-layout">
+    <header class="topbar glass-card admin-sticky-header">
+      <div class="brand-head">
+        <img class="brand-logo small" src="/tiny-shiny-logo.jpg" alt="Tiny Shiny Gifts"/>
+        <div class="badge">Tiny Shiny Gifts</div>
+        <h1>Chatbot Admin</h1>
+        <p>Manage replies, FAQs, leads, order requests and product activity.</p>
+      </div>
+      <div class="top-actions admin-live-actions">
+        <label class="auto-refresh-control">Auto Refresh
+          <select id="autoRefreshInterval">
+            <option value="0">Off</option>
+            <option value="10">10 sec</option>
+            <option value="20">20 sec</option>
+            <option value="30">30 sec</option>
+            <option value="60">60 sec</option>
+            <option value="120">120 sec</option>
+            <option value="600">600 sec</option>
+          </select>
+        </label>
+        <button id="installPwaBtn" type="button" class="ghost-btn">Install App</button>
+        <button id="enableDesktopNotifications" type="button" class="ghost-btn"><span id="notificationStatusDot" class="notify-dot unknown" title="Notification status"></span> Enable Notifications</button>
+        <a class="ghost-btn header-api-settings" href="/templates-library.html">Templates Library</a>
+        <a class="ghost-btn header-api-settings" href="/api-settings.html">API Settings</a>
+        <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
+      </div>
+    </header>
+
+    <section class="panel stat-panel">
+      <div><b id="leadCount">0</b><span>Leads</span></div>
+      <div><b id="eventCount">0</b><span>Activities</span></div>
+      <div><b id="messageCount">0</b><span>Buy Messages</span></div>
+      <div><b id="whatsappInboxCount">0</b><span>WhatsApp Replies</span></div>
+      <div><b id="crmCount">0</b><span>CRM Customers</span></div>
+    </section>
+
+    <section class="panel quick-nav admin-tabs" id="adminTabs">
+      <button class="tab-btn" data-tab="crmPanel">CRM Dashboard</button>
+      <button class="tab-btn active" data-tab="whatsappInboxPanel">Chat Inbox</button>
+      <button class="tab-btn" data-tab="shopifyCustomersPanel">Shopify Customers</button>
+      <button class="tab-btn" data-tab="shopifySalesPanel">Shopify Sales Analysis</button>
+      <button class="tab-btn" data-tab="ndrPanel">NDR</button>
+      <button class="tab-btn" data-tab="bulkBroadcastPanel">Bulk WhatsApp Broadcast</button>
+      <button class="tab-btn" data-tab="phase2Panel">Campaign Analytics</button>
+      <button class="tab-btn" data-tab="dripPanel">Drip Campaigns</button>
+      <button class="tab-btn" data-tab="instagramInboxPanel">Instagram Inbox</button>
+      <button class="tab-btn" data-tab="whatsappChatbotPanel">WhatsApp Chatbot</button>
+      <button class="tab-btn" data-tab="newProductsPanel">New Products</button>
+      <button class="tab-btn" data-tab="leadPanel">Leads</button>
+      <button class="tab-btn" data-tab="activityPanel">Visitor Activity</button>
+      <button class="tab-btn" data-tab="messagePanel">Buy Messages</button>
+      <button class="tab-btn" id="openGoogleSheetTab" data-tab="googleSheetPanel">Google Sheet</button>
+    </section>
+
+    <section class="panel tab-panel" id="apiSettingsPanel">
+      <h2>API Settings</h2>
+      <div class="api-settings-grid">
+        <div class="api-card">
+          <h3>Basic Settings</h3>
+      <p class="hint">Chatbot ON/OFF, bot name and theme color are in API Settings → Chatbot Appearance.</p>
+      <label>Welcome Message <textarea id="welcomeMessage"></textarea></label>
+      <label>Fallback Message <textarea id="fallbackMessage"></textarea></label>
+      <label>Product Offer Message <textarea id="leadOfferMessage"></textarea></label>
+      <label>Add-to-cart Message <textarea id="cartOfferMessage"></textarea></label>
+      <label>Product popup delay seconds <input id="leadPopupDelaySeconds" type="number" min="5"/></label>
+      <button id="saveSettings" class="primary-btn">Save Basic Settings</button>
+        </div>
+        <div class="api-card faq-inline-card">
+          <div class="section-head mini"><div><h3>FAQ Rules</h3><p>Keyword based replies. Yahi se FAQ add/modify/save hoga.</p></div><div class="inline-actions"><button id="addFaq" class="ghost-btn">+ Add FAQ</button><button id="saveFaqs" class="primary-btn">Save FAQs</button></div></div>
+          <div id="faqList"></div>
+          <pre id="faqResult"></pre>
+        </div>
+        <div class="api-card messenger-inline-card">
+          <div class="section-head mini"><div><h3>Facebook Messenger Settings</h3><p>Page Messenger inbox/webhook ke liye settings.</p></div><div class="inline-actions"><button id="saveMessengerSettings" class="primary-btn">Save Messenger</button><button id="mockMessengerMessage" class="ghost-btn">Add Test Messenger DM</button></div></div>
+          <div class="form-grid two">
+            <label class="checkline"><input id="msEnabled" type="checkbox"/> Enable Messenger</label>
+            <label class="checkline"><input id="msAutoReply" type="checkbox"/> Auto Reply</label>
+            <label>Facebook Page ID <input id="msPageId" placeholder="Facebook Page ID"/></label>
+            <label>Webhook Verify Token <input id="msVerifyToken" value="tinyshiny_messenger_verify"/></label>
+            <label>Page Access Token <input id="msPageAccessToken" placeholder="Paste Page access token"/></label>
+            <label>Main Catalog Link <input id="msMainCatalog" placeholder="https://www.tinyshinygifts.com/collections/all"/></label>
+          </div>
+          <pre id="messengerResult"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel tab-panel crm-panel" id="crmPanel">
+      <div class="section-head">
+        <div><h2>CRM Dashboard</h2><p>All chatbot leads, product views, cart leads and order requests in one place.</p></div>
+        <div class="inline-actions"><button id="refreshCrm" class="ghost-btn">Refresh CRM</button><button id="syncGoogleSheets" class="primary-btn">Sync to Google Sheets</button><button id="exportCrmCsv" class="ghost-btn">Export CSV</button></div>
+      </div>
+      <div class="form-grid three crm-toolbar">
+        <label>Search CRM <input id="crmSearch" placeholder="Name, phone, product, order"/></label>
+        <label>Status Filter
+          <select id="crmStatusFilter"><option value="">All Status</option><option>New</option><option>Hot Lead</option><option>Follow Up</option><option>Converted</option><option>Not Interested</option></select>
+        </label>
+        <label>Quick Status
+          <select id="crmBulkStatus"><option value="Follow Up">Follow Up</option><option value="Hot Lead">Hot Lead</option><option value="Converted">Converted</option><option value="Not Interested">Not Interested</option></select>
+        </label>
+      </div>
+      <div class="contact-tabs" id="crmContactTabs">
+        <button type="button" class="contact-tab active" data-contact-filter="with" data-target="crm">With Contact Number</button>
+        <button type="button" class="contact-tab" data-contact-filter="without" data-target="crm">Without Contact Number</button>
+      </div>
+      <pre id="crmSyncResult"></pre>
+      <div id="crmSummary" class="crm-summary"></div>
+      <div id="crmList" class="crm-list"></div>
+    </section>
+
+    <section class="panel tab-panel" id="shopifyCustomersPanel">
+      <div class="section-head">
+        <div><h2>Shopify Customers</h2><p>Shopify customer list, follow-up notes, and bulk WhatsApp/customer messages.</p></div>
+        <div class="inline-actions"><button id="refreshShopifyCustomers" class="ghost-btn">Refresh Customers</button></div>
+      </div>
+      <div class="form-grid three">
+        <label>Search Customer <input id="shopifyCustomerSearch" placeholder="Name, phone, email, city"/></label>
+        <label>Message Text <textarea id="bulkCustomerMessage" placeholder="Write offer, wishes, thanks or follow-up message"></textarea></label>
+        <label>Send Via
+          <select id="bulkSendVia"><option value="whatsapp">WhatsApp</option><option value="crm">Save CRM Follow-up Only</option></select>
+        </label>
+      </div>
+      <div class="inline-actions">
+        <label class="select-all-line"><input id="selectAllShopifyCustomers" type="checkbox"/> Select All Customers</label>
+        <button id="sendBulkCustomerMessage" class="primary-btn">Send Message to Selected</button>
+        <button id="saveBulkCustomerFollowup" class="ghost-btn">Save Follow-up for Selected</button>
+      </div>
+      <pre id="shopifyCustomersResult"></pre>
+      <div id="shopifyCustomersList" class="customer-table-wrap"></div>
+    </section>
+
+
+    <section class="panel tab-panel sales-analysis-panel" id="shopifySalesPanel">
+      <div class="section-head">
+        <div><h2>Shopify Sales Analysis</h2><p>Shopify sales, Meta campaign report, per order cost and profit analysis with graphs.</p></div>
+        <div class="inline-actions"><button id="refreshShopifySales" class="ghost-btn">Refresh Sales</button><button id="exportShopifySalesCsv" class="ghost-btn">Export CSV</button></div>
+      </div>
+      <div class="form-grid four sales-filters">
+        <label>Date Range
+          <select id="salesRange"><option value="7">Last 7 days</option><option value="30" selected>Last 30 days</option><option value="90">Last 90 days</option><option value="365">Last 365 days</option></select>
+        </label>
+        <label>From Date <input id="salesFromDate" type="date"/></label>
+        <label>To Date <input id="salesToDate" type="date"/></label>
+        <label>Campaign <input id="salesCampaignFilter" placeholder="Meta campaign name"/></label>
+        <label>Payment <select id="salesPaymentFilter"><option value="">All</option><option value="cod">COD</option><option value="prepaid">Prepaid</option></select></label>
+        <label>Order Status <select id="salesStatusFilter"><option value="">All</option><option value="paid">Paid</option><option value="pending">Pending</option><option value="returned">Returned</option><option value="fulfilled">Fulfilled</option></select></label>
+      </div>
+      <div id="salesSummary" class="sales-summary-grid"></div>
+
+      <div class="sales-order-tracking-card">
+        <div class="section-head mini">
+          <div><h3>Order Tracking / Customer Order Search</h3><p>Customer name, mobile number, email ya order number se order search karke tracking open karo.</p></div>
+          <button id="searchSalesOrderBtn" class="primary-btn" type="button">Search Order</button>
+        </div>
+        <div class="form-grid four order-tracking-filters">
+          <label>Search Order / Customer <input id="salesOrderSearch" placeholder="Name, mobile, email, #order no"/></label>
+          <label>Date Range <select id="salesOrderSearchRange"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 180 days</option><option value="365">Last 365 days</option><option value="all">All available</option></select></label>
+          <label>Payment <select id="salesOrderSearchPayment"><option value="">All</option><option value="cod">COD</option><option value="prepaid">Prepaid</option></select></label>
+          <label>Status <select id="salesOrderSearchStatus"><option value="">All</option><option value="fulfilled">Fulfilled</option><option value="unfulfilled">Unfulfilled</option><option value="paid">Paid</option><option value="pending">Pending</option></select></label>
+        </div>
+        <div id="salesOrderTrackingResults" class="order-tracking-results"><p class="hint">Search karke order tracking result yaha dikhega.</p></div>
+      </div>
+      <div class="sales-grid">
+        <div class="sales-card"><h3>Daily Sales Graph</h3><div id="salesDailyChart" class="mini-chart"></div></div>
+        <div class="sales-card"><h3>COD vs Prepaid</h3><div id="salesPaymentChart" class="donut-wrap"></div></div>
+        <div class="sales-card"><h3>Campaign Report</h3><div id="salesCampaignTable" class="table-wrap"></div></div>
+        <div class="sales-card"><h3>Per Order Cost / Profit</h3><div id="salesOrderCostTable" class="table-wrap"></div></div>
+        <div class="sales-card"><h3>Product Wise Sales</h3><div id="salesProductTable" class="table-wrap"></div></div>
+        <div class="sales-card"><h3>City / State Sales</h3><div id="salesCityTable" class="table-wrap"></div></div>
+      </div>
+      <pre id="shopifySalesResult"></pre>
+    </section>
+
+
+
+    <section class="panel tab-panel ndr-panel" id="ndrPanel">
+      <div class="section-head">
+        <div><h2>Non-Delivery Report (NDR)</h2><p>Shiprocket NDR data, delivery attempt tracking aur WhatsApp automation.</p></div>
+        <div class="inline-actions"><button id="refreshNdr" class="ghost-btn" type="button">Refresh NDR</button><button id="syncNdr" class="primary-btn" type="button">Sync Shiprocket Live NDR</button><button id="cleanNdr" class="ghost-btn" type="button">Clean Old NDR</button><button id="exportNdrCsv" class="ghost-btn" type="button">Export CSV</button></div>
+      </div>
+      <div class="form-grid four ndr-filters">
+        <label>Provider <select id="ndrProviderFilter"><option value="all">All</option><option value="shiprocket">Shiprocket</option></select></label>
+        <label>Status <select id="ndrStatusFilter"><option value="all">All</option><option value="pending">Pending</option><option value="reattempt">Reattempt</option><option value="resolved">Resolved</option><option value="rto">RTO</option></select></label>
+        <label>Reason <input id="ndrReasonFilter" placeholder="Customer unavailable, refused, address issue"/></label>
+        <label>Search <input id="ndrSearch" placeholder="AWB, order, customer, phone"/></label>
+      </div>
+      <div class="ndr-summary-grid ndr-kpi-row" id="ndrSummary"></div>
+      <div class="ndr-tabs" id="ndrStatusTabs">
+        <button class="ndr-tab active" data-ndr-status-tab="pending">Take Action</button>
+        <button class="ndr-tab" data-ndr-status-tab="reattempt">Re-Attempt Requested</button>
+        <button class="ndr-tab" data-ndr-status-tab="resolved">Delivered</button>
+        <button class="ndr-tab" data-ndr-status-tab="rto">RTO Requested</button>
+      </div>
+      <div class="ndr-automation-card">
+        <h3>NDR WhatsApp Automation</h3>
+        <div class="form-grid four">
+          <label class="checkline"><input id="ndrBeforeDeliveryEnabled" type="checkbox"/> Before delivery WhatsApp</label>
+          <label class="checkline"><input id="ndrFailedDeliveryEnabled" type="checkbox"/> Failed delivery / NDR WhatsApp</label>
+          <label>Reminder delay hours <input id="ndrReminderHours" type="number" min="1" value="24"/></label>
+          <label>Admin alert number <input id="ndrAdminNumber" placeholder="919001727446"/></label>
+        </div>
+        <div class="form-grid two">
+          <label>Before delivery message <textarea id="ndrBeforeMessage" placeholder="Hi {{customer_name}}, your order {{order_no}} is out for delivery today..."></textarea></label>
+          <label>NDR failed delivery message <textarea id="ndrFailedMessage" placeholder="Hi {{customer_name}}, delivery attempt for order {{order_no}} was unsuccessful..."></textarea></label>
+        </div>
+        <div class="inline-actions"><button id="saveNdrSettings" class="primary-btn" type="button">Save NDR WhatsApp Settings</button><button id="sendNdrPendingWhatsapp" class="ghost-btn" type="button">Send Pending WhatsApp</button></div>
+      </div>
+      <div class="ndr-grid">
+        <div class="ndr-card"><h3>NDR Orders</h3><div id="ndrTable" class="table-wrap"></div></div>
+        <div class="ndr-card"><h3>WhatsApp / Activity Logs</h3><div id="ndrLogs" class="activity-log-list"></div></div>
+      </div>
+      <pre id="ndrResult"></pre>
+    </section>
+
+    <section class="panel tab-panel" id="bulkBroadcastPanel">
+      <div class="section-head">
+        <div><h2>Bulk WhatsApp Broadcast</h2><p>Approved template se Shopify / Google Sheet contacts ko campaign bhejein.</p></div>
+        <div class="inline-actions"><button id="refreshBroadcasts" class="ghost-btn">Refresh Campaigns</button></div>
+      </div>
+      <div class="form-grid four">
+        <label>Campaign Name <input id="broadcastName" placeholder="Rakhi offer broadcast"/></label>
+        <label>Category / Tag Filter
+          <select id="broadcastCategory"><option value="">All</option><option>Rakhi</option><option>Home Décor</option><option>Divine</option><option>Candles</option></select>
+        </label>
+        <label>Approved Template <select id="broadcastTemplate"><option value="">Select template</option></select></label>
+        <label>Template Language <input id="broadcastTemplateLang" value="en"/></label>
+      </div>
+      <div class="form-grid five broadcast-image-url-row">
+        <label>Image URL Optional <input id="broadcastImageUrl" placeholder="https://cdn.shopify.com/...jpg"/></label>
+        <label>Select Uploaded Image
+          <select id="broadcastUploadedImageSelect"><option value="">Select uploaded image</option></select>
+        </label>
+        <label>Product / Collection Link <input id="broadcastProductLink" placeholder="https://tinyshinygifts.com/collections/..."/></label>
+        <label>Coupon Code <input id="broadcastCouponCode" placeholder="RAKHI10"/></label>
+        <label>Daily Sending Limit <select id="broadcastDailyLimit"><option>500</option><option>1000</option><option>5000</option></select></label>
+      </div>
+      <div class="form-grid two">
+        <div class="template-variable-card">
+          <label>Template Variables Auto Mapping</label>
+          <p class="hint">Template select karte hi {{1}}, {{2}} jaise variables automatic detect honge. Dropdown se value select karo.</p>
+          <div id="broadcastVariableMap" class="broadcast-variable-map"><p class="hint">Template select karo, variables yaha aa jayenge.</p></div>
+          <textarea id="broadcastVariables" class="hidden" aria-hidden="true"></textarea>
+        </div>
+        <label>Schedule Message <input id="broadcastScheduleAt" type="datetime-local"/><span class="hint">Blank rakhenge to abhi send/queue hoga.</span></label>
+      </div>
+      <div class="form-grid two">
+        <label>Google Sheet / CSV contacts paste karo <textarea id="broadcastPasteContacts" placeholder="name,phone,email,category
+Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
+        <label>Import CSV / Excel File <input id="broadcastCsvFile" type="file" accept=".csv,.txt,.tsv,.xls,.xlsx,text/csv,text/plain"/><span class="hint">Columns: name, phone, email, category, city, tag. Excel ko CSV export karke bhi upload kar sakte hain.</span></label>
+      </div>
+
+      <div class="broadcast-contact-tools">
+        <label>Search Customer <input id="broadcastCustomerSearch" list="broadcastCustomerDatalist" placeholder="Name, phone, email, city, tag"/></label>
+        <datalist id="broadcastCustomerDatalist"></datalist>
+        <label>Filter Source <select id="broadcastFilterBy"><option value="all">All Fields</option><option value="name">Name</option><option value="phone">Phone</option><option value="email">Email</option><option value="city">City</option><option value="tag">Tag / Category</option></select></label>
+        <label>Single Number Optional <input id="broadcastSinglePhone" placeholder="919001727446"/></label>
+        <label>Message Type <select id="broadcastMessageType"><option value="template">Template</option><option value="text">Text Only</option><option value="image">Image Only</option><option value="image_text">Image + Text</option></select></label>
+      </div>
+      <div class="inline-actions broadcast-action-row">
+        <button id="loadBroadcastContacts" class="ghost-btn" type="button">Import Shopify Customers</button>
+        <label class="select-all-line toggle"><input id="broadcastSelectAll" type="checkbox"/> <span id="broadcastSelectAllLabel">Select All</span></label>
+        <button id="importBroadcastPaste" class="ghost-btn" type="button">Import Pasted Contacts</button>
+        <button id="clearBroadcastContacts" class="ghost-btn danger-outline" type="button">Clear Contacts</button>
+        <button id="sendBroadcastNow" class="primary-btn" type="button">Create / Send Broadcast</button>
+      </div>
+      <div class="broadcast-summary" id="broadcastSummary">0 contacts selected</div>
+      <div id="broadcastContactsList" class="broadcast-contacts-list"></div>
+
+      <div class="broadcast-image-manager panel-lite">
+        <div class="section-head mini">
+          <div><h3>Uploaded Image Library</h3><p class="hint">Upload image, caption manage karo, preview dekho, link copy karo, ya remove karo. Select uploaded image se Image URL auto fill hoga.</p></div>
+          <button id="refreshBroadcastImages" class="ghost-btn" type="button">Refresh Images</button>
+        </div>
+        <div class="form-grid two image-library-upload-grid">
+          <label>Upload Image Optional <input id="broadcastImageFile" type="file" accept="image/*"/></label>
+          <label>Image Caption / Extra Text <input id="broadcastImageCaption" placeholder="Caption / offer text"/></label>
+        </div>
+        <div id="broadcastImageUploadStatus" class="hint">Image select karte hi upload hoga, preview dikhega aur public URL Image URL field me aa jayega.</div>
+                <div id="broadcastImageLibrary" class="image-library-inline"></div>
+      </div>
+
+      <h3>Campaign History / Delivery Status</h3>
+      
+      <pre id="broadcastResult"></pre>
+      <div id="broadcastCampaignsList" class="broadcast-campaigns-list"></div>
+    </section>
+
+    
+
+    <section class="panel tab-panel" id="phase2Panel">
+      <div class="section-head"><div><h2>Campaign Analytics & Segments</h2><p>QuickReply/WATI style reports, segmentation, opt-out, clicks aur revenue attribution.</p></div><div class="inline-actions"><button id="refreshPhase2Analytics" class="ghost-btn">Refresh Analytics</button><button id="saveQuickReplySettings" class="primary-btn">Save QuickReply Features</button></div></div>
+      <div class="form-grid four feature-toggle-grid">
+        <label class="checkline"><input id="qrPopupEnabled" type="checkbox"/> WhatsApp Pop-up Lead Capture</label>
+        <label class="checkline"><input id="qrAbandonedCartEnabled" type="checkbox"/> Abandoned Cart Recovery</label>
+        <label class="checkline"><input id="qrProductAbandonEnabled" type="checkbox"/> Product Abandonment</label>
+        <label class="checkline"><input id="qrCodPrepaidEnabled" type="checkbox"/> COD to Prepaid Conversion</label>
+        <label class="checkline"><input id="qrReviewEnabled" type="checkbox"/> Review / Feedback Flow</label>
+        <label class="checkline"><input id="qrClickTrackingEnabled" type="checkbox"/> Click Tracking</label>
+        <label class="checkline"><input id="qrRevenueEnabled" type="checkbox"/> Revenue Attribution</label>
+        <label class="checkline"><input id="qrInactiveExclude" type="checkbox"/> Exclude Inactive Leads</label>
+      </div>
+      <div id="phase2Summary" class="stat-panel mini-stats"></div>
+      <h3>Auto Segments</h3><div id="phase2Segments" class="segment-grid"></div>
+      <h3>Campaign Performance</h3><div id="phase2CampaignStats" class="customer-table-wrap"></div>
+      <pre id="phase2Result"></pre>
+    </section>
+
+    <section class="panel tab-panel" id="dripPanel">
+      <div class="section-head"><div><h2>Drip Campaigns / Automation Rules</h2><p>Multi-day WhatsApp journeys: welcome, product reminder, coupon, last reminder.</p></div><div class="inline-actions"><button id="refreshDrips" class="ghost-btn">Refresh Drips</button><button id="saveDripCampaign" class="primary-btn">Save Drip</button></div></div>
+      <div class="form-grid three">
+        <label>Drip Name <input id="dripName" value="Welcome + Product Reminder"/></label>
+        <label>Trigger <select id="dripTrigger"><option value="new_lead">New Lead</option><option value="abandoned_cart">Abandoned Cart</option><option value="product_view">Product View</option><option value="delivered_order">Delivered Order</option><option value="cod_order">COD Order</option></select></label>
+        <label class="checkline"><input id="dripEnabled" type="checkbox" checked/> Drip Enabled</label>
+      </div>
+      <label>Drip Steps <textarea id="dripSteps" placeholder="Day 0 | welcome_template | Welcome message
+Day 1 | product_followup | Product reminder
+Day 3 | festival_offer | Coupon reminder"></textarea></label>
+      <div id="dripList" class="broadcast-campaigns-list"></div><pre id="dripResult"></pre>
+    </section>
+
+    <section class="panel tab-panel" id="instagramInboxPanel">
+      <div class="section-head"><div><h2>Instagram Inbox / Chatbot</h2><p>Instagram Business DM settings, inbox, auto reply, catalog reply aur CRM lead save.</p></div><div class="inline-actions"><button id="refreshInstagramInbox" class="ghost-btn">Refresh Instagram</button><button id="saveInstagramSettings" class="primary-btn">Save Instagram Settings</button></div></div>
+      <div class="form-grid three">
+        <label class="checkline"><input id="igEnabled" type="checkbox"/> Enable Instagram Module</label>
+        <label class="checkline"><input id="igAutoReply" type="checkbox"/> Auto Reply</label>
+        <label class="checkline"><input id="igCatalogReply" type="checkbox"/> Catalog Reply</label>
+        <label>Instagram Page ID <input id="igPageId" placeholder="Meta Page ID"/></label>
+        <label>Instagram Business Account ID <input id="igBusinessId" placeholder="IG Business Account ID"/></label>
+        <label>Webhook Verify Token <input id="igVerifyToken" value="tinyshiny_instagram_verify"/></label>
+      </div>
+      <div class="form-grid two">
+        <label>Access Token <input id="igAccessToken" placeholder="Paste Instagram/Page token"/></label>
+        <label>Main Catalog Link <input id="igMainCatalog" placeholder="https://www.tinyshinygifts.com/collections/all"/></label>
+      </div>
+      <div class="form-grid two"><label>Human Support Keywords <input id="igSupportKeywords" value="support,help,agent,human"/></label><label>Catalog Keywords <input id="igCatalogKeywords" value="catalog,catalogue,products,collection"/></label></div>
+      <div class="ig-layout"><div><h3>DM Inbox</h3><div id="instagramInboxList" class="inbox-list"></div></div><div><h3>Reply / Test</h3><label>Reply To Username/ID <input id="igReplyTo"/></label><label>Message <textarea id="igReplyText"></textarea></label><button id="sendInstagramReply" class="primary-btn">Save / Send Instagram Reply</button><button id="mockInstagramMessage" class="ghost-btn">Add Test DM</button><pre id="instagramResult"></pre></div></div>
+    </section>
+
+    <section class="panel tab-panel" id="whatsappChatbotPanel">
+      <div class="section-head">
+        <div><h2>WhatsApp Chatbot</h2><p>Incoming WhatsApp replies ke liye auto replies, FAQ aur catalog automation.</p></div>
+        <div class="inline-actions"><button id="saveWhatsappChatbot" class="primary-btn">Save Chatbot</button></div>
+      </div>
+      <div class="form-grid three">
+        <label class="checkline"><input id="waBotEnabled" type="checkbox"/> Enable WhatsApp Chatbot</label>
+        <label class="checkline"><input id="waBotMenuEnabled" type="checkbox"/> Enable Customer Menu</label>
+        <label class="checkline"><input id="waBotCatalogEnabled" type="checkbox"/> Enable Catalog Keywords</label>
+      </div>
+      <div class="form-grid two">
+        <label>Customer Menu Message <textarea id="waBotMenuText" placeholder="1. Track Order
+2. Catalog
+3. Talk to Support"></textarea></label>
+        <label>After-hours / Support Message <textarea id="waBotAfterHours" placeholder="Our team will reply shortly."></textarea></label>
+      </div>
+      <h3>Catalog Links</h3>
+      <div class="form-grid three">
+        <label>Main Catalog <input id="waBotMainCatalog" placeholder="https://www.tinyshinygifts.com/collections/all"/></label>
+        <label>Rakhi <input id="waBotRakhiCatalog" placeholder="Rakhi collection link"/></label>
+        <label>Home Décor <input id="waBotHomeCatalog" placeholder="Home decor collection link"/></label>
+        <label>Divine <input id="waBotDivineCatalog" placeholder="Divine collection link"/></label>
+        <label>Candles <input id="waBotCandlesCatalog" placeholder="Candles collection link"/></label>
+        <label>New Arrivals <input id="waBotNewCatalog" placeholder="New arrivals link"/></label>
+      </div>
+      <h3>Shipping / Tracking Provider</h3>
+      <div class="form-grid three">
+        <label>Shipping Provider
+          <select id="waShippingProvider"><option value="shiprocket">Shiprocket</option></select>
+        </label>
+        <label>Tracking Reply Keywords <input id="waTrackingKeywords" value="track,tracking,order status,where is my order"/></label>
+        <label>Support Handover Keywords <input id="waSupportKeywords" value="support,agent,human,call me,help me"/></label>
+      </div>
+      <p class="hint">Keywords: catalog, catalogue, products, collection, price list. STOP/UNSUBSCRIBE reply se customer broadcast opt-out ho jayega.</p>
+      
+      <div class="catalog-category-box">
+        <h3>Catalog Categories</h3>
+        <p class="hint">Customer catalog select karega to sirf checked/active categories jayengi.</p>
+        <div id="catalogCategoriesTable" class="catalog-categories-table"></div>
+        <div class="inline-actions">
+          <button id="addCatalogCategory" type="button" class="ghost-btn compact-btn">+ Add Category</button>
+        </div>
+      </div>
+<pre id="waBotResult"></pre>
+    </section>
+
+
+
+    <section class="panel tab-panel active compact-inbox whatsapp-web-panel wati-style-panel" id="whatsappInboxPanel">
+      <div class="team-inbox-shell">
+        <aside class="wati-left">
+          <div class="wati-left-head">
+            <h2>Chat Inbox</h2>
+            <button id="refreshWhatsappInbox" class="ghost-btn compact-btn">Refresh</button>
+          </div>
+          <div class="channel-tabs">
+            <button type="button" class="channel-tab active" data-channel-filter="all">All</button>
+            <button type="button" class="channel-tab" data-channel-filter="whatsapp">WhatsApp</button>
+            <button type="button" class="channel-tab" data-channel-filter="instagram">Instagram</button>
+            <button type="button" class="channel-tab" data-channel-filter="messenger">Messenger</button>
+          </div>
+          <div class="wa-sidebar-top compact-search-block">
+            <label>Search
+              <input id="whatsappInboxSearch" list="whatsappShopifyCustomerList" autocomplete="off" placeholder="Name, phone, message / Shopify customer"/>
+              <datalist id="whatsappShopifyCustomerList"></datalist>
+            </label>
+            <label>Keep / Show
+              <select id="whatsappInboxDays"><option value="1">1 day</option><option value="2">2 days</option><option value="3">3 days</option><option value="4">4 days</option><option value="5">5 days</option><option value="6">6 days</option><option value="7" selected>7 days</option><option value="8">8 days</option><option value="9">9 days</option><option value="10">10 days</option></select>
+            </label>
+            <div class="wa-clear-actions">
+              <button id="clearWhatsappInboxRange" class="ghost-btn danger-outline" type="button">Clear Days</button>
+              <button id="clearWhatsappInboxAll" class="ghost-btn danger-outline" type="button">Clear All</button>
+            </div>
+          </div>
+          <div class="wa-chat-count"><b id="whatsappInboxThreadCount">0</b> conversations</div>
+          <div id="whatsappChatList" class="wa-chat-list wati-list"></div>
+        </aside>
+
+        <main class="wati-center">
+          <div id="whatsappActiveChat" class="wa-active-chat empty-state wati-chat-window">
+            Select a customer chat from the left side.
+          </div>
+          <div class="wa-reply-dock wati-reply-dock">
+            <div class="reply-mini-row">
+              <input id="whatsappReplyPhone" placeholder="91XXXXXXXXXX" title="Reply To Number"/>
+              <select id="whatsappReplyImage" title="Saved Image Optional"><option value="">No image / Text only</option></select>
+            </div>
+            <div class="reply-compose-row">
+              <textarea id="whatsappReplyText" placeholder="Type your message here..."></textarea>
+              <button id="sendWhatsappInboxReply" class="primary-btn">Send</button>
+            </div>
+            <div class="reply-bottom-actions">
+              <button id="pickWhatsappEmoji" type="button" class="ghost-btn compact-btn" title="Add emoji">😊 Emoji</button>
+              <button id="pickWhatsappImage" type="button" class="ghost-btn compact-btn" title="Add image">🖼 Image</button>
+              <button id="pickWhatsappDocument" type="button" class="ghost-btn compact-btn" title="Add document">📎 Document</button>
+              <input id="whatsappImageFile" type="file" accept="image/*" hidden/>
+              <input id="whatsappDocumentFile" type="file" accept=".pdf,.txt,.doc,.docx,.xls,.xlsx,application/pdf,text/plain" hidden/>
+              <span id="whatsappAttachmentLabel" class="attachment-label"></span>
+              <button id="enableDesktopNotifications2" type="button" class="ghost-btn compact-btn"><span id="notificationStatusDot" class="notify-dot unknown" title="Notification status"></span> Enable Notifications</button>
+              <button id="markWhatsappInboxRead" class="ghost-btn compact-btn">Mark Read</button>
+              <pre id="whatsappInboxResult"></pre>
+            </div>
+          </div>
+        </main>
+  <aside class="wati-right">
+          <div id="waContactPanel" class="wa-contact-panel">
+            <h3>Contact Info</h3>
+            <p class="hint">Select chat to view customer details.</p>
+          </div>
+          <div class="wa-team-controls right-controls">
+            <label>Status <select id="waThreadStatus"><option value="open">Open</option><option value="pending">Pending</option><option value="resolved">Resolved</option></select></label>
+            <label>Assign Agent <input id="waThreadAgent" placeholder="Agent name"/></label>
+            <label>Tags <input id="waThreadTags" placeholder="COD, Urgent, Return"/></label>
+            <button id="saveWaThreadMeta" class="primary-btn compact-btn">Save Chat Info</button>
+          </div>
+          <label class="wa-internal-note compact-note">Internal Note <textarea id="waThreadNote" placeholder="Private note for team"></textarea></label>
+          <div id="whatsappShopifyAction" class="wa-shopify-action"></div>
+        </aside>
+      </div>
+      <div id="whatsappInboxList" class="inbox-list legacy-hidden"></div>
+    </section>
+
+    <section class="panel tab-panel" id="newProductsPanel">
+      <div class="section-head">
+        <div><h2>New Products</h2><p>Fetch latest Shopify products and send WhatsApp launch, upsell and cross-sell promotions.</p></div>
+        <div class="inline-actions"><button id="refreshNewProducts" class="ghost-btn">Refresh Products</button></div>
+      </div>
+      <div class="form-grid three">
+        <label>Search Product <input id="newProductSearch" placeholder="Product title, type, vendor"/></label>
+        <label>Promotion Message <textarea id="newProductMessage" placeholder="Write new product / offer / upsell message. Product link will be included if empty."></textarea></label>
+        <label>Send Mode
+          <select id="newProductSendMode"><option value="whatsapp">WhatsApp</option><option value="crm">Save CRM Follow-up Only</option></select>
+        </label>
+      </div>
+      <div class="inline-actions">
+        <label class="select-all-line"><input id="selectAllProductPromoCustomers" type="checkbox"/> Select All Customers</label>
+        <button id="sendNewProductPromo" class="primary-btn">Send Selected Product Promo</button>
+      </div>
+      <div class="form-grid two">
+        <div><h3>Products</h3><div id="newProductsList" class="product-grid"></div></div>
+        <div><h3>Customers</h3><input id="newProductCustomerSearch" placeholder="Search customer by name, phone, email"/><div id="newProductCustomerList" class="mini-customer-list"></div></div>
+      </div>
+      <pre id="newProductsResult"></pre>
+    </section>
+
+
+
+
+    <section class="panel tab-panel media-panel" id="imagePanel">
+      <div class="section-head">
+        <div>
+          <h2>Image Messages</h2>
+          <p>WhatsApp message bhejne ke liye image optional hai. Image select hogi to attach hogi, nahi to sirf text message jayega.</p>
+        </div>
+        <div class="inline-actions"><button id="refreshMedia" class="ghost-btn">Refresh Images</button><button id="refreshMediaCustomers" class="ghost-btn" type="button">Load Shopify Customers</button></div>
+      </div>
+
+      <div class="form-grid two">
+        <label>Image Type
+          <select id="mediaCategory">
+            <option value="thanks_letter">Thanks Letter</option>
+            <option value="offer_discount">Offer / Discount Image</option>
+            <option value="wishes">Wishes</option>
+            <option value="product_offer">Product Offer</option>
+            <option value="other">Other</option>
+          </select>
+        </label>
+        <label>Image Title <input id="mediaTitle" placeholder="Example: Rakhi Offer Banner"/></label>
+      </div>
+      <label>WhatsApp Message / Caption <textarea id="mediaCaption" placeholder="Write message. If no image is selected, only this text will be sent."></textarea></label>
+      <label>Upload Images <input id="mediaFile" type="file" accept="image/png,image/jpeg,image/webp,image/gif" multiple/></label>
+      <div class="media-actions">
+        <button id="uploadMedia" class="primary-btn">Upload Selected Images</button>
+        <button id="clearSelectedMedia" class="ghost-btn" type="button">Clear Attached Images</button>
+      </div>
+      <p class="hint">Multiple images attach kar sakte ho. Har selected image ke saamne Remove hoga. WhatsApp me multiple images one-by-one jayengi.</p>
+
+      <div class="send-box">
+        <h3>Send WhatsApp Message</h3>
+        <div class="form-grid two">
+          <label>Send To
+            <select id="mediaSendTo">
+              <option value="owner">Owner / Team WhatsApp</option>
+              <option value="custom">Customer Number</option>
+              <option value="shopify_customers">Selected Shopify Customers</option>
+              <option value="all_shopify_customers">All Shopify Customers</option>
+            </select>
+          </label>
+          <label>Customer WhatsApp Number <input id="mediaPhone" placeholder="91XXXXXXXXXX"/></label>
+        </div>
+        <div class="media-customer-box">
+          <div class="media-actions">
+            <label class="checkline"><input id="selectAllMediaCustomers" type="checkbox"/> Select All Customers</label>
+            <button id="sendAllMediaCustomers" class="ghost-btn" type="button">Send Message to All Numbers</button>
+          </div>
+          <input id="mediaCustomerSearch" placeholder="Search Shopify customer by name, phone, email"/>
+          <div id="mediaCustomerList" class="mini-customer-list"></div>
+        </div>
+        <div id="selectedMediaList" class="selected-media-list"></div>
+        <button id="sendSelectedMedia" class="primary-btn">Send WhatsApp Message</button>
+        <pre id="mediaSendResult"></pre>
+      </div>
+      <h3>Saved Image Library</h3>
+      <div id="mediaList" class="media-grid"></div>
+    </section>
+
+    <section class="panel tab-panel" id="leadPanel">
+      <div class="section-head"><div><h2>Leads / Order Requests</h2><p>Contact number wale aur bina contact number wale leads alag dekhein.</p></div><button id="refreshLeads" class="ghost-btn">Refresh Leads</button></div>
+      <div class="contact-tabs" id="leadContactTabs">
+        <button type="button" class="contact-tab active" data-contact-filter="with" data-target="lead">With Contact Number</button>
+        <button type="button" class="contact-tab" data-contact-filter="without" data-target="lead">Without Contact Number</button>
+      </div>
+      <div id="leadList"></div>
+    </section>
+    <section class="panel tab-panel" id="activityPanel">
+      <div class="section-head"><div><h2>Visitor / Product Activity</h2><p>Identified visitors aur anonymous activity alag dekhein.</p></div><button id="refreshEvents" class="ghost-btn">Refresh Activity</button></div>
+      <div class="contact-tabs" id="activityContactTabs">
+        <button type="button" class="contact-tab active" data-contact-filter="with" data-target="activity">With Contact Number</button>
+        <button type="button" class="contact-tab" data-contact-filter="without" data-target="activity">Without Contact Number</button>
+      </div>
+      <div id="eventList"></div>
+    </section>
+    <section class="panel tab-panel" id="messagePanel"><h2>Generated Buy Messages</h2><button id="refreshMsgs" class="ghost-btn">Refresh Messages</button><div id="messageList"></div></section>
+    <section class="panel tab-panel" id="googleSheetPanel"><h2>Google Sheet</h2><p id="googleSheetHelp">Google Sheet link not configured. Please add it in API Settings.</p><a id="googleSheetOpenLink" class="primary-btn" target="_blank" rel="noopener" href="#">Open Google Sheet</a></section>
+    <div id="adminNotificationToast" class="admin-toast hidden" role="status" aria-live="polite"></div>
+  </main>
+  <div id="shopifyCustomerModal" class="modal-overlay hidden">
+    <div class="modal-card shopify-customer-modal">
+      <div class="section-head mini"><div><h2>Add Shopify Customer</h2><p>Customer details fill karke Shopify customer create karein.</p></div><button type="button" class="ghost-btn" id="closeShopifyCustomerModal">Close</button></div>
+      <div class="form-grid two">
+        <label>First Name <input id="modalFirstName"/></label>
+        <label>Last Name <input id="modalLastName"/></label>
+        <label>Phone / WhatsApp <input id="modalPhone"/></label>
+        <label>Email <input id="modalEmail"/></label>
+        <label>Address <input id="modalAddress"/></label>
+        <label>City <input id="modalCity"/></label>
+        <label>State <input id="modalState"/></label>
+        <label>Pincode <input id="modalPincode"/></label>
+        <label>Country <input id="modalCountry" value="India"/></label>
+        <label>Tags <input id="modalTags" value="WhatsApp Inbox, Added from Chat Inbox"/></label>
+        <label class="checkline"><input id="modalMarketing" type="checkbox" checked/> Marketing / WhatsApp consent</label>
+      </div>
+      <label>Notes <textarea id="modalNotes" placeholder="Customer note"></textarea></label>
+      <div class="inline-actions"><button type="button" class="primary-btn" id="saveModalShopifyCustomer">Save Customer</button><button type="button" class="ghost-btn" id="cancelModalShopifyCustomer">Cancel</button></div>
+      <pre id="modalShopifyResult"></pre>
+    </div>
+  </div>
+  <script src="/admin.js?v=20260611133000"></script>
+</body>
+</html>

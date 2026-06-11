@@ -1,0 +1,86 @@
+{
+  "name": "Tiny Shiny Chatbot Admin",
+  "short_name": "TSG Admin",
+  "description": "Tiny Shiny Gifts chatbot admin panel, WhatsApp inbox, Shopify customers and CRM.",
+  "start_url": "/admin.html?app=1",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#ffffff",
+  "theme_color": "#d63384",
+  "categories": [
+    "business",
+    "productivity",
+    "shopping"
+  ],
+  "icons": [
+    {
+      "src": "/icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    },
+    {
+      "src": "/icons/maskable-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "maskable"
+    },
+    {
+      "src": "/icons/maskable-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Chatbot Admin",
+      "short_name": "Admin",
+      "url": "/admin.html?app=1",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "WhatsApp Inbox",
+      "short_name": "Inbox",
+      "url": "/admin.html?tab=whatsappInboxPanel",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "API Settings",
+      "short_name": "Settings",
+      "url": "/api-settings.html",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
+    {
+      "name": "Shopify Customers",
+      "short_name": "Customers",
+      "url": "/admin.html?tab=shopifyCustomersPanel",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    }
+  ]
+}

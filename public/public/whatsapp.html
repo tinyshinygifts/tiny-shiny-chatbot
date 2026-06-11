@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>Tiny Shiny WhatsApp Inbox</title>
+  <link rel="manifest" href="/manifest.json?v=20260610143416"/>
+  <link rel="stylesheet" href="/style.css?v=20260611060041"/>
+</head>
+<body class="whatsapp-only-page">
+  <div class="admin-shell whatsapp-app-shell">
+    <header class="admin-header compact-whatsapp-header">
+      <div class="brand-area">
+        <img src="/tiny-shiny-logo.jpg" class="brand-logo big-logo" alt="Tiny Shiny"/>
+        <div>
+          <h1>WhatsApp Chat Inbox</h1>
+          <p>Direct WhatsApp app page</p>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button id="installAppBtn" class="ghost-btn" type="button" style="display:none">Install WhatsApp App</button>
+        <button id="enableNotificationsBtn" class="ghost-btn" type="button"><span id="notificationStatusDot" class="notification-dot pending"></span> Enable Notifications</button>
+        <a class="ghost-btn" href="/admin.html">Back to Admin</a>
+        <button id="logoutBtn" class="ghost-btn danger-outline" type="button">Logout</button>
+      </div>
+    </header>
+    <main>
+      <section id="whatsappInboxPanel" class="panel visible-panel">
+        <div class="wati-inbox-layout">
+          <aside class="wati-left">
+            <div class="section-head mini"><div><h2>Chat Inbox</h2></div><button id="refreshWhatsappInbox" class="ghost-btn compact-btn" type="button">Refresh</button></div>
+            <div class="channel-tabs">
+              <button type="button" class="channel-tab active" data-channel-filter="all">All</button>
+              <button type="button" class="channel-tab" data-channel-filter="whatsapp">WhatsApp</button>
+              <button type="button" class="channel-tab" data-channel-filter="instagram">Instagram</button>
+              <button type="button" class="channel-tab" data-channel-filter="messenger">Messenger</button>
+            </div>
+            <label>Search <input id="whatsappInboxSearch" list="whatsappCustomerSearchList" placeholder="Name, phone, message / Shopify customer"/></label>
+            <datalist id="whatsappCustomerSearchList"></datalist>
+            <label>Keep / Show <select id="whatsappInboxKeepDays"><option>1</option><option>3</option><option selected>7</option><option>10</option></select></label>
+            <div class="inline-actions"><button id="clearWhatsappInboxDays" class="ghost-btn compact-btn" type="button">Clear Days</button><button id="clearWhatsappInboxAll" class="ghost-btn compact-btn" type="button">Clear All</button></div>
+            <div id="whatsappInboxCount" class="hint"></div>
+            <div id="whatsappChatList" class="wa-chat-list"></div>
+          </aside>
+          <section class="wati-center">
+            <div id="whatsappActiveChat" class="wa-active-chat wati-chat-window">Select a customer chat.</div>
+            <div class="wati-composer">
+              <div id="whatsappShopifyAction" class="wa-shopify-action"></div>
+              <div class="form-grid two compact">
+                <input id="whatsappReplyPhone" placeholder="Reply number"/>
+                <select id="whatsappReplyImage"><option value="">No image / Text only</option></select>
+              </div>
+              <textarea id="whatsappReplyText" placeholder="Type your message here..."></textarea>
+              <div class="composer-actions">
+                <button type="button" class="ghost-btn compact-btn" data-wa-emoji>😊</button>
+                <label class="ghost-btn compact-btn file-upload-btn">🖼 Image<input id="waImageFileInput" type="file" accept="image/*" hidden></label>
+                <label class="ghost-btn compact-btn file-upload-btn">📎 Document<input id="waDocumentFileInput" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.txt,image/*" hidden></label>
+                <span id="whatsappAttachmentLabel" class="hint"></span>
+                <button id="sendWhatsappReply" class="primary-btn" type="button">Send</button>
+              </div>
+              <pre id="whatsappReplyResult" class="result-box hidden"></pre>
+            </div>
+          </section>
+          <aside id="waContactPanel" class="wati-right"><h3>Contact Info</h3><p class="hint">Select chat to view details.</p></aside>
+        </div>
+      </section>
+    </main>
+  </div>
+  <script src="/admin.js?v=20260611060041"></script>
+  <script>
+    document.addEventListener('DOMContentLoaded', () => {
+      document.body.classList.add('whatsapp-only-mode');
+      if (typeof showPanel === 'function') showPanel('whatsappInboxPanel');
+      try{ localStorage.setItem('tsgTeamInboxChannel','all'); teamInboxChannelFilter='all'; }catch(e){} if (typeof loadWhatsappInbox === 'function') loadWhatsappInbox();
+    });
+  </script>
+</body>
+</html>

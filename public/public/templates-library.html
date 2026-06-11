@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>WhatsApp Templates Library - Tiny Shiny Chatbot</title>
+  <link rel="icon" href="/tiny-shiny-logo.jpg"/>
+  <link rel="stylesheet" href="/style.css?v=20260611133000"/>
+</head>
+<body class="templates-library-page-body">
+  <main class="admin-wrap templates-library-page">
+    <header class="topbar glass-card">
+      <div class="brand-head">
+        <img class="brand-logo small" src="/tiny-shiny-logo.jpg" alt="Tiny Shiny Gifts"/>
+        <div class="badge">WhatsApp Automation</div>
+        <h1>WhatsApp Templates Library</h1>
+        <p>Templates, customer follow-up, order confirmation aur NDR WhatsApp settings ek hi page par manage karo.</p>
+      </div>
+      <div class="top-actions api-top-actions">
+        <button id="downloadConfig" type="button" class="ghost-btn">Download API Backup</button>
+        <label class="ghost-btn file-upload-btn" for="uploadConfigFile">Upload API Backup</label>
+        <input id="uploadConfigFile" type="file" accept=".txt,.json,text/plain,application/json" hidden/>
+        <button id="refreshApiTemplates" type="button" class="ghost-btn">Refresh Templates</button>
+        <button id="restoreDefaultTemplates" type="button" class="ghost-btn">Restore Default 12</button>
+        <a class="pill-link" href="/api-settings.html">← API Settings</a>
+        <a class="pill-link" href="/admin.html">Admin Panel</a>
+        <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
+      </div>
+    </header>
+<section class="panel api-ndr-settings-panel ndr-library-panel">
+      <div class="section-head">
+        <div><h2>NDR WhatsApp Settings</h2><p>Before delivery aur failed delivery NDR WhatsApp messages.</p></div>
+        <button id="saveNdrApiSettings" class="primary-btn" type="button">Save NDR Settings</button>
+      </div>
+      <div class="form-grid three">
+        <label class="checkline"><input id="apiNdrBeforeDeliveryEnabled" type="checkbox"/> Before delivery message ON</label>
+        <label class="checkline"><input id="apiNdrFailedDeliveryEnabled" type="checkbox"/> NDR failed delivery message ON</label>
+        <label>Reminder delay hours <input id="apiNdrReminderHours" type="number" min="1" placeholder="24"/></label>
+        <label>Admin alert number <input id="apiNdrAdminNumber" placeholder="919001727446"/></label>
+        <label>Before delivery template name <input id="apiNdrBeforeTemplate" placeholder="order_out_for_delivery"/></label>
+        <label>NDR template name <input id="apiNdrFailedTemplate" placeholder="ndr_failed_delivery"/></label>
+      </div>
+      <div class="form-grid two">
+        <label>Before delivery message <textarea id="apiNdrBeforeMessage"></textarea></label>
+        <label>NDR failed delivery message <textarea id="apiNdrFailedMessage"></textarea></label>
+      </div>
+      <pre id="apiNdrResult"></pre>
+    </section>
+<section class="panel api-template-library-panel templates-only-panel">
+      <div class="section-head">
+        <div><h2>Saved Templates</h2><p>Saare WhatsApp templates yahi ek jagah maintain/manage honge. Use unlimited hai, duplicate template repeat nahi hoga.</p></div>
+        <div class="inline-actions"><button id="newTemplateBtn" type="button" class="ghost-btn">+ Add Template</button></div>
+      </div>
+      <div class="template-workspace api-template-workspace compact-template-workspace">
+        <div>
+          <div id="templateList" class="template-grid compact-template-grid"></div>
+        </div>
+        <div class="template-editor template-editor-fixed">
+          <h3 id="templateEditorTitle">Add / Modify Template</h3>
+          <input id="templateId" type="hidden"/>
+          <div class="template-form-grid">
+            <label>Template Name <input id="templateName" placeholder="order_confirmation"/></label>
+            <label>Language Code <input id="templateLanguage" placeholder="en"/></label>
+            <label>Category <select id="templateCategory"><option>Utility</option><option>Marketing</option><option>Authentication</option></select></label>
+            <label>Header Type <select id="templateHeaderType"><option>None</option><option>Image</option><option>Video</option><option>Document</option><option>Text</option></select></label>
+          </div>
+          <label>Use Case <input id="templateUseCase" placeholder="Kis automation ke liye use hoga"/></label>
+          <label>Body Text <textarea id="templateBody" rows="7" placeholder="Hi {{1}}, your order {{2}}..."></textarea></label>
+          <label>Variables <textarea id="templateVariables" rows="3" placeholder="Customer Name&#10;Order Number&#10;Order Amount"></textarea></label>
+          <label>Buttons <textarea id="templateButtons" rows="3" placeholder="Quick Reply | Interested&#10;URL | Shop Now | https://www.tinyshinygifts.com"></textarea></label>
+          <label class="checkline"><input id="templateEnabled" type="checkbox" checked/> Enabled in library</label>
+          <div class="inline-actions">
+            <button id="saveTemplate" class="primary-btn" type="button">Save Template</button>
+            <button id="mapTemplateToAutomation" class="ghost-btn" type="button">Use Selected</button>
+            <button id="clearTemplateForm" class="ghost-btn" type="button">Clear</button>
+          </div>
+          <pre id="templateResult"></pre>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel template-status-clean-panel">
+      <h2>Selected Templates Summary</h2>
+      <div id="apiTemplateList" class="template-status-list compact-status-list"></div>
+      <p class="hint">Saved Templates me jo Use kiya hai ya automation me selected hai, uska short summary.</p>
+    </section>
+  </main>
+  <script src="/api-settings.js?v=20260611133000"></script>
+  <div id="apiErrorLogModal" class="modal hidden api-error-log-modal">
+    <div class="modal-card wide"><div class="modal-head"><h2 id="apiErrorLogTitle">API Error Log</h2><button type="button" class="ghost-btn" id="closeApiErrorLog">×</button></div><div id="apiErrorLogBody" class="api-error-log-body"></div><div class="modal-actions"><button type="button" class="ghost-btn" id="copyApiErrorLog">Copy Error</button><button type="button" class="primary-btn" id="testApiAgain">Test Again</button></div></div>
+  </div>
+</body>
+</html>
