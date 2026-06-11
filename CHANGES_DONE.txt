@@ -1,10 +1,28 @@
 CHANGES_DONE
 
-v17 rollback:
-1. Website chatbot restored back like previous v14 behavior.
-2. v16 WhatsApp Support direct-open/widget patch removed.
-3. v15 changes were not used.
-4. Base used: v14 ZIP.
+v18 update:
+1. Website chatbot floating button changed to selected pink cute chat logo.
+   - Added public/chat-button.png.
+   - New widget uses the selected design.
 
-Note:
-- This keeps the website chatbot as it was in v14.
+2. Chat button now shows options first:
+   - Track My Order
+   - Product Information
+   - Return / Exchange
+   - WhatsApp Support
+   - COD Confirmation
+   - Talk to Support
+
+3. Widget reads API Settings:
+   - chatbotEnabled
+   - botName
+   - welcomeMessage
+   - fallbackMessage
+   - themeColor/accentColor
+
+4. WhatsApp Support option opens WhatsApp directly.
+   - No extra message shown.
+   - No wrong Track Shipment button.
+
+Base:
+- v17 ZIP used as base.
