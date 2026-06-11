@@ -22,3 +22,10 @@ v27 update:
 
 Base:
 - v26 ZIP used as base.
+
+v28 update:
+1. Mobile site floating chat button reduced in size to about 90%.
+2. Mobile site floating chat button moved upward so it does not sit too low over the bottom nav.
+3. Mobile opened chat box also moved upward accordingly.
+Base:
+- v27 ZIP used as base.

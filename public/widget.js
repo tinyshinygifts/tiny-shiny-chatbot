@@ -43,8 +43,8 @@
       #tsgChatInput{flex:1;border:1px solid #e5d9e0;border-radius:999px;padding:12px 14px;outline:none;font-size:14px;min-width:0}
       #tsgChatSend{border:0;background:${pink};color:#fff;border-radius:999px;padding:12px 18px;font-weight:900;cursor:pointer;box-shadow:0 8px 18px rgba(214,51,132,.22)}
       @media(max-width:520px){
-        #tsgChatFab{right:10px;bottom:10px;width:96px;height:66px}
-        #tsgChatBox{right:8px;left:8px;bottom:84px;width:auto;max-height:82vh;border-radius:22px}
+        #tsgChatFab{right:10px;bottom:72px;width:86px;height:59px}
+        #tsgChatBox{right:8px;left:8px;bottom:138px;width:auto;max-height:82vh;border-radius:22px}
         #tsgChatMsgs{height:410px;max-height:62vh}.tsgChipWrap{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px;width:90%;padding:9px 10px}.tsgChip{font-size:10.5px;padding:7px 4px}
       }
     `;
