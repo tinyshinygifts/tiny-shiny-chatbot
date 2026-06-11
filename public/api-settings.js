@@ -1,6 +1,7 @@
 const keys = ['WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER','ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS','SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER','SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI','WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG','CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG','GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG','META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST'];
 let whatsappTemplates = [];
 let whatsappTemplateMappings = {};
+let selectedWhatsappTemplateIds = [];
 let selectedTemplateId = '';
 let faqs = [];
 let lastApiConnectionRows = [];
@@ -14,6 +15,44 @@ function templateValue(t){ return [t.name,t.category,t.language,t.useCase,t.body
 function parseTemplateButtons(text){ return String(text||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{ const parts=line.split('|').map(x=>x.trim()); return { type: parts[0] || 'Quick Reply', text: parts[1] || '', url: parts[2] || '' }; }).filter(b=>b.text); }
 function buttonsToText(buttons){ return (buttons||[]).map(b=>[b.type||'Quick Reply', b.text||'', b.url||''].filter(Boolean).join(' | ')).join('\n'); }
 function templateUsedLabel(t){ const targets = templateUsedTargets(t); return targets.length ? targets.map(x=>templateTargetLabels[x]||x).join(', ') : ''; }
+function isTemplateSelected(t){
+  const ids = selectedWhatsappTemplateIds || [];
+  return ids.some(id => String(id) === String(t?.id) || String(id) === String(t?.name));
+}
+function selectedTemplatesList(){
+  const ids = selectedWhatsappTemplateIds || [];
+  return (whatsappTemplates || []).filter(t => isTemplateSelected(t)).sort((a,b)=>ids.indexOf(String(a.id))-ids.indexOf(String(b.id)));
+}
+function renderSelectedTemplates(){
+  const boxes=[$('selectedTemplatesList'), $('selectedTemplatesCompact')].filter(Boolean);
+  if(!boxes.length) return;
+  const selected = selectedTemplatesList();
+  const html = selected.length ? selected.map((t,i)=>`<div class="selected-template-pill">
+    <span><b>${esc(i+1)}. ${esc(t.name)}</b><small>${esc(t.language||'en')} • ${esc(t.category||'Utility')}</small></span>
+    <button type="button" class="ghost-btn compact-btn danger-outline" data-unselect-template="${esc(t.id)}">Unselect</button>
+  </div>`).join('') : '<p class="hint">Abhi koi template selected nahi hai. Template card par Use click karo.</p>';
+  boxes.forEach(box=>{ box.innerHTML = html; });
+}
+async function selectTemplate(id){
+  const res=await fetch('/api/whatsapp-templates/select',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
+  if(res.ok){ whatsappTemplates=res.templates||whatsappTemplates; selectedWhatsappTemplateIds=res.selectedTemplateIds||selectedWhatsappTemplateIds; whatsappTemplateMappings=res.mappings||whatsappTemplateMappings; renderTemplates(); renderSelectedTemplates(); renderApiTemplates(); renderUnlimitedWhatsappFormats(); }
+  else alert(res.error || 'Template select failed.');
+}
+async function unselectTemplate(id){
+  const res=await fetch('/api/whatsapp-templates/unselect',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({id})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
+  if(res.ok){ whatsappTemplates=res.templates||whatsappTemplates; selectedWhatsappTemplateIds=res.selectedTemplateIds||selectedWhatsappTemplateIds; whatsappTemplateMappings=res.mappings||whatsappTemplateMappings; renderTemplates(); renderSelectedTemplates(); renderApiTemplates(); renderUnlimitedWhatsappFormats(); }
+  else alert(res.error || 'Template unselect failed.');
+}
+async function clearSelectedTemplates(){
+  if(!confirm('All selected templates clear karne hain? API mappings/settings delete nahi honge.')) return;
+  const res=await fetch('/api/whatsapp-templates/clear-selected',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
+  if(res.ok){ whatsappTemplates=res.templates||whatsappTemplates; selectedWhatsappTemplateIds=res.selectedTemplateIds||[]; whatsappTemplateMappings=res.mappings||whatsappTemplateMappings; renderTemplates(); renderSelectedTemplates(); renderApiTemplates(); renderUnlimitedWhatsappFormats(); }
+  else alert(res.error || 'Selected templates clear failed.');
+}
+
 function templateOptionsHtml(currentName=''){
   const opts = whatsappTemplates.filter(t=>t.enabled!==false).map(t=>`<option value="${esc(t.id)}" ${t.name===currentName?'selected':''}>${esc(t.name)} (${esc(t.language||'en')})</option>`).join('');
   return '<option value="">Manual / Select template</option>' + opts;
@@ -92,7 +131,7 @@ function editTemplate(id){
   renderTemplates();
 }
 function renderTemplates(){
-  const list=$('templateList'); if(!list) return;
+  const list=$('templateList'); if(!list) { renderSelectedTemplates(); return; }
   const q=($('templateSearch')?.value||'').toLowerCase().trim();
   const cat=$('templateCategoryFilter')?.value||'';
   const activeTarget=selectedMapTarget();
@@ -100,22 +139,25 @@ function renderTemplates(){
   list.innerHTML=filtered.map(t=>{
     const usedTargets=templateUsedTargets(t); const usedLabel=templateUsedLabel(t); const isUsed=usedTargets.length>0;
     const targetUsed=usedTargets.includes(activeTarget);
-    const actionText = targetUsed ? 'USED' : 'Use';
+    const selected=isTemplateSelected(t);
+    const actionText = targetUsed ? 'USED' : 'Map';
     const actionClass = targetUsed ? 'used-btn' : '';
-    return `<div class="template-card ${String(selectedTemplateId)===String(t.id)?'selected':''} ${isUsed?'template-used':''}">
+    return `<div class="template-card ${String(selectedTemplateId)===String(t.id)?'selected':''} ${isUsed?'template-used':''} ${selected?'template-selected':''}">
       <div class="template-card-head"><b>${esc(t.name)}</b><span>${esc(t.category||'')} • ${esc(t.language||'en')}</span></div>
-      ${isUsed?`<div class="used-badge">USED: ${esc(usedLabel)}</div>`:`<div class="available-badge">Available / Use</div>`}
+      <div class="template-badges">${selected?`<div class="selected-badge">SELECTED</div>`:''}${isUsed?`<div class="used-badge">MAPPED: ${esc(usedLabel)}</div>`:`<div class="available-badge">Available</div>`}</div>
       <p>${esc(t.useCase||'')}</p>
       <small>Header: ${esc(t.headerType||'None')} • Variables: ${esc((t.variables||[]).length)}</small>
       <pre>${esc((t.body||'').slice(0,260))}${(t.body||'').length>260?'...':''}</pre>
       <div class="template-actions">
         <button class="ghost-btn" data-edit-template="${esc(t.id)}">Modify</button>
+        <button class="ghost-btn ${selected?'used-btn':''}" data-${selected?'unselect':'select'}-template="${esc(t.id)}">${selected?'Selected':'Use'}</button>
         <button class="ghost-btn ${actionClass}" data-toggle-template="${esc(t.id)}" data-map-target="${esc(activeTarget)}">${actionText}</button>
         <button class="ghost-btn danger-outline" data-delete-template="${esc(t.id)}">Remove</button>
       </div>
     </div>`;
   }).join('') || '<p>No templates found. Click Add Template or Restore Default 12.</p>';
-}
+  renderSelectedTemplates();
+} 
 function applyMappingsToFields(mappings){
   if(!mappings) return;
   if(mappings.customer_followup){ if($('CUSTOMER_WHATSAPP_TEMPLATE_NAME')) CUSTOMER_WHATSAPP_TEMPLATE_NAME.value=mappings.customer_followup.name||''; if($('CUSTOMER_WHATSAPP_TEMPLATE_LANG')) CUSTOMER_WHATSAPP_TEMPLATE_LANG.value=mappings.customer_followup.language||'en'; if($('CUSTOMER_WHATSAPP_MESSAGES_ENABLED')) CUSTOMER_WHATSAPP_MESSAGES_ENABLED.value=String(mappings.customer_followup.enabled ?? CUSTOMER_WHATSAPP_MESSAGES_ENABLED.value ?? 'false'); }
@@ -193,6 +235,7 @@ function renderApiTemplates(){
 async function loadApiTemplates(){
   const d=await fetch('/api/whatsapp-templates',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,templates:[],mappings:{}}));
   whatsappTemplates=d.templates||[];
+  selectedWhatsappTemplateIds=d.selectedTemplateIds||[];
   whatsappTemplateMappings=d.mappings||{};
   if(!selectedTemplateId && whatsappTemplates[0]) selectedTemplateId=whatsappTemplates[0].id;
   const currentCustomer=$('CUSTOMER_WHATSAPP_TEMPLATE_NAME')?.value.trim()||'';
@@ -203,6 +246,8 @@ async function loadApiTemplates(){
   ['API_TEST_TEMPLATE_SELECT','API_TEST_TEMPLATE_SELECT_2'].forEach(id=>setSelectOptions(id,currentTest));
   renderApiTemplates();
   renderTemplates();
+  renderSelectedTemplates();
+  renderUnlimitedWhatsappFormats();
 }
 const colorOptions = ['#d63384','#9b35ff','#0ea5e9','#16a34a','#f97316','#111827'];
 const colorNames = {'#d63384':'Tiny Shiny Pink','#9b35ff':'Premium Purple','#0ea5e9':'Sky Blue','#16a34a':'Fresh Green','#f97316':'Festive Orange','#111827':'Luxury Black'};
@@ -400,6 +445,9 @@ document.addEventListener('click', async (e)=>{
   if(e.target.id === 'restoreDefaultTemplates') restoreDefaultTemplates();
   if(e.target.id === 'mapTemplateToAutomation') { const id=$('templateId')?.value || selectedTemplateId; if(!id) return alert('Please select or save a template first.'); mapTemplate(id); }
   if(e.target.dataset.editTemplate) editTemplate(e.target.dataset.editTemplate);
+  if(e.target.dataset.selectTemplate) selectTemplate(e.target.dataset.selectTemplate);
+  if(e.target.dataset.unselectTemplate) unselectTemplate(e.target.dataset.unselectTemplate);
+  if(e.target.id==='clearSelectedTemplates') clearSelectedTemplates();
   if(e.target.dataset.deleteTemplate) deleteTemplate(e.target.dataset.deleteTemplate);
   if(e.target.dataset.mapTemplate) mapTemplate(e.target.dataset.mapTemplate, e.target.dataset.mapTarget || undefined);
   if(e.target.dataset.toggleTemplate) toggleTemplateUse(e.target.dataset.toggleTemplate, e.target.dataset.mapTarget || undefined);
@@ -472,6 +520,7 @@ function renderUnlimitedWhatsappFormats(){
   </div>`).join('') || '<p class="hint">Abhi koi format nahi hai. + Add Format click karo.</p>';
 }
 function addQuickWhatsappFormat(){
+  if(!$('templateName')) { window.location.href='/templates-library.html#templateEditorTitle'; return; }
   clearTemplateForm();
   const n=(whatsappTemplates||[]).length+1;
   if($('templateName')) templateName.value='custom_template_'+n;
@@ -497,9 +546,6 @@ setInterval(renderUnlimitedWhatsappFormats, 2500);
 
 document.addEventListener('click', e=>{
   if(e.target && e.target.id==='openTemplatesLibraryTop'){
-    const sec=document.getElementById('whatsappTemplatesLibrarySection') || document.getElementById('unlimitedWhatsappFormats') || document.getElementById('templateEditorTitle');
-    if(sec) sec.scrollIntoView({behavior:'smooth',block:'start'});
-    document.body.classList.add('show-templates-library');
-    setTimeout(()=>{ try{ renderUnlimitedWhatsappFormats(); renderTemplates(); }catch(err){} },100);
+    window.location.href='/templates-library.html';
   }
 });

@@ -895,3 +895,32 @@ body:has(.api-top-actions) .brand-logo.small{width:76px!important;height:76px!im
   #codDebugLogs{max-height:240px!important;font-size:11px!important;}
   .api-top-actions .ghost-btn,.api-top-actions .pill-link{padding:10px 12px!important;font-size:12px!important;}
 }
+
+
+/* v30 Separate WhatsApp Templates Library page + unlimited selection */
+.templates-library-wrap{width:min(96vw,1500px)!important;max-width:1500px!important;margin:0 auto!important;padding:18px 0!important}
+.templates-library-body{overflow-y:auto!important}
+.templates-library-open-link{display:inline-flex;align-items:center;justify-content:center;text-decoration:none}
+.templates-library-main-panel{min-height:70vh;overflow:visible!important}
+.templates-library-workspace{grid-template-columns:minmax(0,1.45fr) minmax(440px,.95fr)!important}
+.selected-templates-panel{margin:16px 0;padding:14px;border:1px dashed #efb8d5;border-radius:20px;background:linear-gradient(135deg,#fff,#fff7fb)}
+.selected-template-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px;margin-top:10px}
+.selected-template-list.compact{grid-template-columns:repeat(auto-fill,minmax(230px,1fr))}
+.selected-template-pill{display:flex;align-items:center;justify-content:space-between;gap:10px;border:1px solid #9ee7bf;background:linear-gradient(135deg,#f6fff9,#fff);border-radius:16px;padding:10px 12px;box-shadow:0 8px 20px rgba(20,140,74,.08);min-width:0}
+.selected-template-pill span{min-width:0;display:grid;gap:2px}
+.selected-template-pill b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#14532d}
+.selected-template-pill small{color:#166534;font-weight:800}
+.selected-badge{display:inline-flex;align-items:center;width:max-content;border-radius:999px;padding:6px 10px;font-size:12px;font-weight:950;background:#dcfce7;border:1px solid #86efac;color:#166534}
+.template-badges{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.template-card.template-selected{border-color:#22c55e!important;box-shadow:0 14px 34px rgba(34,197,94,.14)!important}
+.compact-btn{padding:7px 10px!important;font-size:12px!important;margin:0!important}
+.api-template-library-compact .template-status-list{margin-top:10px}
+.quick-nav-template-library-link{display:inline-flex!important;align-items:center!important;justify-content:center!important;text-decoration:none!important;color:var(--purple)!important}
+.quick-nav-template-library-link:hover{text-decoration:none!important}
+.api-result-box{max-height:320px;overflow:auto;white-space:pre-wrap;word-break:break-word;background:#071728;color:#fff;border-radius:16px;padding:14px}
+.unlimited-formats-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.unlimited-format-row{display:grid;gap:4px;border:1px solid var(--line);border-radius:16px;background:#fff;padding:12px;box-shadow:0 8px 20px rgba(130,40,90,.05)}
+.unlimited-format-row b{color:#27172a;overflow-wrap:anywhere}
+.unlimited-format-row span,.unlimited-format-row small{color:#6d5b69;font-weight:800;font-size:12px}
+@media(max-width:1180px){.templates-library-workspace{grid-template-columns:1fr!important}.selected-template-list{grid-template-columns:1fr}.templates-library-wrap{width:96vw!important}.template-editor-fixed{position:static!important}}
+@media(max-width:760px){.templates-library-wrap{padding:8px 0!important}.templates-library-main-panel{padding:14px!important}.selected-template-pill{align-items:flex-start;flex-direction:column}.template-grid{grid-template-columns:1fr!important;max-height:none!important}.template-form-grid{grid-template-columns:1fr!important}.template-actions{gap:6px}.template-actions button{padding:8px 10px!important}.api-top-actions{justify-content:flex-start}}

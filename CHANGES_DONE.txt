@@ -1,0 +1,54 @@
+Tiny Shiny Chatbot ZIP Updated
+================================
+
+Base ZIP used:
+tiny-shiny-chatbot-api-template-tab-cod-debug-scroll.zip
+
+Changes done in this same project:
+1. Added separate WhatsApp Templates Library page:
+   public/templates-library.html
+
+2. Added Templates Library links:
+   - Admin top actions
+   - Admin quick nav
+   - API Settings top actions
+
+3. Fixed broken/mixed API Settings Templates section:
+   - Removed malformed injected template editor HTML from api-settings.html
+   - Kept API Settings clean for quick template mapping/status
+   - COD WhatsApp Debug and Unlimited WhatsApp API Formats panels kept safely
+
+4. Fixed 2-template limit issue:
+   - Added selectedWhatsappTemplateIds server-side storage in data/settings.json
+   - Added /api/whatsapp-templates/select
+   - Added /api/whatsapp-templates/unselect
+   - Added /api/whatsapp-templates/clear-selected
+   - Old selected templates are not removed when selecting new templates
+
+5. Added selected templates UI:
+   - Selected Templates panel
+   - Use / Selected button
+   - Unselect button
+   - Clear Selected button
+
+6. Existing API settings are preserved:
+   - API backup upload/download still available
+   - Settings merge is safe
+   - Shopify / WhatsApp / ICARRY / Google Sheet data is not reset
+
+7. Mobile/scroll fixes:
+   - Responsive template grid
+   - Mobile single-column layout
+   - Scroll-friendly template page
+
+Files changed:
+- server.js
+- public/admin.html
+- public/api-settings.html
+- public/api-settings.js
+- public/style.css
+- public/service-worker.js
+- public/manifest.json
+
+Files added:
+- public/templates-library.html

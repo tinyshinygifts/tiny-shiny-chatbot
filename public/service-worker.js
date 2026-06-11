@@ -6,7 +6,7 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const req = event.request;
   const url = new URL(req.url);
-  if (url.pathname.includes('admin') || url.pathname.includes('api-settings') || url.pathname.includes('whatsapp') || url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.startsWith('/api/')) {
+  if (url.pathname.includes('admin') || url.pathname.includes('api-settings') || url.pathname.includes('whatsapp') || url.pathname.includes('templates-library') || url.pathname.endsWith('.js') || url.pathname.endsWith('.css') || url.pathname.startsWith('/api/')) {
     event.respondWith(fetch(req, {cache:'no-store'}).catch(() => caches.match(req)));
     return;
   }

@@ -20,7 +20,7 @@
         <button id="downloadConfig" type="button" class="ghost-btn">Download API Backup</button>
         <label class="ghost-btn file-upload-btn" for="uploadConfigFile">Upload API Backup</label>
         <input id="uploadConfigFile" type="file" accept=".txt,.json,text/plain,application/json" hidden/>
-        <button id="openTemplatesLibraryTop" type="button" class="ghost-btn templates-library-top-btn">WhatsApp Templates Library</button>
+        <a id="openTemplatesLibraryTop" class="ghost-btn templates-library-top-btn" href="/templates-library.html">WhatsApp Templates Library</a>
         <a class="pill-link" href="/admin.html">← Back to Admin</a>
         <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
       </div>
@@ -221,27 +221,17 @@
       </div>
     </section>
 
-    <section class="panel api-template-library-panel">
+    <section class="panel api-template-library-panel api-template-library-compact">
       <div class="section-head">
         <div>
           <h2>WhatsApp Templates Library</h2>
-          <p>Meta WhatsApp Manager me approved templates yaha save rakho. Add, modify, remove aur multiple automation use yahi se manage hoga.</p>
+          <p>Templates Library ko ab separate page me shift kar diya gaya hai. API settings safe rahengi aur yaha sirf quick mapping/status dikhega.</p>
         </div>
         <div class="inline-actions">
+          <a href="/templates-library.html" class="primary-btn templates-library-open-link">Open Templates Library</a>
           <button id="refreshApiTemplates" type="button" class="ghost-btn">Refresh Templates</button>
-          <button id="newTemplateBtn" type="button" class="ghost-btn">+ Add Template</button>
           <button id="restoreDefaultTemplates" type="button" class="ghost-btn">Restore Default 12</button>
         </div>
-      </div>
-
-      <div class="form-grid three">
-        <label>Search Template <input id="templateSearch" placeholder="order, followup, shipped, offer"/></label>
-        <label>Filter Category
-          <select id="templateCategoryFilter"><option value="">All</option><option>Utility</option><option>Marketing</option><option>Authentication</option></select>
-        </label>
-        <label>Quick Use For
-          <select id="templateMapTarget"><option value="customer_followup">Customer Follow-up</option><option value="order_confirmation">Order Confirmation</option><option value="test_whatsapp">Test WhatsApp / Owner</option></select>
-        </label>
       </div>
 
       <div class="form-grid three template-quick-map">
@@ -256,63 +246,31 @@
         </label>
       </div>
 
-      <div class="template-workspace api-template-workspace">
-        <div>
-          <h3>Saved Templates</h3>
-          <div id="templateList" class="template-grid"></div>
-        </div>
-        <div class="template-editor template-editor-fixed">
-          <h3 
-        <div id="whatsappTemplatesLibrarySection" class="templates-library-section">
-<section class="settings-card unlimited-template-card">
-          <h2>Unlimited WhatsApp API Formats</h2>
-          <p class="hint">Yaha jitne chaho utne WhatsApp formats/templates add kar sakte ho. Sirf 2 format ki limit remove kar di gayi hai.</p>
-          <div class="inline-actions">
-            <button id="addUnlimitedWhatsappFormat" type="button" class="primary-btn">+ Add Format</button>
-          </div>
-          <div id="unlimitedWhatsappFormats" class="unlimited-formats-list"></div>
-        </section>
-        <section class="settings-card">
-          <h2>COD WhatsApp Debug</h2>
-          <p class="hint">COD order message nahi jaye to yaha webhook, phone, COD detect aur WhatsApp API result dikhega.</p>
-          <button id="refreshCodDebugLogs" type="button" class="ghost-btn">Refresh COD Debug Logs</button>
-          <pre id="codDebugLogs" class="api-result-box"></pre>
-        </section>
-id="templateEditorTitle">Add / Modify Template</h3>
-          <input id="templateId" type="hidden"/>
-          <div class="template-form-grid">
-            <label>Template Name <input id="templateName" placeholder="order_confirmation"/></label>
-            <label>Language Code <input id="templateLanguage" placeholder="en"/></label>
-            <label>Category
-              <select id="templateCategory"><option>Utility</option><option>Marketing</option><option>Authentication</option></select>
-            </label>
-            <label>Header Type
-              <select id="templateHeaderType"><option>None</option><option>Image</option><option>Video</option><option>Document</option><option>Text</option></select>
-            </label>
-          </div>
-          <label>Use Case <input id="templateUseCase" placeholder="Kis automation ke liye use hoga"/></label>
-          <label>Body Text <textarea id="templateBody" rows="8" placeholder="Hi {{1}}, your order {{2}}..."></textarea></label>
-          <label>Variables <textarea id="templateVariables" rows="3" placeholder="Customer Name
-Order Number
-Order Amount"></textarea></label>
-          <label>Buttons <textarea id="templateButtons" rows="3" placeholder="Quick Reply | Interested
-URL | Shop Now | https://www.tinyshinygifts.com"></textarea></label>
-          <label class="checkline"><input id="templateEnabled" type="checkbox" checked/> Enabled in library</label>
-          <div class="inline-actions">
-            <button id="saveTemplate" class="primary-btn" type="button">Save Template</button>
-            <button id="mapTemplateToAutomation" class="ghost-btn" type="button">Use Selected</button>
-            <button id="clearTemplateForm" class="ghost-btn" type="button">Clear</button>
-          </div>
-          <pre id="templateResult"></pre>
-</div>
-
-          <p class="hint">Quick Use For dropdown me automation select karo. Template card ke Use/USED button se selected automation me add/remove kar sakte ho.</p>
-        </div>
-      </div>
+      <h3>Selected Templates</h3>
+      <p class="hint">Separate page me jitne bhi templates par Use click karoge, sab yaha selected list me dikh jayenge. 2 template ki limit hata di gayi hai.</p>
+      <div id="selectedTemplatesCompact" class="selected-template-list compact"></div>
 
       <h3>Template Use Status</h3>
       <div id="apiTemplateList" class="template-status-list"></div>
-      <p class="hint">Jo template automation me laga hoga uspar USED dikhega. Quick Use For badal kar same template ko alag automation me bhi use kar sakte ho.</p>
+      <p class="hint">Jo template automation me mapped hoga uspar USED dikhega. Full add/edit/delete ke liye Open Templates Library button use karo.</p>
+    </section>
+
+    <section class="panel settings-card unlimited-template-card">
+      <div class="section-head">
+        <div>
+          <h2>Unlimited WhatsApp API Formats</h2>
+          <p class="hint">Yaha all formats/templates ka quick view hai. New format add/edit karne ke liye Templates Library page open karo.</p>
+        </div>
+        <a href="/templates-library.html#templateEditorTitle" class="ghost-btn">+ Add / Edit Format</a>
+      </div>
+      <div id="unlimitedWhatsappFormats" class="unlimited-formats-list"></div>
+    </section>
+
+    <section class="panel settings-card">
+      <h2>COD WhatsApp Debug</h2>
+      <p class="hint">COD order message nahi jaye to yaha webhook, phone, COD detect aur WhatsApp API result dikhega.</p>
+      <button id="refreshCodDebugLogs" type="button" class="ghost-btn">Refresh COD Debug Logs</button>
+      <pre id="codDebugLogs" class="api-result-box"></pre>
     </section>
 
     <section class="panel">

@@ -70,6 +70,17 @@
           "sizes": "192x192"
         }
       ]
+    },
+    {
+      "name": "Templates Library",
+      "short_name": "Templates",
+      "url": "/templates-library.html",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
     }
   ]
 }
