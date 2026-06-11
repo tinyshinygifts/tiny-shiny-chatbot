@@ -457,20 +457,23 @@ function flattenForSheet(obj, prefix = '', out = {}) {
   return out;
 }
 function crmKey(record = {}) {
-  const phone = normalizeWhatsAppPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || record.raw?.phone || record.raw?.customer?.phone);
-  const email = cleanText(record.email || record.customerEmail || record.customer?.email || record.raw?.email || record.raw?.customer?.email).toLowerCase();
+  const raw = record.raw || {};
+  const phone = normalizeWhatsAppPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || raw.phone || raw.customer?.phone || raw.billing_address?.phone || raw.shipping_address?.phone || raw.customer?.default_address?.phone);
+  const email = cleanText(record.email || record.customerEmail || record.customer?.email || raw.email || raw.customer?.email || raw.contact_email).toLowerCase();
   const visitor = cleanText(record.visitorId);
-  return phone ? `phone:${phone}` : email ? `email:${email}` : visitor ? `visitor:${visitor}` : `lead:${record.id || crypto.randomUUID()}`;
+  const orderId = cleanText(record.orderName || record.orderId || raw.name || raw.order_number || raw.id);
+  return phone ? `phone:${phone}` : email ? `email:${email}` : visitor ? `visitor:${visitor}` : orderId ? `order:${orderId}` : `lead:${record.id || crypto.randomUUID()}`;
 }
 function upsertCrm(record = {}, source = 'lead') {
   const key = crmKey(record);
   const all = readJson(crmPath, []);
   const idx = all.findIndex(x => x.crmKey === key);
-  const phone = normalizeWhatsAppPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || record.raw?.phone || record.raw?.customer?.phone);
-  const name = cleanText(record.name || record.customerName || record.raw?.customer?.first_name || record.raw?.customer?.last_name || record.customer?.name);
-  const email = cleanText(record.email || record.customerEmail || record.customer?.email || record.raw?.email || record.raw?.customer?.email);
-  const productTitle = cleanText(record.productTitle || record.product || record.product?.title || record.raw?.line_items?.[0]?.title);
-  const pageUrl = cleanText(record.pageUrl || record.productUrl || record.product?.url);
+  const raw = record.raw || {};
+  const phone = normalizeWhatsAppPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || raw.phone || raw.customer?.phone || raw.billing_address?.phone || raw.shipping_address?.phone || raw.customer?.default_address?.phone);
+  const name = cleanText(record.name || record.customerName || [raw.customer?.first_name, raw.customer?.last_name].filter(Boolean).join(' ') || [raw.billing_address?.first_name, raw.billing_address?.last_name].filter(Boolean).join(' ') || [raw.shipping_address?.first_name, raw.shipping_address?.last_name].filter(Boolean).join(' ') || record.customer?.name);
+  const email = cleanText(record.email || record.customerEmail || record.customer?.email || raw.email || raw.customer?.email || raw.contact_email);
+  const productTitle = cleanText(record.productTitle || record.product || record.product?.title || raw.line_items?.[0]?.title || raw.line_items?.[0]?.name);
+  const pageUrl = cleanText(record.pageUrl || record.productUrl || record.product?.url || raw.order_status_url || raw.status_url);
   const eventType = cleanText(record.type || record.eventType || source);
   const now = nowIso();
   const base = idx >= 0 ? all[idx] : { id: crypto.randomUUID(), crmKey: key, createdAt: now, status: 'New', notes: '', tags: [] };
@@ -488,8 +491,12 @@ function upsertCrm(record = {}, source = 'lead') {
     productPrice: cleanText(record.productPrice || record.price || record.product?.price) || base.productPrice || '',
     discountText: cleanText(record.discountText || record.product?.discountText) || base.discountText || '',
     orderName: cleanText(record.orderName || record.orderId || record.raw?.name) || base.orderName || '',
-    total: cleanText(record.total || record.raw?.total_price) || base.total || '',
-    lastMessage: cleanText(record.message || record.note || record.caption) || base.lastMessage || '',
+    total: cleanText(record.total || raw.total_price || raw.current_total_price) || base.total || '',
+    paymentMethod: cleanText(record.paymentMethod || (Array.isArray(raw.payment_gateway_names) ? raw.payment_gateway_names.join(', ') : raw.gateway || raw.processing_method)) || base.paymentMethod || '',
+    orderStatus: cleanText(record.orderStatus || record.status || raw.fulfillment_status || raw.financial_status || '') || base.orderStatus || '',
+    whatsappStatus: cleanText(record.whatsappStatus || record.whatsappResult?.ok && 'WhatsApp Sent' || record.whatsappResult?.friendlyError || record.whatsappResult?.reason || record.whatsappResult?.json?.error?.message || '') || base.whatsappStatus || '',
+    isCodOrder: record.isCodOrder ?? base.isCodOrder ?? false,
+    lastMessage: cleanText(record.message || record.note || record.caption || record.whatsappResult?.friendlyError || record.whatsappResult?.reason || record.whatsappResult?.json?.error?.message) || base.lastMessage || '',
     leadCount: (base.leadCount || 0) + (source === 'lead' ? 1 : 0),
     activityCount: (base.activityCount || 0) + (source === 'activity' ? 1 : 0),
     messageCount: (base.messageCount || 0) + (source === 'message' ? 1 : 0)
@@ -2320,6 +2327,11 @@ app.post('/api/whatsapp-bulk/send', async (req, res) => {
 
 
 app.get('/api/crm', (req, res) => {
+  // Backfill/merge Shopify order webhook leads into CRM each time dashboard loads.
+  const leads = readJson(leadsPath, []);
+  leads.filter(l => ['shopify_order_webhook','cod_order_confirmed','cod_order_cancelled','order_confirmation','cod_confirmation'].includes(String(l.type || ''))).forEach(l => {
+    try { upsertCrm(l, 'lead'); } catch(e) {}
+  });
   const customers = readJson(crmPath, []);
   const summary = customers.reduce((acc, c) => { acc.total++; acc[c.status || 'New'] = (acc[c.status || 'New'] || 0) + 1; return acc; }, { total: 0 });
   res.json({ ok: true, customers, summary });
@@ -3291,10 +3303,20 @@ async function updateShopifyOrderNoteAndTags(orderId, addTag, noteLine) {
 }
 async function cancelShopifyOrder(orderId) {
   if (!orderId) return { ok:false, skipped:true, reason:'Shopify order id missing.' };
-  return shopifyFetch(`orders/${orderId}/cancel.json`, {
-    method:'POST',
-    body:{ reason:'customer', email:false, restock:true, refund:false }
-  });
+  const attempts = [];
+  const bodies = [
+    { reason:'customer', email:false, restock:true, refund:false },
+    { reason:'customer', email:false, restock:true },
+    { reason:'customer' }
+  ];
+  for (const body of bodies) {
+    const r = await shopifyFetch(`orders/${orderId}/cancel.json`, { method:'POST', body }).catch(e => ({ ok:false, error:e.message }));
+    attempts.push({ body, ok:r.ok, status:r.status, error:r.json?.errors || r.json?.error || r.error || r.message || '' });
+    if (r.ok) return { ...r, attempts, cancelled:true };
+    const msg = JSON.stringify(r.json || r.error || r.message || '').toLowerCase();
+    if (/already.*cancel|cancelled/.test(msg)) return { ...r, ok:true, attempts, alreadyCancelled:true, cancelled:true };
+  }
+  return { ok:false, attempts, error:'Shopify cancel API failed. Check Shopify Admin API permission write_orders and order status.' };
 }
 function isCodConfirmText(text) { return /^(confirm|yes|yes confirm|confirm order|order confirm|haan|ha|ha ji|ok|okay)$/i.test(String(text || '').trim()); }
 function isCodCancelText(text) { return /^(cancel|no|no cancel|cancel order|nahi|nahin|mat bhejo)$/i.test(String(text || '').trim()); }
@@ -3319,10 +3341,47 @@ async function handleCodConfirmationReply(item = {}) {
   const autoCancel = String(process.env.COD_AUTO_CANCEL_ENABLED || env.COD_AUTO_CANCEL_ENABLED || 'true').toLowerCase() === 'true';
   const cancelResult = autoCancel ? await cancelShopifyOrder(orderId).catch(e => ({ ok:false, error:e.message })) : { ok:false, skipped:true, reason:'COD auto cancel disabled.' };
   const shopifyUpdate = await updateShopifyOrderNoteAndTags(orderId, 'COD Cancelled by Customer', `COD Cancelled by customer via WhatsApp on ${nowIso()}. Phone: ${item.from}`).catch(e => ({ ok:false, error:e.message }));
-  updateLeadById(lead.id, { codCustomerResponse:'cancelled', codCancelledAt: nowIso(), status: autoCancel ? 'COD Cancelled by Customer' : 'COD Cancellation Requested', cancelResult, shopifyUpdate });
-  const reply = await sendWhatsAppTextManual({ to:item.from, message:`Your COD order ${orderName} cancellation request has been received.${autoCancel ? ' The order has been cancelled.' : ''} Team Tiny Shiny Gifts` }).catch(e => ({ ok:false, error:e.message }));
-  await sendOwnerWhatsApp(`COD order cancelled by customer\nOrder: ${orderName}\nPhone: ${item.from}\nAuto cancel: ${autoCancel ? 'yes' : 'no'}`).catch(()=>{});
-  return appendJson(leadsPath, { id: crypto.randomUUID(), type:'cod_order_cancelled', createdAt: nowIso(), phone:item.from, orderName, status:autoCancel ? 'COD Cancelled' : 'COD Cancellation Requested', cancelResult, shopifyUpdate, customerReply:reply, raw:item });
+  const cancelOk = Boolean(cancelResult?.ok || cancelResult?.cancelled || cancelResult?.alreadyCancelled);
+  const finalStatus = autoCancel ? (cancelOk ? 'COD Cancelled in Shopify' : 'COD Cancel Request - Shopify Cancel Failed') : 'COD Cancellation Requested';
+  updateLeadById(lead.id, { codCustomerResponse:'cancelled', codCancelledAt: nowIso(), status: finalStatus, cancelResult, shopifyUpdate, orderStatus: finalStatus, whatsappStatus:'Customer replied Cancel' });
+  const replyText = cancelOk
+    ? `Your COD order ${orderName} has been cancelled. Team Tiny Shiny Gifts`
+    : `Your COD order ${orderName} cancellation request has been received. Our team will update it shortly. Team Tiny Shiny Gifts`;
+  const reply = await sendWhatsAppTextManual({ to:item.from, message:replyText }).catch(e => ({ ok:false, error:e.message }));
+  await sendOwnerWhatsApp(`COD order cancelled by customer\nOrder: ${orderName}\nPhone: ${item.from}\nShopify cancel: ${cancelOk ? 'SUCCESS' : 'FAILED'}${cancelOk?'':'\nReason: '+(cancelResult?.error || JSON.stringify(cancelResult?.attempts||[]).slice(0,500))}`).catch(()=>{});
+  return appendJson(leadsPath, { id: crypto.randomUUID(), type:'cod_order_cancelled', createdAt: nowIso(), phone:item.from, orderName, customerName:lead.customerName||orderCustomerName(order), productTitle:lead.productTitle||orderFirstProductTitle(order), productImage:lead.productImage||'', total:lead.total||order.total_price||'', status:finalStatus, orderStatus:finalStatus, whatsappStatus:'Customer replied Cancel', cancelResult, shopifyUpdate, customerReply:reply, raw:order });
+}
+
+
+function orderConfirmationExactComponents(order = {}, imageUrl = '') {
+  const components = [];
+  if (imageUrl) {
+    components.push({ type: 'header', parameters: [{ type: 'image', image: { link: absoluteImageUrl(imageUrl) } }] });
+  }
+  components.push({ type:'body', parameters:[
+    textParam(orderCustomerName(order) || 'Customer'),
+    textParam(orderFirstProductTitle(order) || 'Product'),
+    textParam(String(order.name || order.order_number || order.id || '-')),
+    textParam(String(order.total_price || order.current_total_price || order.subtotal_price || '0'))
+  ]});
+  // Static Visit website button does not need button parameters.
+  return components;
+}
+async function sendOrderConfirmationExact(phone, templateName, lang, order = {}, productImage = '') {
+  const attempts = [];
+  const attempt = async (label, imageUrl) => {
+    const result = await postWhatsApp(whatsappTemplateBody(phone, templateName, lang, orderConfirmationExactComponents(order, imageUrl)));
+    attempts.push({ label, ok:result.ok, status:result.status, error:result.json?.error?.message || result.json?.error?.error_data?.details || result.reason || result.error || '', request:result.request });
+    return result;
+  };
+  let result = await attempt('order-exact-image-4-body-no-button-params', productImage || '');
+  if (result.ok) return { ...result, attempts, orderExactFormat:true };
+  if (productImage && isWhatsAppParamMismatch(result)) {
+    const retry = await attempt('order-exact-no-image-4-body-no-button-params', '');
+    if (retry.ok) return { ...retry, attempts, orderExactFormat:true, noImageFallback:true };
+    return { ...retry, ok:false, attempts, orderExactFormat:true, originalResult:result, friendlyError: readableTemplateMismatchReason(templateName, retry), reason: readableTemplateMismatchReason(templateName, retry) };
+  }
+  return { ...result, ok:false, attempts, orderExactFormat:true, friendlyError: readableTemplateMismatchReason(templateName, result), reason: readableTemplateMismatchReason(templateName, result) };
 }
 
 async function sendOrderConfirmationToCustomer(order = {}) {
@@ -3333,16 +3392,23 @@ async function sendOrderConfirmationToCustomer(order = {}) {
   const template = String(process.env.ORDER_CONFIRMATION_TEMPLATE_NAME || env.ORDER_CONFIRMATION_TEMPLATE_NAME || 'order_confirmation').trim();
   const lang = String(process.env.ORDER_CONFIRMATION_TEMPLATE_LANG || env.ORDER_CONFIRMATION_TEMPLATE_LANG || 'en').trim();
   if (!template) return { ok:false, skipped:true, reason:'Order confirmation template name missing.' };
-  
-  const productImage = await getOrderProductImage(order).catch(() => '');
-  let result = await sendTemplateWithOrderFallback(phone, template, lang, order, productImage);
-  if(!result.ok && productImage && isWhatsAppParamMismatch(result)){
-    const retry = await sendTemplateWithOrderFallback(phone, template, lang, order, '');
-    result = retry.ok ? retry : { ...result, noImageRetry: retry };
-  }
-  return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage && (result.request?.components || []).some(c => c.type === 'header')) };
-}
 
+  const productImage = await getOrderProductImage(order).catch(() => '');
+  let result = await sendOrderConfirmationExact(phone, template, lang, order, productImage);
+
+  if (!result.ok && !isWhatsAppParamMismatch(result)) {
+    const generic = await sendTemplateWithOrderFallback(phone, template, lang, order, productImage);
+    result = generic.ok ? generic : { ...result, genericFallback: generic };
+  }
+
+  return {
+    ...result,
+    productImage,
+    productTitle: orderFirstProductTitle(order),
+    imageHeaderSent: Boolean(productImage && (result.request?.components || []).some(c => c.type === 'header')),
+    debug:{ phone, template, lang, exactMetaFormat:true, bodyVariableCount:4, buttonParametersSent:false }
+  };
+}
 
 app.get('/api/cod/debug-logs', requireAdmin, (req,res)=>{
   const leads=readJson(leadsPath,[]).filter(l=>l && l.type==='shopify_order_webhook').slice(0,50);

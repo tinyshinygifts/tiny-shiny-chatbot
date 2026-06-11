@@ -1,23 +1,18 @@
 CHANGES_DONE
 
-v24 update:
-1. COD order confirmation WhatsApp fixed according to Meta screenshot.
-   Exact API format now sent for cod_order_confirmation:
-   - Header: Image
-   - Body: exactly 4 text variables
-     {{1}} Customer Name
-     {{2}} Product Name
-     {{3}} Order Number
-     {{4}} Order Amount
-   - Buttons: Confirm / Cancel / Visit website
-   - No button parameters are sent because these buttons are not dynamic URL placeholders.
+v25 update:
+1. CRM Dashboard Shopify order visibility fixed.
+   - Shopify order webhook leads are merged/backfilled into CRM when CRM loads.
+   - CRM cards now show order number, amount, payment method, COD flag, WhatsApp status and order status.
 
-2. This prevents Meta error #132012 caused by extra/mismatched button/header/body parameters.
+2. order_confirmation exact Meta template format added.
+   - Header Image + exactly 4 body variables + no button parameters.
 
-3. Debug now stores:
-   - exactMetaFormat: true
-   - bodyVariableCount: 4
-   - buttonParametersSent: false
+3. COD customer Cancel reply -> Shopify cancel improved.
+   - On customer Cancel/No/Nahi reply, Shopify cancel API is called with retry bodies.
+   - Order tag/note update remains.
+   - Customer/Admin messages now show whether Shopify cancel succeeded or failed.
+   - CRM/lead status records Shopify cancel success/failure.
 
 Base:
-- v23 ZIP used as base.
+- v24 ZIP used as base.
