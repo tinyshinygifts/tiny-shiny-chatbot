@@ -845,3 +845,30 @@ body:has(.api-top-actions) .brand-logo.small{width:76px!important;height:76px!im
   .whatsapp-only-page .wati-inbox-layout,.whatsapp-only-page .wati-left,.whatsapp-only-page .wati-center{min-height:0!important;}
   .whatsapp-only-page button,.whatsapp-only-page input,.whatsapp-only-page textarea,.whatsapp-only-page label{touch-action:manipulation!important;}
 }
+
+/* Mobile scroll + WhatsApp/Messenger layout fix 20260611053315 */
+@media(max-width:900px){
+  html, body{height:100%!important;}
+  body.whatsapp-only-page{overflow:auto!important;position:static!important;}
+  .whatsapp-only-page .admin-shell.whatsapp-app-shell{height:100dvh!important;min-height:100dvh!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;}
+  .whatsapp-only-page main{flex:1!important;min-height:0!important;overflow:hidden!important;}
+  .whatsapp-only-page #whatsappInboxPanel{height:100%!important;min-height:0!important;overflow:hidden!important;}
+  .whatsapp-only-page .wati-inbox-layout{height:100%!important;min-height:0!important;overflow:hidden!important;display:flex!important;}
+  .whatsapp-only-page .wati-left{height:100%!important;min-height:0!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;}
+  .whatsapp-only-page .wa-chat-list{flex:1!important;min-height:0!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-y!important;padding-bottom:120px!important;}
+  .whatsapp-only-page .wati-center{height:100%!important;min-height:0!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;}
+  .whatsapp-only-page .wa-active-chat{flex:1!important;min-height:0!important;overflow:hidden!important;display:flex!important;flex-direction:column!important;}
+  .whatsapp-only-page .wa-message-area{flex:1!important;min-height:0!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;touch-action:pan-y!important;padding-bottom:16px!important;}
+  .whatsapp-only-page .wati-composer{flex:0 0 auto!important;position:relative!important;bottom:auto!important;z-index:20!important;}
+  .whatsapp-only-page .channel-tabs{overflow-x:auto!important;-webkit-overflow-scrolling:touch!important;flex:0 0 auto!important;}
+  .whatsapp-only-page .wati-right{height:100%!important;overflow-y:auto!important;-webkit-overflow-scrolling:touch!important;}
+  body.wa-mobile-chat-open.whatsapp-only-page .wati-left{display:none!important;}
+  body.wa-mobile-chat-open.whatsapp-only-page .wati-center{display:flex!important;width:100%!important;}
+  body:not(.wa-mobile-chat-open).whatsapp-only-page .wati-center{display:none!important;}
+  body:not(.wa-mobile-chat-open).whatsapp-only-page .wati-left{display:flex!important;width:100%!important;}
+  .whatsapp-only-page .wa-chat-item{touch-action:manipulation!important;}
+}
+.unlimited-template-card{border:2px solid #f3cfe1!important;background:#fff7fb!important;}
+.unlimited-formats-list{display:grid;gap:10px;margin-top:12px;}
+.unlimited-format-row{display:grid;grid-template-columns:1.2fr 1fr 1.2fr auto;gap:10px;align-items:center;background:#fff;border:1px solid #f3cfe1;border-radius:14px;padding:10px;}
+@media(max-width:760px){.unlimited-format-row{grid-template-columns:1fr;}}

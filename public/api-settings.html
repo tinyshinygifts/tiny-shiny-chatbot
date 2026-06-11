@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>API Settings - Tiny Shiny Chatbot</title>
   <link rel="icon" href="/tiny-shiny-logo.jpg"/>
-  <link rel="stylesheet" href="/style.css?v=20260610143416"/>
+  <link rel="stylesheet" href="/style.css?v=20260611053315"/>
 </head>
 <body>
   <main class="admin-wrap">
@@ -261,7 +261,22 @@
           <div id="templateList" class="template-grid"></div>
         </div>
         <div class="template-editor template-editor-fixed">
-          <h3 id="templateEditorTitle">Add / Modify Template</h3>
+          <h3 
+        <section class="settings-card unlimited-template-card">
+          <h2>Unlimited WhatsApp API Formats</h2>
+          <p class="hint">Yaha jitne chaho utne WhatsApp formats/templates add kar sakte ho. Sirf 2 format ki limit remove kar di gayi hai.</p>
+          <div class="inline-actions">
+            <button id="addUnlimitedWhatsappFormat" type="button" class="primary-btn">+ Add Format</button>
+          </div>
+          <div id="unlimitedWhatsappFormats" class="unlimited-formats-list"></div>
+        </section>
+        <section class="settings-card">
+          <h2>COD WhatsApp Debug</h2>
+          <p class="hint">COD order message nahi jaye to yaha webhook, phone, COD detect aur WhatsApp API result dikhega.</p>
+          <button id="refreshCodDebugLogs" type="button" class="ghost-btn">Refresh COD Debug Logs</button>
+          <pre id="codDebugLogs" class="api-result-box"></pre>
+        </section>
+id="templateEditorTitle">Add / Modify Template</h3>
           <input id="templateId" type="hidden"/>
           <div class="template-form-grid">
             <label>Template Name <input id="templateName" placeholder="order_confirmation"/></label>
@@ -352,7 +367,7 @@ URL | Shop Now | https://www.tinyshinygifts.com"></textarea></label>
       <p>On Render hosting, add the same values in Render → Service → Environment.</p>
     </section>
   </main>
-  <script src="/api-settings.js?v=20260610143416"></script>
+  <script src="/api-settings.js?v=20260611053315"></script>
 
   <div id="apiErrorLogModal" class="modal hidden api-error-log-modal">
     <div class="modal-card wide">

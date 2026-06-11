@@ -7,7 +7,7 @@ let lastApiConnectionRows = [];
 let lastApiErrorLogKey = '';
 function $(id){ return document.getElementById(id); }
 function show(el, data){ el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); }
-const templateTargetLabels = {customer_followup:'Customer Follow-up', order_confirmation:'Order Confirmation', test_whatsapp:'Test WhatsApp / Owner'};
+const templateTargetLabels = {customer_followup:'Customer Follow-up', order_confirmation:'Order Confirmation', cod_order:'COD Order', ndr:'NDR', broadcast:'Broadcast', abandoned_cart:'Abandoned Cart', review_request:'Review Request', test_whatsapp:'Test WhatsApp / Owner', custom:'Custom'};
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
 function templateUsedTargets(t){ const serverTargets = Array.isArray(t.usedTargets) ? t.usedTargets : []; if(serverTargets.length) return serverTargets; return Object.entries(whatsappTemplateMappings||{}).filter(([,m])=>m && m.name && m.name===t.name).map(([k])=>k); }
 function templateValue(t){ return [t.name,t.category,t.language,t.useCase,t.body,(t.variables||[]).join(' ')].join(' ').toLowerCase(); }
@@ -27,12 +27,16 @@ function applyApiTemplateToTarget(tpl, target){
   } else if(target==='order_confirmation'){
     if($('ORDER_CONFIRMATION_TEMPLATE_NAME')) ORDER_CONFIRMATION_TEMPLATE_NAME.value=tpl.name||'';
     if($('ORDER_CONFIRMATION_TEMPLATE_LANG')) ORDER_CONFIRMATION_TEMPLATE_LANG.value=tpl.language||'en';
+  } else if(target==='cod_order'){
+    if($('COD_ORDER_CONFIRMATION_TEMPLATE_NAME')) COD_ORDER_CONFIRMATION_TEMPLATE_NAME.value=tpl.name||'';
+    if($('COD_ORDER_CONFIRMATION_TEMPLATE_LANG')) COD_ORDER_CONFIRMATION_TEMPLATE_LANG.value=tpl.language||'en';
   } else if(target==='test_whatsapp'){
     if($('WHATSAPP_TEST_TEMPLATE_NAME')) WHATSAPP_TEST_TEMPLATE_NAME.value=tpl.name||'';
     if($('WHATSAPP_TEST_TEMPLATE_LANG')) WHATSAPP_TEST_TEMPLATE_LANG.value=tpl.language||'en_US';
   }
   renderApiTemplates();
   renderTemplates();
+  renderUnlimitedWhatsappFormats();
 }
 function templateBySelectValue(value){ return whatsappTemplates.find(t=>String(t.id)===String(value) || t.name===value); }
 function selectedMapTarget(){ return $('templateMapTarget')?.value || 'customer_followup'; }
@@ -116,6 +120,7 @@ function applyMappingsToFields(mappings){
   if(!mappings) return;
   if(mappings.customer_followup){ if($('CUSTOMER_WHATSAPP_TEMPLATE_NAME')) CUSTOMER_WHATSAPP_TEMPLATE_NAME.value=mappings.customer_followup.name||''; if($('CUSTOMER_WHATSAPP_TEMPLATE_LANG')) CUSTOMER_WHATSAPP_TEMPLATE_LANG.value=mappings.customer_followup.language||'en'; if($('CUSTOMER_WHATSAPP_MESSAGES_ENABLED')) CUSTOMER_WHATSAPP_MESSAGES_ENABLED.value=String(mappings.customer_followup.enabled ?? CUSTOMER_WHATSAPP_MESSAGES_ENABLED.value ?? 'false'); }
   if(mappings.order_confirmation){ if($('ORDER_CONFIRMATION_TEMPLATE_NAME')) ORDER_CONFIRMATION_TEMPLATE_NAME.value=mappings.order_confirmation.name||''; if($('ORDER_CONFIRMATION_TEMPLATE_LANG')) ORDER_CONFIRMATION_TEMPLATE_LANG.value=mappings.order_confirmation.language||'en'; if($('ORDER_CONFIRMATION_WHATSAPP_ENABLED')) ORDER_CONFIRMATION_WHATSAPP_ENABLED.value=String(mappings.order_confirmation.enabled ?? ORDER_CONFIRMATION_WHATSAPP_ENABLED.value ?? 'false'); }
+  if(mappings.cod_order){ if($('COD_ORDER_CONFIRMATION_TEMPLATE_NAME')) COD_ORDER_CONFIRMATION_TEMPLATE_NAME.value=mappings.cod_order.name||''; if($('COD_ORDER_CONFIRMATION_TEMPLATE_LANG')) COD_ORDER_CONFIRMATION_TEMPLATE_LANG.value=mappings.cod_order.language||'en'; if($('COD_CONFIRMATION_WHATSAPP_ENABLED')) COD_CONFIRMATION_WHATSAPP_ENABLED.value=String(mappings.cod_order.enabled ?? COD_CONFIRMATION_WHATSAPP_ENABLED.value ?? 'true'); }
   if(mappings.test_whatsapp){ if($('WHATSAPP_TEST_TEMPLATE_NAME')) WHATSAPP_TEST_TEMPLATE_NAME.value=mappings.test_whatsapp.name||''; if($('WHATSAPP_TEST_TEMPLATE_LANG')) WHATSAPP_TEST_TEMPLATE_LANG.value=mappings.test_whatsapp.language||'en_US'; }
 }
 async function saveTemplate(){
@@ -174,6 +179,9 @@ function renderApiTemplates(){
   const current={
     customer_followup: $('CUSTOMER_WHATSAPP_TEMPLATE_NAME')?.value.trim()||'',
     order_confirmation: $('ORDER_CONFIRMATION_TEMPLATE_NAME')?.value.trim()||'',
+    cod_order: $('COD_ORDER_CONFIRMATION_TEMPLATE_NAME')?.value.trim()||'',
+    ndr: $('NDR_TEMPLATE_NAME')?.value?.trim?.()||'',
+    broadcast: $('BROADCAST_TEMPLATE_NAME')?.value?.trim?.()||'',
     test_whatsapp: $('WHATSAPP_TEST_TEMPLATE_NAME')?.value.trim()||''
   };
   box.innerHTML = whatsappTemplates.map(t=>{
@@ -452,3 +460,37 @@ document.addEventListener('click', e=>{
   if(e.target && e.target.id==='copyApiErrorLog') copyApiErrorLog();
   if(e.target && e.target.id==='testApiAgain') loadConnectionStatus();
 });
+
+
+function renderUnlimitedWhatsappFormats(){
+  const box=$('unlimitedWhatsappFormats'); if(!box) return;
+  box.innerHTML=(whatsappTemplates||[]).map((t,i)=>`<div class="unlimited-format-row">
+    <b>${esc(i+1)}. ${esc(t.name)}</b>
+    <span>${esc(t.language||'en')} • ${esc(t.category||'Utility')} • Header: ${esc(t.headerType||'None')}</span>
+    <small>${esc(t.useCase||'')}</small>
+    <button type="button" class="ghost-btn compact-btn" data-edit-template="${esc(t.id)}">Edit</button>
+  </div>`).join('') || '<p class="hint">Abhi koi format nahi hai. + Add Format click karo.</p>';
+}
+function addQuickWhatsappFormat(){
+  clearTemplateForm();
+  const n=(whatsappTemplates||[]).length+1;
+  if($('templateName')) templateName.value='custom_template_'+n;
+  if($('templateLanguage')) templateLanguage.value='en';
+  if($('templateCategory')) templateCategory.value='Utility';
+  if($('templateHeaderType')) templateHeaderType.value='None';
+  if($('templateUseCase')) templateUseCase.value='Custom / Manual / Broadcast';
+  if($('templateBody')) templateBody.value='Hi {{1}}, thank you for connecting with Tiny Shiny Gifts.';
+  if($('templateVariables')) templateVariables.value='Customer Name';
+  if($('templateEditorTitle')) templateEditorTitle.textContent='Add New WhatsApp Format';
+  document.getElementById('templateName')?.scrollIntoView({behavior:'smooth',block:'center'});
+}
+document.addEventListener('click', e=>{
+  if(e.target.id==='addUnlimitedWhatsappFormat') addQuickWhatsappFormat();
+  if(e.target.id==='refreshCodDebugLogs') loadCodDebugLogs();
+});
+async function loadCodDebugLogs(){
+  const box=$('codDebugLogs'); if(!box) return;
+  const d=await fetch('/api/cod/debug-logs',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  box.textContent=JSON.stringify(d,null,2);
+}
+setInterval(renderUnlimitedWhatsappFormats, 2500);

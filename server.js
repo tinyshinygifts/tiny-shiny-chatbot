@@ -609,6 +609,27 @@ function getWhatsAppTemplateMappings(env = readEnvFile()) {
       language: env.ORDER_CONFIRMATION_TEMPLATE_LANG || 'en',
       enabled: String(env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || 'false').toLowerCase() === 'true'
     },
+    cod_order: {
+      key: 'COD_ORDER_CONFIRMATION_TEMPLATE_NAME',
+      langKey: 'COD_ORDER_CONFIRMATION_TEMPLATE_LANG',
+      name: env.COD_ORDER_CONFIRMATION_TEMPLATE_NAME || '',
+      language: env.COD_ORDER_CONFIRMATION_TEMPLATE_LANG || 'en',
+      enabled: String(env.COD_CONFIRMATION_WHATSAPP_ENABLED || 'true').toLowerCase() === 'true'
+    },
+    ndr: {
+      key: 'NDR_TEMPLATE_NAME',
+      langKey: 'NDR_TEMPLATE_LANG',
+      name: env.NDR_TEMPLATE_NAME || '',
+      language: env.NDR_TEMPLATE_LANG || 'en',
+      enabled: Boolean(env.NDR_TEMPLATE_NAME)
+    },
+    broadcast: {
+      key: 'BROADCAST_TEMPLATE_NAME',
+      langKey: 'BROADCAST_TEMPLATE_LANG',
+      name: env.BROADCAST_TEMPLATE_NAME || '',
+      language: env.BROADCAST_TEMPLATE_LANG || 'en',
+      enabled: Boolean(env.BROADCAST_TEMPLATE_NAME)
+    },
     test_whatsapp: {
       key: 'WHATSAPP_TEST_TEMPLATE_NAME',
       langKey: 'WHATSAPP_TEST_TEMPLATE_LANG',
@@ -1181,11 +1202,21 @@ app.post('/api/whatsapp-templates/use', (req, res) => {
     update.ORDER_CONFIRMATION_WHATSAPP_ENABLED = 'true';
     update.ORDER_CONFIRMATION_TEMPLATE_NAME = tpl.name;
     update.ORDER_CONFIRMATION_TEMPLATE_LANG = tpl.language || 'en';
+  } else if (target === 'cod_order') {
+    update.COD_CONFIRMATION_WHATSAPP_ENABLED = 'true';
+    update.COD_ORDER_CONFIRMATION_TEMPLATE_NAME = tpl.name;
+    update.COD_ORDER_CONFIRMATION_TEMPLATE_LANG = tpl.language || 'en';
+  } else if (target === 'ndr') {
+    update.NDR_TEMPLATE_NAME = tpl.name;
+    update.NDR_TEMPLATE_LANG = tpl.language || 'en';
+  } else if (target === 'broadcast') {
+    update.BROADCAST_TEMPLATE_NAME = tpl.name;
+    update.BROADCAST_TEMPLATE_LANG = tpl.language || 'en';
   } else if (target === 'test_whatsapp') {
     update.WHATSAPP_TEST_TEMPLATE_NAME = tpl.name;
     update.WHATSAPP_TEST_TEMPLATE_LANG = tpl.language || 'en';
   } else {
-    return res.status(400).json({ ok:false, error:'Target required: customer_followup, order_confirmation, or test_whatsapp' });
+    return res.status(400).json({ ok:false, error:'Target required: customer_followup, order_confirmation, cod_order, ndr, broadcast, or test_whatsapp' });
   }
   writeEnvFile({ ...env, ...update });
   {
@@ -1220,7 +1251,7 @@ app.post('/api/whatsapp-templates/unuse', (req, res) => {
       update.WHATSAPP_TEST_TEMPLATE_LANG = env.WHATSAPP_TEST_TEMPLATE_LANG || 'en_US';
     }
   } else {
-    return res.status(400).json({ ok:false, error:'Target required: customer_followup, order_confirmation, or test_whatsapp' });
+    return res.status(400).json({ ok:false, error:'Target required: customer_followup, order_confirmation, cod_order, ndr, broadcast, or test_whatsapp' });
   }
   writeEnvFile({ ...env, ...update });
   const savedEnv = readEnvFile();
@@ -2596,7 +2627,7 @@ function isCodOrder(order = {}) {
     order.note,
     order.source_name
   ].flat().filter(Boolean).join(' ').toLowerCase();
-  return /\bcod\b|cash on delivery|cash_on_delivery|manual payment|payment on delivery/.test(parts);
+  return /\bcod\b|cash\s*on\s*delivery|cash_on_delivery|manual payment|payment on delivery|pay on delivery|cod[_\s-]?order|cash/i.test(parts);
 }
 async function codTemplateComponents(order = {}, options = {}) {
   // COD template also uses image header when product image is available.
@@ -2604,18 +2635,22 @@ async function codTemplateComponents(order = {}, options = {}) {
 }
 async function sendCodConfirmationToCustomer(order = {}) {
   const env = readEnvFile();
-  const orderEnabled = String(process.env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || env.ORDER_CONFIRMATION_WHATSAPP_ENABLED || 'false').toLowerCase() === 'true';
+  // COD confirmation has its own switch. It should work even when normal prepaid order confirmation is OFF.
   const codEnabledRaw = process.env.COD_CONFIRMATION_WHATSAPP_ENABLED || env.COD_CONFIRMATION_WHATSAPP_ENABLED || 'true';
   const codEnabled = String(codEnabledRaw).toLowerCase() === 'true';
   const phone = orderCustomerPhone(order);
-  if (!orderEnabled || !codEnabled || !phone) return { ok:false, skipped:true, reason: !phone ? 'Customer phone missing or invalid.' : 'COD confirmation WhatsApp disabled.' };
+  if (!codEnabled || !phone) return { ok:false, skipped:true, reason: !phone ? 'Customer phone missing or invalid.' : 'COD confirmation WhatsApp disabled.' };
   const template = String(process.env.COD_ORDER_CONFIRMATION_TEMPLATE_NAME || env.COD_ORDER_CONFIRMATION_TEMPLATE_NAME || 'cod_order_confirmation').trim();
   const lang = String(process.env.COD_ORDER_CONFIRMATION_TEMPLATE_LANG || env.COD_ORDER_CONFIRMATION_TEMPLATE_LANG || 'en').trim();
   if (!template) return { ok:false, skipped:true, reason:'COD confirmation template name missing.' };
   
   const productImage = await getOrderProductImage(order).catch(() => '');
-  const result = await sendTemplateWithOrderFallback(phone, template, lang, order, productImage);
-  return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage && (result.request?.components || []).some(c => c.type === 'header')) };
+  let result = await sendTemplateWithOrderFallback(phone, template, lang, order, productImage);
+  // Last fallback: try no-image template attempt when image header/template mismatch blocks COD message.
+  if(!result.ok && productImage){
+    result = await sendTemplateWithOrderFallback(phone, template, lang, order, '');
+  }
+  return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage && (result.request?.components || []).some(c => c.type === 'header')), debug:{phone, template, lang, codEnabled:true, gateways:order.payment_gateway_names||[], financialStatus:order.financial_status||''} };
 }
 function findLatestCodPendingLead(phone) {
   const p = normalizeWhatsAppPhone(phone);
@@ -2705,6 +2740,16 @@ async function sendOrderConfirmationToCustomer(order = {}) {
   const result = await sendTemplateWithOrderFallback(phone, template, lang, order, productImage);
   return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage && (result.request?.components || []).some(c => c.type === 'header')) };
 }
+
+
+app.get('/api/cod/debug-logs', requireAdmin, (req,res)=>{
+  const leads=readJson(leadsPath,[]).filter(l=>l && l.type==='shopify_order_webhook').slice(0,50);
+  res.json({ok:true, count:leads.length, logs:leads.map(l=>({
+    createdAt:l.createdAt, orderName:l.orderName, phone:l.phone, isCodOrder:l.isCodOrder,
+    paymentGateways:l.paymentGateways, financialStatus:l.financialStatus, status:l.status,
+    message:l.message, whatsappResult:l.whatsappResult
+  }))});
+});
 
 app.post('/webhooks/shopify/orders/create', async (req, res) => {
   const order = req.body || {};
