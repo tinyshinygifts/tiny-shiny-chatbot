@@ -33,9 +33,9 @@
       .tsgMsg{margin:10px 0;padding:12px 14px;border-radius:16px;white-space:pre-wrap;line-height:1.4;font-size:14px;word-break:break-word}
       .tsgBot{margin-right:28px;background:#fff;border:1px solid #ece1e8;color:#494349;border-bottom-left-radius:8px;box-shadow:0 3px 10px rgba(0,0,0,.03)}
       .tsgUser{margin-left:42px;background:${pink};color:#fff;border-bottom-right-radius:8px;box-shadow:0 4px 10px rgba(214,51,132,.18)}
-      .tsgHeroAction{display:block;width:100%;border:0;background:${pink};color:#fff;border-radius:16px;padding:12px 14px;font-weight:900;font-size:14px;cursor:pointer;margin:8px 0 12px;box-shadow:0 10px 20px rgba(214,51,132,.22)}
-      .tsgChipWrap{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
-      .tsgChip{border:1px solid #e5cad8;background:#fff;color:#4a4049;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer}
+      .tsgHeroAction{display:none!important}
+      .tsgChipWrap{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px;margin-top:10px}
+      .tsgChip{border:1px solid #e5cad8;background:#fff;color:#4a4049;border-radius:999px;padding:8px 8px;font-size:12px;font-weight:800;cursor:pointer;text-align:center;white-space:nowrap;min-width:0}
       .tsgChip:hover{background:#fff4f8;border-color:#d9a8c3}
       .tsgActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
       .tsgAction{border:0;background:${pink};color:#fff;border-radius:999px;padding:9px 12px;font-weight:900;cursor:pointer;text-decoration:none;display:inline-flex}
@@ -45,7 +45,7 @@
       @media(max-width:520px){
         #tsgChatFab{right:10px;bottom:10px;width:96px;height:66px}
         #tsgChatBox{right:8px;left:8px;bottom:84px;width:auto;max-height:82vh;border-radius:22px}
-        #tsgChatMsgs{height:410px;max-height:62vh}
+        #tsgChatMsgs{height:410px;max-height:62vh}.tsgChipWrap{grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}.tsgChip{font-size:11px;padding:8px 5px}
       }
     `;
     const old=document.getElementById('tsgChatStyle');
@@ -121,13 +121,6 @@
 
     function renderStarterUI(){
       const welcomeBubble = addMsg(settings.welcomeMessage || defaultWelcome, 'bot');
-      const heroBtn=document.createElement('button');
-      heroBtn.type='button';
-      heroBtn.className='tsgHeroAction';
-      heroBtn.textContent='WhatsApp support';
-      heroBtn.onclick=()=>send('WhatsApp support');
-      msgs.appendChild(heroBtn);
-
       const chipWrap=document.createElement('div');
       chipWrap.className='tsgChipWrap';
       [

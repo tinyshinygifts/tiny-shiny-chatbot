@@ -1,16 +1,11 @@
 CHANGES_DONE
 
-v20 update:
-1. Website chatbot redesigned to match the shared reference look.
-2. Header:
-   - Tiny Shiny Assistant
-   - Usually replies instantly
-3. Starter layout on open:
-   - Welcome bubble
-   - Big pink WhatsApp support button
-   - Quick chips: Confirm my order, Track my order, COD available?, Shipping charges, Return policy, WhatsApp support
-4. Bottom input + Send button styled like the reference.
-5. Floating pink chat logo remains in use.
+v21 update:
+1. Big pink "WhatsApp support" button removed from website chatbot.
+2. Quick chips arranged cleanly in exactly 2 lines:
+   Row 1: Confirm my order | Track my order | COD available?
+   Row 2: Shipping charges | Return policy | WhatsApp support
+3. Mobile layout adjusted so chips stay neat and do not wrap randomly.
 
 Base:
-- v19 ZIP used as base.
+- v20 ZIP used as base.
