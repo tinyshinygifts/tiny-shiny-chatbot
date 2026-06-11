@@ -237,8 +237,11 @@
         <label>Approved Template <select id="broadcastTemplate"><option value="">Select template</option></select></label>
         <label>Template Language <input id="broadcastTemplateLang" value="en"/></label>
       </div>
-      <div class="form-grid four">
+      <div class="form-grid five broadcast-image-url-row">
         <label>Image URL Optional <input id="broadcastImageUrl" placeholder="https://cdn.shopify.com/...jpg"/></label>
+        <label>Select Uploaded Image
+          <select id="broadcastUploadedImageSelect"><option value="">Select uploaded image</option></select>
+        </label>
         <label>Product / Collection Link <input id="broadcastProductLink" placeholder="https://tinyshinygifts.com/collections/..."/></label>
         <label>Coupon Code <input id="broadcastCouponCode" placeholder="RAKHI10"/></label>
         <label>Daily Sending Limit <select id="broadcastDailyLimit"><option>500</option><option>1000</option><option>5000</option></select></label>
@@ -260,12 +263,12 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
 
       <div class="broadcast-image-library" id="broadcastImageLibraryBox">
         <h3>Image + Text Message</h3>
-        <p class="hint">Image URL upar dal sakte hain. File upload karne par image preview/filename yaha dikhega; live sending ke liye public Image URL best rahega.</p>
+        <p class="hint">Yaha image upload karne par public URL auto generate hoga aur Image URL field me fill ho jayega. Uploaded images dropdown me bhi available rahengi.</p>
         <div class="form-grid two">
           <label>Upload Image Optional <input id="broadcastImageFile" type="file" accept="image/*"/></label>
           <label>Image Caption / Extra Text <input id="broadcastImageCaption" placeholder="Caption / offer text"/></label>
         </div>
-        <div id="broadcastImageLibrary" class="image-library-inline"></div>
+        <div id="broadcastImageUploadStatus" class="hint"></div>
       </div>
       <div class="broadcast-contact-tools">
         <label>Search Customer <input id="broadcastCustomerSearch" list="broadcastCustomerDatalist" placeholder="Name, phone, email, city, tag"/></label>
@@ -284,6 +287,15 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
       </div>
       <div class="broadcast-summary" id="broadcastSummary">0 contacts selected</div>
       <div id="broadcastContactsList" class="broadcast-contacts-list"></div>
+
+      <div class="broadcast-image-manager panel-lite">
+        <div class="section-head mini">
+          <div><h3>Uploaded Image Library</h3><p class="hint">Yaha se image manage karo. Copy Link se URL milega; dropdown se select karne par Image URL auto fill hoga.</p></div>
+          <button id="refreshBroadcastImages" class="ghost-btn" type="button">Refresh Images</button>
+        </div>
+        <div id="broadcastImageLibrary" class="image-library-inline"></div>
+      </div>
+
       <h3>Campaign History / Delivery Status</h3>
       
       <pre id="broadcastResult"></pre>

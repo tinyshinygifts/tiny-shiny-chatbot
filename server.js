@@ -1706,7 +1706,8 @@ app.post('/api/broadcast/campaigns', async (req,res)=>{
     for(const c of contacts){ if(!seen.has(c.phone)){ seen.add(c.phone); unique.push(c); } }
     const validation = validateBroadcastBeforeSend(body, unique);
     if(!validation.ok) return res.status(400).json({ ok:false, error:validation.error, validation });
-    const campaign={ id:crypto.randomUUID(), name:String(body.name||'WhatsApp Broadcast').trim(), category:String(body.category||'All').trim(), templateName:String(body.templateName||'').trim(), templateLang:String(body.templateLang||validation.template?.language||'en').trim(), imageUrl:String(body.imageUrl||'').trim(), productLink:String(body.productLink||'').trim(), couponCode:String(body.couponCode||'').trim(), imageCaption:String(body.imageCaption||'').trim(), messageType:String(body.messageType||'template').trim(), variables:Array.isArray(body.variables)?body.variables:[], dailyLimit:Number(body.dailyLimit||500)||500, scheduleAt:body.scheduleAt||'', contacts:unique, results:[], status:body.scheduleAt && new Date(body.scheduleAt).getTime()>Date.now()?'scheduled':'queued', createdAt:nowIso(), updatedAt:nowIso() };
+    const finalImageUrl = String(body.imageUrl || '').trim() ? absoluteUrl(req, String(body.imageUrl || '').trim()) : '';
+    const campaign={ id:crypto.randomUUID(), name:String(body.name||'WhatsApp Broadcast').trim(), category:String(body.category||'All').trim(), templateName:String(body.templateName||'').trim(), templateLang:String(body.templateLang||validation.template?.language||'en').trim(), imageUrl:finalImageUrl, productLink:String(body.productLink||'').trim(), couponCode:String(body.couponCode||'').trim(), imageCaption:String(body.imageCaption||'').trim(), messageType:String(body.messageType||'template').trim(), variables:Array.isArray(body.variables)?body.variables:[], dailyLimit:Number(body.dailyLimit||500)||500, scheduleAt:body.scheduleAt||'', contacts:unique, results:[], status:body.scheduleAt && new Date(body.scheduleAt).getTime()>Date.now()?'scheduled':'queued', createdAt:nowIso(), updatedAt:nowIso() };
     const campaigns=readJson(broadcastCampaignsPath, []); campaigns.unshift(campaign); writeJson(broadcastCampaignsPath,campaigns.slice(0,500));
     if(campaign.status==='queued') await processBroadcastCampaign(campaign.id);
     const saved=readJson(broadcastCampaignsPath, []).find(c=>c.id===campaign.id) || campaign;
@@ -2702,6 +2703,10 @@ function absoluteImageUrl(url) {
   if (!raw) return '';
   if (/^https?:\/\//i.test(raw)) return raw;
   if (raw.startsWith('//')) return 'https:' + raw;
+  if (raw.startsWith('/uploads/')) {
+    const appBase = String(process.env.SHOPIFY_APP_URL || process.env.CHATBOT_BASE_URL || process.env.APP_URL || '').replace(/\/$/, '');
+    if (appBase) return appBase + raw;
+  }
   const base = String(process.env.WEBSITE_URL || 'https://www.tinyshinygifts.com').replace(/\/$/, '');
   return raw.startsWith('/') ? base + raw : raw;
 }

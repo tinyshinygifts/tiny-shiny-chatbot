@@ -635,7 +635,7 @@ async function loadMedia(){
   mediaImages=d.images||[];
   selectedMediaIds = selectedMediaIds.filter(id=>mediaImages.some(img=>String(img.id)===String(id)));
   selectedMediaId = selectedMediaIds[0] || '';
-  renderSelectedMedia(); renderWhatsappReplyImages();
+  renderSelectedMedia(); renderWhatsappReplyImages(); renderBroadcastImageLibrary();
   if(!$('mediaList')) return;
   mediaList.innerHTML=mediaImages.map(img=>{
     const selected=selectedMediaIds.includes(img.id);
@@ -1019,7 +1019,7 @@ function setupPwaInstall(){
 setupPwaInstall();
 
 document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); if(e.target.id==='broadcastCategory'||e.target.id==='broadcastCustomerSearch'||e.target.id==='broadcastFilterBy') renderBroadcastContacts(); if(e.target.dataset && e.target.dataset.broadcastVarCustom!==undefined) updateBroadcastVariablesFromMap(); if(e.target.id==='salesOrderSearch') clearTimeout(window.__salesOrderSearchTimer), window.__salesOrderSearchTimer=setTimeout(searchSalesOrders,450); if(e.target.dataset.flowEdit){ const flow=activeFlow(); const i=Number(e.target.dataset.flowIndex); if(flow.blocks&&flow.blocks[i]){ flow.blocks[i][e.target.dataset.flowEdit]=e.target.value; } } const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); if(e.target.checked) phones.forEach(p=>broadcastSelectedPhones.add(p)); else phones.forEach(p=>broadcastSelectedPhones.delete(p)); document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=e.target.checked); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ const f=e.target.files[0]; if($('broadcastImageLibrary')) broadcastImageLibrary.innerHTML=`<div class="hint">Selected image: ${esc(f.name)}. Live send ke liye public Image URL upar paste karein.</div>`; } });
+document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); if(e.target.checked) phones.forEach(p=>broadcastSelectedPhones.add(p)); else phones.forEach(p=>broadcastSelectedPhones.delete(p)); document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=e.target.checked); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ uploadBroadcastImageFile(e.target.files[0]); } if(e.target.id==='broadcastUploadedImageSelect'){ if($('broadcastImageUrl')) broadcastImageUrl.value=e.target.value||''; } });
 document.addEventListener('click',async e=>{
 
   if(e.target.classList && e.target.classList.contains('contact-tab')){ const target=e.target.dataset.target; const mode=e.target.dataset.contactFilter || 'with'; if(target==='crm'){ crmContactFilter=mode; renderCrm(); } if(target==='lead'){ leadContactFilter=mode; renderLeads(); } if(target==='activity'){ activityContactFilter=mode; renderEvents(); } return; }
@@ -1063,6 +1063,7 @@ document.addEventListener('click',async e=>{
   if(e.target.id==='loadBroadcastContacts') importShopifyToBroadcast();
   if(e.target.id==='importBroadcastPaste') importBroadcastPaste();
   if(e.target.id==='clearBroadcastContacts'){ broadcastContacts=[]; broadcastSelectedPhones=new Set(); renderBroadcastContacts(); } if(e.target.id==='broadcastDeselectAll'){ broadcastSelectedPhones=new Set(); document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=false); renderBroadcastContacts(); }
+  if(e.target.id==='refreshBroadcastImages') loadMedia();
   if(e.target.id==='sendBroadcastNow') createBroadcast();
   if(e.target.id==='refreshBroadcasts') loadBroadcasts();
   if(e.target.id==='saveWhatsappChatbot') saveWhatsappChatbotSettings();
@@ -1670,12 +1671,57 @@ document.addEventListener('click', e=>{
 document.addEventListener('input', e=>{ if(e.target.dataset.catName!==undefined || e.target.dataset.catLink!==undefined || e.target.dataset.catActive!==undefined){ waBotSettings.catalogCategories=collectCatalogCategories(); }});
 document.addEventListener('change', e=>{ if(e.target.dataset.catActive!==undefined){ waBotSettings.catalogCategories=collectCatalogCategories(); }});
 
-function renderBroadcastImageLibrary(){
-  const box=$('broadcastImageLibrary'); if(!box) return;
-  box.innerHTML=(mediaImages||[]).slice(0,20).map(img=>`<button type="button" class="broadcast-img-choice" data-use-broadcast-img="${esc(img.url||'')}"><img src="${esc(img.url||'')}" alt=""><span>${esc(img.title||img.filename||'Image')}</span></button>`).join('') || '<p class="hint">No saved images yet.</p>';
+function broadcastImageUrl(img){ return img.absoluteUrl || img.url || ''; }
+function renderBroadcastUploadedImageDropdown(){
+  const sel=$('broadcastUploadedImageSelect'); if(!sel) return;
+  const current=sel.value;
+  sel.innerHTML='<option value="">Select uploaded image</option>' + (mediaImages||[]).map(img=>`<option value="${esc(broadcastImageUrl(img))}">${esc(img.title||img.originalName||img.filename||'Image')}</option>`).join('');
+  if(current && [...sel.options].some(o=>o.value===current)) sel.value=current;
 }
-document.addEventListener('click', e=>{ const b=e.target.closest('[data-use-broadcast-img]'); if(b && $('broadcastImageUrl')) broadcastImageUrl.value=b.dataset.useBroadcastImg; });
-setInterval(renderBroadcastImageLibrary, 3000);
+function renderBroadcastImageLibrary(){
+  renderBroadcastUploadedImageDropdown();
+  const box=$('broadcastImageLibrary'); if(!box) return;
+  box.innerHTML=(mediaImages||[]).slice(0,80).map(img=>{
+    const url=broadcastImageUrl(img);
+    return `<div class="broadcast-image-card" data-broadcast-image-card="${esc(img.id)}">
+      <img src="${esc(url)}" alt="${esc(img.title||img.filename||'Image')}"/>
+      <div class="broadcast-image-meta"><b>${esc(img.title||img.originalName||img.filename||'Image')}</b><small>${esc(url)}</small></div>
+      <div class="broadcast-image-actions">
+        <button type="button" class="ghost-btn" data-use-broadcast-img="${esc(url)}">Use</button>
+        <button type="button" class="ghost-btn" data-copy-broadcast-img="${esc(url)}">Copy Link</button>
+        <button type="button" class="ghost-btn danger-outline" data-delete-broadcast-img="${esc(img.id)}">Remove</button>
+      </div>
+    </div>`;
+  }).join('') || '<p class="hint">No saved images yet. Upar Upload Image Optional se image upload karo.</p>';
+}
+async function uploadBroadcastImageFile(file){
+  if(!file) return;
+  const status=$('broadcastImageUploadStatus');
+  if(status) status.textContent='Uploading image and creating public URL...';
+  try{
+    if(!/^image\//i.test(file.type||'')) throw new Error('Only image file upload karo.');
+    if(file.size>8*1024*1024) throw new Error('Image 8 MB se choti honi chahiye.');
+    const dataUrl=await fileToDataUrl(file);
+    const res=await fetch('/api/media-images',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:file.name,title:file.name,category:'broadcast',caption:$('broadcastImageCaption')?.value||'',dataUrl})}).then(r=>r.json());
+    if(!res.ok) throw new Error(res.error||'Image upload failed');
+    await loadMedia();
+    const url=res.image?.absoluteUrl || res.image?.url || '';
+    if($('broadcastImageUrl')) broadcastImageUrl.value=url;
+    if($('broadcastUploadedImageSelect')) broadcastUploadedImageSelect.value=url;
+    if(status) status.textContent='Image uploaded. Public URL generated and filled in Image URL field.';
+  }catch(e){
+    if(status) status.textContent='Image upload failed: '+e.message;
+    alert('Image upload failed: '+e.message);
+  }
+}
+document.addEventListener('click', async e=>{
+  const use=e.target.closest('[data-use-broadcast-img]');
+  if(use && $('broadcastImageUrl')){ broadcastImageUrl.value=use.dataset.useBroadcastImg; if($('broadcastUploadedImageSelect')) broadcastUploadedImageSelect.value=use.dataset.useBroadcastImg; return; }
+  const copy=e.target.closest('[data-copy-broadcast-img]');
+  if(copy){ try{ await navigator.clipboard.writeText(copy.dataset.copyBroadcastImg||''); alert('Image link copied.'); }catch(err){ prompt('Copy image link:', copy.dataset.copyBroadcastImg||''); } return; }
+  const del=e.target.closest('[data-delete-broadcast-img]');
+  if(del){ if(confirm('Remove this image from library?')){ await fetch('/api/media-images/'+encodeURIComponent(del.dataset.deleteBroadcastImg),{method:'DELETE',credentials:'include'}); await loadMedia(); } return; }
+});
 
 (function tsgLoaderSafetyMobileFinal(){
   function killLoader(){
