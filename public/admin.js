@@ -604,7 +604,7 @@ function renderCrm(){
   const st=$('crmStatusFilter')?.value||'';
   renderCrmTabs();
   const base=contactFiltered(crmCustomers, crmContactFilter);
-  const filtered=base.filter(c=>(!q||crmValue(c).includes(q))&&(!st||(c.status||'New')===st));
+  const filtered=base.filter(c=>(!q||crmValue(c).includes(q))&&(!st||(c.status||'New')===st)).sort((x,y)=>String(y.updatedAt||y.createdAt||'').localeCompare(String(x.updatedAt||x.createdAt||'')));
   if($('crmCount')) crmCount.textContent=crmCustomers.length;
   if($('crmSummary')){
     const counts=crmCustomers.reduce((a,c)=>{const k=c.status||'New';a[k]=(a[k]||0)+1;return a;},{});

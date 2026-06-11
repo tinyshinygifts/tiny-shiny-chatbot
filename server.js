@@ -456,23 +456,45 @@ function flattenForSheet(obj, prefix = '', out = {}) {
   }
   return out;
 }
+
+function splitStatusParts(value='') {
+  return String(value || '').split('|').map(x => x.trim()).filter(Boolean);
+}
+function appendStatusLine(oldValue='', newValue='') {
+  const parts = [];
+  for (const p of splitStatusParts(oldValue).concat(splitStatusParts(newValue))) {
+    if (p && !parts.some(x => x.toLowerCase() === p.toLowerCase())) parts.push(p);
+  }
+  return parts.join(' | ');
+}
+function normalizedOrderKeyValue(value='') {
+  return cleanText(value).replace(/^#/, '').trim().toLowerCase();
+}
+function crmOrderIdFromRecord(record = {}) {
+  const raw = record.raw || {};
+  return cleanText(record.orderName || record.orderId || record.orderNumber || raw.name || raw.order_number || raw.id);
+}
+function isOrderCrmType(record = {}) {
+  const type = String(record.type || record.sourceType || '').toLowerCase();
+  return ['shopify_order_webhook','cod_order_confirmed','cod_order_cancelled','order_confirmation','cod_confirmation'].includes(type) || Boolean(crmOrderIdFromRecord(record) && (record.isShopifyOrder || record.isCodOrder));
+}
 function crmKey(record = {}) {
   const raw = record.raw || {};
-  const type = String(record.type || '').toLowerCase();
-  const orderId = cleanText(record.orderName || record.orderId || record.orderNumber || raw.name || raw.order_number || raw.id);
-  const orderTypes = ['shopify_order_webhook','cod_order_confirmed','cod_order_cancelled','order_confirmation','cod_confirmation'];
-  // Shopify order records must be order-wise, not phone-wise. Same customer can have many orders.
-  if (orderId && orderTypes.includes(type)) return `order:${orderId}`;
+  const orderId = crmOrderIdFromRecord(record);
+  if (orderId && isOrderCrmType(record)) return `order:${normalizedOrderKeyValue(orderId)}`;
   const phone = normalizeWhatsAppPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || raw.phone || raw.customer?.phone || raw.billing_address?.phone || raw.shipping_address?.phone || raw.customer?.default_address?.phone);
   const email = cleanText(record.email || record.customerEmail || record.customer?.email || raw.email || raw.customer?.email || raw.contact_email).toLowerCase();
   const visitor = cleanText(record.visitorId);
-  return phone ? `phone:${phone}` : email ? `email:${email}` : visitor ? `visitor:${visitor}` : orderId ? `order:${orderId}` : `lead:${record.id || crypto.randomUUID()}`;
+  return phone ? `phone:${phone}` : email ? `email:${email}` : visitor ? `visitor:${visitor}` : orderId ? `order:${normalizedOrderKeyValue(orderId)}` : `lead:${record.id || crypto.randomUUID()}`;
 }
 function upsertCrm(record = {}, source = 'lead') {
   const key = crmKey(record);
   const all = readJson(crmPath, []);
-  const idx = all.findIndex(x => x.crmKey === key);
   const raw = record.raw || {};
+  const orderIdForMerge = crmOrderIdFromRecord(record);
+  const normalizedOrderForMerge = normalizedOrderKeyValue(orderIdForMerge);
+  const idx = all.findIndex(x => x.crmKey === key || (normalizedOrderForMerge && normalizedOrderKeyValue(x.orderName || x.orderId || '') === normalizedOrderForMerge));
+
   const phone = normalizeWhatsAppPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || raw.phone || raw.customer?.phone || raw.billing_address?.phone || raw.shipping_address?.phone || raw.customer?.default_address?.phone);
   const name = cleanText(record.name || record.customerName || [raw.customer?.first_name, raw.customer?.last_name].filter(Boolean).join(' ') || [raw.billing_address?.first_name, raw.billing_address?.last_name].filter(Boolean).join(' ') || [raw.shipping_address?.first_name, raw.shipping_address?.last_name].filter(Boolean).join(' ') || record.customer?.name);
   const email = cleanText(record.email || record.customerEmail || record.customer?.email || raw.email || raw.customer?.email || raw.contact_email);
@@ -494,21 +516,32 @@ function upsertCrm(record = {}, source = 'lead') {
     productImage: cleanText(record.productImage || record.image || record.product?.image) || base.productImage || '',
     productPrice: cleanText(record.productPrice || record.price || record.product?.price) || base.productPrice || '',
     discountText: cleanText(record.discountText || record.product?.discountText) || base.discountText || '',
-    orderName: cleanText(record.orderName || record.orderId || record.raw?.name) || base.orderName || '',
+    orderName: cleanText(record.orderName || record.orderId || record.orderNumber || raw.name || raw.order_number || raw.id) || base.orderName || '',
     total: cleanText(record.total || raw.total_price || raw.current_total_price) || base.total || '',
     paymentMethod: cleanText(record.paymentMethod || (Array.isArray(raw.payment_gateway_names) ? raw.payment_gateway_names.join(', ') : raw.gateway || raw.processing_method)) || base.paymentMethod || '',
-    orderStatus: cleanText(record.orderStatus || record.status || raw.fulfillment_status || raw.financial_status || '') || base.orderStatus || '',
-    whatsappStatus: cleanText(record.whatsappStatus || record.whatsappResult?.ok && 'WhatsApp Sent' || record.whatsappResult?.friendlyError || record.whatsappResult?.reason || record.whatsappResult?.json?.error?.message || '') || base.whatsappStatus || '',
+    orderStatus: appendStatusLine(base.orderStatus || '', cleanText(record.orderStatus || record.status || raw.fulfillment_status || raw.financial_status || '')),
+    whatsappStatus: appendStatusLine(base.whatsappStatus || '', cleanText((record.whatsappResult?.ok ? 'WhatsApp Sent' : '') || record.whatsappStatus || record.whatsappResult?.friendlyError || record.whatsappResult?.reason || record.whatsappResult?.json?.error?.message || '')),
     isCodOrder: record.isCodOrder ?? base.isCodOrder ?? false,
     isShopifyOrder: ['shopify_order_webhook','cod_order_confirmed','cod_order_cancelled','order_confirmation','cod_confirmation'].includes(String(record.type || '').toLowerCase()) || base.isShopifyOrder || false,
     sourceType: cleanText(record.type || source) || base.sourceType || '',
-    lastMessage: cleanText(record.message || record.note || record.caption || record.whatsappResult?.friendlyError || record.whatsappResult?.reason || record.whatsappResult?.json?.error?.message) || base.lastMessage || '',
+    lastMessage: appendStatusLine(base.lastMessage || '', cleanText(record.message || record.note || record.caption || record.whatsappResult?.friendlyError || record.whatsappResult?.reason || record.whatsappResult?.json?.error?.message || '')),
     leadCount: (base.leadCount || 0) + (source === 'lead' ? 1 : 0),
     activityCount: (base.activityCount || 0) + (source === 'activity' ? 1 : 0),
     messageCount: (base.messageCount || 0) + (source === 'message' ? 1 : 0)
   };
   if (idx >= 0) all[idx] = next; else all.unshift(next);
-  writeJson(crmPath, all.slice(0, 5000));
+  const seenOrders = new Set();
+  const deduped = [];
+  for (const row of all) {
+    const ok = normalizedOrderKeyValue(row.orderName || row.orderId || '');
+    if (ok && row.isShopifyOrder) {
+      if (seenOrders.has(ok)) continue;
+      seenOrders.add(ok);
+      row.crmKey = `order:${ok}`;
+    }
+    deduped.push(row);
+  }
+  writeJson(crmPath, deduped.slice(0, 5000));
   return next;
 }
 function googleSheetsEnabled() {
@@ -2338,7 +2371,26 @@ app.get('/api/crm', (req, res) => {
   leads.filter(l => ['shopify_order_webhook','cod_order_confirmed','cod_order_cancelled','order_confirmation','cod_confirmation'].includes(String(l.type || ''))).forEach(l => {
     try { upsertCrm(l, 'lead'); } catch(e) {}
   });
-  const customers = readJson(crmPath, []).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+  let customersRaw = readJson(crmPath, []);
+  const byOrder = new Map();
+  const cleaned = [];
+  for (const row of customersRaw) {
+    const ok = normalizedOrderKeyValue(row.orderName || row.orderId || '');
+    if (ok && (row.isShopifyOrder || String(row.crmKey||'').startsWith('order:'))) {
+      const existing = byOrder.get(ok);
+      if (!existing) {
+        row.crmKey = `order:${ok}`;
+        byOrder.set(ok, row);
+      } else {
+        existing.orderStatus = appendStatusLine(existing.orderStatus, row.orderStatus);
+        existing.whatsappStatus = appendStatusLine(existing.whatsappStatus, row.whatsappStatus);
+        existing.lastMessage = appendStatusLine(existing.lastMessage, row.lastMessage);
+        existing.updatedAt = String(existing.updatedAt||'') > String(row.updatedAt||'') ? existing.updatedAt : row.updatedAt;
+      }
+    } else cleaned.push(row);
+  }
+  const customers = [...byOrder.values(), ...cleaned].sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+  writeJson(crmPath, customers.slice(0,5000));
   const summary = customers.reduce((acc, c) => { acc.total++; acc[c.status || 'New'] = (acc[c.status || 'New'] || 0) + 1; return acc; }, { total: 0 });
   res.json({ ok: true, customers, summary });
 });
@@ -3271,12 +3323,16 @@ async function sendCodConfirmationToCustomer(order = {}) {
 function findLatestCodPendingLead(phone) {
   const p = normalizeWhatsAppPhone(phone);
   const leads = readJson(leadsPath, []);
-  return leads.find(l =>
-    l && l.type === 'shopify_order_webhook' && l.isCodOrder &&
-    normalizeWhatsAppPhone(l.phone || l.raw?.phone || l.raw?.customer?.phone || '') === p &&
-    !String(l.codCustomerResponse || '').trim() &&
-    !String(l.raw?.cancelled_at || '').trim()
-  ) || null;
+  const phoneMatches = (l) => {
+    const raw = l.raw || {};
+    const vals = [l.phone, raw.phone, raw.customer?.phone, raw.billing_address?.phone, raw.shipping_address?.phone, raw.customer?.default_address?.phone];
+    return vals.some(v => normalizeWhatsAppPhone(v) === p);
+  };
+  return leads
+    .filter(l => l && l.type === 'shopify_order_webhook' && l.isCodOrder && phoneMatches(l))
+    .filter(l => !String(l.codCustomerResponse || '').trim())
+    .filter(l => !String(l.raw?.cancelled_at || '').trim())
+    .sort((a,b)=>String(b.createdAt||'').localeCompare(String(a.createdAt||'')))[0] || null;
 }
 function updateLeadById(id, patch = {}) {
   const leads = readJson(leadsPath, []);
@@ -3284,6 +3340,7 @@ function updateLeadById(id, patch = {}) {
   if (idx >= 0) {
     leads[idx] = { ...leads[idx], ...patch, updatedAt: nowIso() };
     writeJson(leadsPath, leads);
+    try { upsertCrm(leads[idx], 'lead'); } catch(e) {}
     return leads[idx];
   }
   return null;
@@ -3348,14 +3405,14 @@ async function handleCodConfirmationReply(item = {}) {
   const cancelResult = autoCancel ? await cancelShopifyOrder(orderId).catch(e => ({ ok:false, error:e.message })) : { ok:false, skipped:true, reason:'COD auto cancel disabled.' };
   const shopifyUpdate = await updateShopifyOrderNoteAndTags(orderId, 'COD Cancelled by Customer', `COD Cancelled by customer via WhatsApp on ${nowIso()}. Phone: ${item.from}`).catch(e => ({ ok:false, error:e.message }));
   const cancelOk = Boolean(cancelResult?.ok || cancelResult?.cancelled || cancelResult?.alreadyCancelled);
-  const finalStatus = autoCancel ? (cancelOk ? 'COD Cancelled in Shopify' : 'COD Cancel Request - Shopify Cancel Failed') : 'COD Cancellation Requested';
+  const finalStatus = autoCancel ? (cancelOk ? 'Customer Cancelled | Shopify Cancelled' : 'Customer Cancelled | Shopify Cancel Failed') : 'Customer Cancelled | Shopify Cancel Pending';
   updateLeadById(lead.id, { codCustomerResponse:'cancelled', codCancelledAt: nowIso(), status: finalStatus, cancelResult, shopifyUpdate, orderStatus: finalStatus, whatsappStatus:'Customer replied Cancel' });
   const replyText = cancelOk
     ? `Your COD order ${orderName} has been cancelled. Team Tiny Shiny Gifts`
     : `Your COD order ${orderName} cancellation request has been received. Our team will update it shortly. Team Tiny Shiny Gifts`;
   const reply = await sendWhatsAppTextManual({ to:item.from, message:replyText }).catch(e => ({ ok:false, error:e.message }));
   await sendOwnerWhatsApp(`COD order cancelled by customer\nOrder: ${orderName}\nPhone: ${item.from}\nShopify cancel: ${cancelOk ? 'SUCCESS' : 'FAILED'}${cancelOk?'':'\nReason: '+(cancelResult?.error || JSON.stringify(cancelResult?.attempts||[]).slice(0,500))}`).catch(()=>{});
-  return appendJson(leadsPath, { id: crypto.randomUUID(), type:'cod_order_cancelled', createdAt: nowIso(), phone:item.from, orderName, customerName:lead.customerName||orderCustomerName(order), productTitle:lead.productTitle||orderFirstProductTitle(order), productImage:lead.productImage||'', total:lead.total||order.total_price||'', status:finalStatus, orderStatus:finalStatus, whatsappStatus:'Customer replied Cancel', cancelResult, shopifyUpdate, customerReply:reply, raw:order });
+  return appendJson(leadsPath, { id: crypto.randomUUID(), type:'cod_order_cancelled', createdAt: nowIso(), phone:item.from, orderName, orderId: orderName, customerName:lead.customerName||orderCustomerName(order), productTitle:lead.productTitle||orderFirstProductTitle(order), productImage:lead.productImage||'', total:lead.total||order.total_price||'', status:finalStatus, orderStatus:finalStatus, whatsappStatus:'Customer replied Cancel', cancelResult, shopifyUpdate, customerReply:reply, raw:order });
 }
 
 
