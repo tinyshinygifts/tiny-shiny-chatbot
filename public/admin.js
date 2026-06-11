@@ -599,7 +599,7 @@ async function saveShippingProvider(){
 
 function parseDateMs(v){ const t=Date.parse(String(v||'')); return Number.isFinite(t)?t:0; }
 function orderNoValue(v){ const m=String(v||'').match(/\d+/g); return m?Number(m[m.length-1]):0; }
-function crmSortValue(c){ return parseDateMs(c.orderSortAt||c.orderCreatedAt||c.updatedAt||c.createdAt); }
+function crmSortValue(c){ return parseDateMs(c.orderCreatedAt||c.orderDate||c.createdAt||c.updatedAt); }
 function formatCrmDate(v){
   const t=parseDateMs(v);
   if(!t) return '';
@@ -634,7 +634,7 @@ function renderCrm(){
     const statusLine=[c.orderStatus?`Order Status: ${c.orderStatus}`:'', c.whatsappStatus?`WhatsApp: ${c.whatsappStatus}`:''].filter(Boolean).join(' | ');
     return `<div class="crm-card clean-crm-card" data-crm-id="${esc(c.id)}">
       <div class="crm-main"><b>${esc(c.name||'Customer')}</b><span>${esc(c.phone||'No phone')}${c.email?' • '+esc(c.email):''}</span></div>
-      <div class="crm-meta"><span class="status-chip">${esc(c.status||'New')}</span><span class="${hasContactNumber(c)?'contact-ok':'contact-missing'}">${hasContactNumber(c)?'With Contact Number':'Without Contact Number'}</span><span>${esc(formatCrmDate(c.orderCreatedAt||c.updatedAt||c.createdAt))}</span><span>Leads: ${esc(c.leadCount||0)} • Activity: ${esc(c.activityCount||0)}</span></div>
+      <div class="crm-meta"><span class="status-chip">${esc(c.status||'New')}</span><span class="${hasContactNumber(c)?'contact-ok':'contact-missing'}">${hasContactNumber(c)?'With Contact Number':'Without Contact Number'}</span><span>${esc(formatCrmDate(c.orderCreatedAt||c.createdAt||c.updatedAt))}</span><span>Leads: ${esc(c.leadCount||0)} • Activity: ${esc(c.activityCount||0)}</span></div>
       ${orderLine?`<div class="crm-message"><b>${esc(orderLine)}</b></div>`:''}
       ${statusLine?`<div class="crm-message">${esc(statusLine)}</div>`:''}
       <div class="crm-product-row">${c.productImage?`<img src="${esc(c.productImage)}" alt=""/>`:''}<div><b>${esc(c.productTitle||'No product yet')}</b><br/><a href="${esc(c.pageUrl||'#')}" target="_blank" title="${esc(c.pageUrl||'')}">${esc(shortUrl(c.pageUrl||''))}</a><div class="crm-message">${esc(c.lastMessage||'')}</div></div></div>

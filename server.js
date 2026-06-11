@@ -500,12 +500,17 @@ function orderNumberValue(value='') {
   const n = String(value || '').match(/\d+/g);
   return n ? Number(n[n.length - 1]) : 0;
 }
+function crmSortTimestamp(row = {}) {
+  // Sort by the same actual order date/time that is shown on CRM cards.
+  // Do not use updatedAt first, otherwise a refresh/status update can push old orders above new orders.
+  return Date.parse(row.orderCreatedAt || row.orderDate || row.raw?.created_at || row.createdAt || row.updatedAt || '') || 0;
+}
 function crmSortRows(rows = []) {
   return (rows || []).sort((a,b) => {
-    const at = Date.parse(a.orderSortAt || a.orderCreatedAt || a.updatedAt || a.createdAt || '') || 0;
-    const bt = Date.parse(b.orderSortAt || b.orderCreatedAt || b.updatedAt || b.createdAt || '') || 0;
-    if (bt !== at) return bt - at;
-    return orderNumberValue(b.orderName || b.orderId || '') - orderNumberValue(a.orderName || a.orderId || '');
+    const at = crmSortTimestamp(a);
+    const bt = crmSortTimestamp(b);
+    if (bt !== at) return bt - at; // latest date + latest time first
+    return orderNumberValue(b.orderName || b.orderId || '') - orderNumberValue(a.orderName || a.orderId || ''); // higher order no first
   });
 }
 function crmKey(record = {}) {
@@ -539,7 +544,7 @@ function upsertCrm(record = {}, source = 'lead') {
     ...base,
     updatedAt: latestIso(base.updatedAt || base.createdAt, eventAt) || eventAt || now,
     orderCreatedAt: base.orderCreatedAt || orderCreatedAt || '',
-    orderSortAt: latestIso(base.orderSortAt || base.orderCreatedAt || base.createdAt, orderCreatedAt || eventAt) || orderCreatedAt || eventAt || '',
+    orderSortAt: orderCreatedAt || base.orderSortAt || base.orderCreatedAt || eventAt || '',
     lastSource: source,
     lastEventType: eventType || base.lastEventType || '',
     name: name || base.name || '',
@@ -2421,7 +2426,7 @@ app.get('/api/crm', (req, res) => {
         existing.lastMessage = appendStatusLine(existing.lastMessage, row.lastMessage);
         existing.updatedAt = latestIso(existing.updatedAt || existing.createdAt, row.updatedAt || row.createdAt);
         existing.orderCreatedAt = existing.orderCreatedAt || row.orderCreatedAt || row.createdAt || '';
-        existing.orderSortAt = latestIso(existing.orderSortAt || existing.orderCreatedAt || existing.createdAt, row.orderSortAt || row.orderCreatedAt || row.updatedAt || row.createdAt);
+        existing.orderSortAt = existing.orderCreatedAt || row.orderCreatedAt || row.createdAt || '';
       }
     } else cleaned.push(row);
   }

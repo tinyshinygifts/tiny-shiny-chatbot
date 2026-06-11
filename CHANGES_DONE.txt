@@ -1,28 +1,22 @@
 CHANGES_DONE
 
-v30 update (base v28):
+v31 update (base v30):
 
-1. CRM same-time issue fixed.
-   - CRM dashboard refresh/backfill no longer sets all order cards to the same current time.
-   - Each Shopify order card uses actual Shopify order created time / webhook event time.
+1. CRM proper 3-level sorting fixed.
+   - First sort: actual order date latest first.
+   - Second sort: actual order time latest first.
+   - Third sort: order number highest/latest first.
+   - Example: #1036 dated 11-06-2026 will come above #1035 dated 10-06-2026.
 
-2. Readable date/time format added.
-   - CRM now shows date like: 11-06-2026 12:11 AM
-   - Raw ISO format is hidden from CRM card display.
+2. Sorting now uses the same date/time shown on the CRM card.
+   - Old orders will not move to the top just because their WhatsApp status/CRM record updated later.
 
-3. CRM sorting improved.
-   - Latest order/date-time appears at the top.
-   - If date/time is same, higher order number appears first.
-   - Example: #1041 appears above #1040.
-
-4. Order number search improved.
-   - Searching #1041 or 1041 both work.
-
-5. Preserved previous v28/v27 fixes.
-   - Duplicate order cards merge by order number.
-   - Same order status appends with "|" separator.
-   - WhatsApp Cancel -> Shopify Cancel improvements remain.
-   - Mobile chat button smaller and moved upward remains.
+3. Preserved previous fixes from v30/v28:
+   - Readable date/time format.
+   - Duplicate order merge by order number.
+   - Status appends with "|".
+   - WhatsApp Cancel -> Shopify Cancel improved.
+   - Mobile chat button smaller and shifted upward.
 
 Base:
-- v28 ZIP used as base.
+- v30 ZIP used as base.
