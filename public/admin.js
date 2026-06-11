@@ -849,13 +849,10 @@ async function createBroadcast(){
   if(tpl.language && $('broadcastTemplateLang') && broadcastTemplateLang.value !== tpl.language){
     broadcastTemplateLang.value = tpl.language;
   }
-  const variables=String($('broadcastVariables')?.value||'').split(/?
-/).map(x=>x.trim()).filter(Boolean);
+  const variables=String($('broadcastVariables')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
   const body={ name:$('broadcastName')?.value||'WhatsApp Broadcast', category:$('broadcastCategory')?.value||'All', templateName, templateLang:$('broadcastTemplateLang')?.value||tpl.language||'en', imageUrl, imageCaption:$('broadcastImageCaption')?.value||'', messageType:msgType, productLink:$('broadcastProductLink')?.value||'', couponCode:$('broadcastCouponCode')?.value||'', dailyLimit:Number($('broadcastDailyLimit')?.value||500), scheduleAt:$('broadcastScheduleAt')?.value||'', variables, contacts };
   const res=await fetch('/api/broadcast/campaigns',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
-  if($('broadcastResult')) broadcastResult.textContent=broadcastFriendlyResult(res) + '
-
-' + JSON.stringify(res,null,2);
+  if($('broadcastResult')) broadcastResult.textContent=broadcastFriendlyResult(res) + '\n\n' + JSON.stringify(res,null,2);
   if(!res.ok) alert(res.error || 'Broadcast failed.');
   await loadBroadcasts();
 }
