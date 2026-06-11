@@ -1,6 +1,6 @@
 (function(){
-  if(window.__TSG_CHAT_WIDGET_V19__) return;
-  window.__TSG_CHAT_WIDGET_V19__ = true;
+  if(window.__TSG_CHAT_WIDGET_V20__) return;
+  window.__TSG_CHAT_WIDGET_V20__ = true;
 
   const script = document.currentScript;
   const BASE = script && script.src ? new URL(script.src).origin : 'https://chat.tinyshinygifts.com';
@@ -12,35 +12,48 @@
   }
 
   let settings = {};
-  const fixedBotName = 'Tiny Shiny Assistant';
-  const defaultWelcome = '👋 Hi! How can I help you today?';
+  const headerTitle = 'Tiny Shiny Assistant';
+  const headerSubtitle = 'Usually replies instantly';
+  const defaultWelcome = 'Hello! Welcome to Tiny Shiny Gifts. I can help with product details, order confirmation, order tracking, COD, delivery, returns, and WhatsApp support.';
   const defaultFallback = 'I need a little more detail to help you.';
 
   function injectCss(color){
     const pink = color || '#d63384';
     const css = `
       #tsgChatFab{position:fixed;right:18px;bottom:18px;z-index:2147483000;width:116px;height:78px;border:0;background:transparent url('${BASE}/chat-button.png') center/contain no-repeat;cursor:pointer;filter:drop-shadow(0 10px 22px rgba(214,51,132,.32));}
-      #tsgChatBox{position:fixed;right:18px;bottom:102px;width:min(370px,calc(100vw - 24px));max-height:74vh;background:#fff;border:1px solid #f2cfe1;border-radius:22px;box-shadow:0 18px 60px rgba(58,22,50,.22);z-index:2147483001;display:none;overflow:hidden;font-family:Arial,sans-serif}
-      #tsgChatHead{background:linear-gradient(135deg,${pink},#9b2a76);color:#fff;padding:12px 14px;font-weight:900;display:flex;justify-content:space-between;align-items:center}
-      #tsgChatTitle{display:flex;align-items:center;gap:10px;min-width:0}
-      #tsgChatLogo{width:38px;height:38px;border-radius:50%;background:#fff;color:${pink};font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;line-height:1;text-align:center;flex:none}
-      #tsgChatTitleText{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-      #tsgChatClose{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:50%;width:30px;height:30px;font-weight:900;cursor:pointer;font-size:20px;line-height:28px}
-      #tsgChatMsgs{padding:12px;height:320px;max-height:48vh;overflow:auto;background:#fff7fb}
-      .tsgMsg{margin:8px 0;padding:10px 12px;border-radius:16px;white-space:pre-wrap;line-height:1.35;font-size:14px}
-      .tsgUser{margin-left:42px;background:${pink};color:#fff;border-bottom-right-radius:4px}
-      .tsgBot{margin-right:28px;background:#fff;border:1px solid #f3d0e3;color:#2d1830;border-bottom-left-radius:4px}
-      .tsgOptionList{display:flex;flex-direction:column;gap:8px;margin-top:10px}
-      .tsgOption{width:100%;border:1px solid ${pink};background:#fff;color:${pink};border-radius:8px;padding:10px 12px;font-weight:900;cursor:pointer;text-align:center}
-      .tsgOption:hover{background:#fff3f9}
+      #tsgChatBox{position:fixed;right:18px;bottom:102px;width:min(360px,calc(100vw - 24px));max-height:78vh;background:#fff;border:1px solid #f3d3e5;border-radius:24px;box-shadow:0 20px 60px rgba(58,22,50,.22);z-index:2147483001;display:none;overflow:hidden;font-family:Arial,sans-serif}
+      #tsgChatHead{background:linear-gradient(135deg,${pink},#c92f7e);color:#fff;padding:14px 16px;display:flex;justify-content:space-between;align-items:flex-start}
+      #tsgChatHeadLeft{display:flex;gap:10px;align-items:flex-start;min-width:0}
+      #tsgChatLogo{width:42px;height:42px;border-radius:14px;background:#fff;color:${pink};font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;line-height:1.05;text-align:center;flex:none;box-shadow:0 4px 12px rgba(0,0,0,.08)}
+      #tsgChatHeadTitle{font-weight:900;font-size:16px;line-height:1.1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      #tsgChatHeadSub{margin-top:5px;font-size:12px;line-height:1.2;opacity:.95;font-weight:700}
+      #tsgChatClose{background:rgba(255,255,255,.14);border:1px solid rgba(255,255,255,.45);color:#fff;border-radius:999px;width:32px;height:32px;font-weight:900;cursor:pointer;font-size:20px;line-height:28px;flex:none}
+      #tsgChatBody{background:#f8f5f8}
+      #tsgChatMsgs{padding:14px;height:360px;max-height:56vh;overflow:auto}
+      .tsgMsg{margin:10px 0;padding:12px 14px;border-radius:16px;white-space:pre-wrap;line-height:1.4;font-size:14px;word-break:break-word}
+      .tsgBot{margin-right:28px;background:#fff;border:1px solid #ece1e8;color:#494349;border-bottom-left-radius:8px;box-shadow:0 3px 10px rgba(0,0,0,.03)}
+      .tsgUser{margin-left:42px;background:${pink};color:#fff;border-bottom-right-radius:8px;box-shadow:0 4px 10px rgba(214,51,132,.18)}
+      .tsgHeroAction{display:block;width:100%;border:0;background:${pink};color:#fff;border-radius:16px;padding:12px 14px;font-weight:900;font-size:14px;cursor:pointer;margin:8px 0 12px;box-shadow:0 10px 20px rgba(214,51,132,.22)}
+      .tsgChipWrap{display:flex;gap:8px;flex-wrap:wrap;margin-top:2px}
+      .tsgChip{border:1px solid #e5cad8;background:#fff;color:#4a4049;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:700;cursor:pointer}
+      .tsgChip:hover{background:#fff4f8;border-color:#d9a8c3}
       .tsgActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
       .tsgAction{border:0;background:${pink};color:#fff;border-radius:999px;padding:9px 12px;font-weight:900;cursor:pointer;text-decoration:none;display:inline-flex}
-      #tsgChatForm{display:flex;gap:8px;padding:10px;border-top:1px solid #f2d2e4;background:#fff}
-      #tsgChatInput{flex:1;border:1px solid #edd0e1;border-radius:999px;padding:10px 12px;outline:none}
-      #tsgChatSend{border:0;background:${pink};color:#fff;border-radius:999px;padding:10px 14px;font-weight:900;cursor:pointer}
-      @media(max-width:520px){#tsgChatFab{right:10px;bottom:10px;width:96px;height:66px}#tsgChatBox{right:8px;left:8px;bottom:84px;width:auto;max-height:78vh}#tsgChatMsgs{height:360px;max-height:58vh}}
+      #tsgChatForm{display:flex;gap:10px;align-items:center;padding:12px 14px;border-top:1px solid #eee1e8;background:#fff}
+      #tsgChatInput{flex:1;border:1px solid #e5d9e0;border-radius:999px;padding:12px 14px;outline:none;font-size:14px;min-width:0}
+      #tsgChatSend{border:0;background:${pink};color:#fff;border-radius:999px;padding:12px 18px;font-weight:900;cursor:pointer;box-shadow:0 8px 18px rgba(214,51,132,.22)}
+      @media(max-width:520px){
+        #tsgChatFab{right:10px;bottom:10px;width:96px;height:66px}
+        #tsgChatBox{right:8px;left:8px;bottom:84px;width:auto;max-height:82vh;border-radius:22px}
+        #tsgChatMsgs{height:410px;max-height:62vh}
+      }
     `;
-    const st=document.createElement('style'); st.id='tsgChatStyle'; st.textContent=css; document.head.appendChild(st);
+    const old=document.getElementById('tsgChatStyle');
+    if(old) old.remove();
+    const st=document.createElement('style');
+    st.id='tsgChatStyle';
+    st.textContent=css;
+    document.head.appendChild(st);
   }
 
   function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
@@ -64,11 +77,19 @@
     const box=document.createElement('div');
     box.id='tsgChatBox';
     box.innerHTML=`<div id="tsgChatHead">
-        <div id="tsgChatTitle"><span id="tsgChatLogo">TINY<br>SHINY</span><span id="tsgChatTitleText">${esc(fixedBotName)}</span></div>
-        <button id="tsgChatClose" type="button">×</button>
+      <div id="tsgChatHeadLeft">
+        <div id="tsgChatLogo">TINY<br>SHINY</div>
+        <div>
+          <div id="tsgChatHeadTitle">${esc(headerTitle)}</div>
+          <div id="tsgChatHeadSub">${esc(headerSubtitle)}</div>
+        </div>
       </div>
+      <button id="tsgChatClose" type="button">×</button>
+    </div>
+    <div id="tsgChatBody">
       <div id="tsgChatMsgs"></div>
-      <form id="tsgChatForm"><input id="tsgChatInput" placeholder="Type your message..." autocomplete="off"/><button id="tsgChatSend" type="submit">➤</button></form>`;
+      <form id="tsgChatForm"><input id="tsgChatInput" placeholder="Type your message..." autocomplete="off"/><button id="tsgChatSend" type="submit">Send</button></form>
+    </div>`;
 
     document.body.appendChild(box);
     document.body.appendChild(fab);
@@ -79,7 +100,7 @@
     function addMsg(text, who='bot', actions=[]){
       if(!text && (!actions || !actions.length)) return;
       const d=document.createElement('div');
-      d.className='tsgMsg '+(who==='user'?'tsgUser':'tsgBot');
+      d.className='tsgMsg ' + (who==='user' ? 'tsgUser' : 'tsgBot');
       d.innerHTML=esc(text||'');
       if(actions && actions.length){
         const a=document.createElement('div'); a.className='tsgActions';
@@ -95,34 +116,44 @@
       }
       msgs.appendChild(d);
       msgs.scrollTop=msgs.scrollHeight;
+      return d;
     }
 
-    function renderDefaultOptions(){
-      const wrap=document.createElement('div');
-      wrap.className='tsgOptionList';
-      const options=[
+    function renderStarterUI(){
+      const welcomeBubble = addMsg(settings.welcomeMessage || defaultWelcome, 'bot');
+      const heroBtn=document.createElement('button');
+      heroBtn.type='button';
+      heroBtn.className='tsgHeroAction';
+      heroBtn.textContent='WhatsApp support';
+      heroBtn.onclick=()=>send('WhatsApp support');
+      msgs.appendChild(heroBtn);
+
+      const chipWrap=document.createElement('div');
+      chipWrap.className='tsgChipWrap';
+      [
+        ['Confirm my order','Confirm my order'],
         ['Track my order','Track my order'],
-        ['Product information','Product information'],
-        ['Return / Exchange','Return / Exchange'],
-        ['Contact Support','Contact Support']
-      ];
-      options.forEach(([label,msg])=>{
-        const b=document.createElement('button');
-        b.type='button';
-        b.className='tsgOption';
-        b.textContent=label;
-        b.onclick=()=>send(msg);
-        wrap.appendChild(b);
+        ['COD available?','COD available?'],
+        ['Shipping charges','Shipping charges'],
+        ['Return policy','Return policy'],
+        ['WhatsApp support','WhatsApp support']
+      ].forEach(([label,msg])=>{
+        const chip=document.createElement('button');
+        chip.type='button';
+        chip.className='tsgChip';
+        chip.textContent=label;
+        chip.onclick=()=>send(msg);
+        chipWrap.appendChild(chip);
       });
-      msgs.appendChild(wrap);
+      msgs.appendChild(chipWrap);
+      msgs.scrollTop=msgs.scrollHeight;
     }
 
     function openBox(){
       box.style.display='block';
-      if(!msgs.dataset.welcome){
-        msgs.dataset.welcome='1';
-        addMsg(settings.welcomeMessage || defaultWelcome, 'bot');
-        renderDefaultOptions();
+      if(!msgs.dataset.init){
+        msgs.dataset.init='1';
+        renderStarterUI();
       }
     }
 
@@ -133,7 +164,11 @@
       addMsg(text,'user');
       input.value='';
       try{
-        const res=await fetch(BASE+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,visitorId,...currentProduct()})});
+        const res=await fetch(BASE + '/api/chat', {
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({message:text, visitorId, ...currentProduct()})
+        });
         const data=await res.json();
         const openUrl=data.openUrl || data.redirectUrl || data.supportUrl || '';
         if(openUrl){
@@ -146,16 +181,16 @@
         }
         addMsg(data.reply || data.message || '', 'bot', actions);
       }catch(e){
-        addMsg(settings.fallbackMessage || defaultFallback,'bot');
+        addMsg(settings.fallbackMessage || defaultFallback, 'bot');
       }
     }
 
     fab.onclick=()=>{
-      if(box.style.display==='block') box.style.display='none';
-      else openBox();
+      box.style.display = box.style.display==='block' ? 'none' : 'block';
+      if(box.style.display==='block') openBox();
     };
     box.querySelector('#tsgChatClose').onclick=()=>box.style.display='none';
-    box.querySelector('#tsgChatForm').onsubmit=e=>{e.preventDefault(); send(input.value);};
+    box.querySelector('#tsgChatForm').onsubmit=(e)=>{ e.preventDefault(); send(input.value); };
   }
 
   fetch(BASE+'/api/settings',{cache:'no-store'}).then(r=>r.json()).then(j=>{

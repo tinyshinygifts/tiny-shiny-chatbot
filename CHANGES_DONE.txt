@@ -1,18 +1,16 @@
 CHANGES_DONE
 
-v19 update:
-1. WhatsApp Support option removed from website chat menu.
-2. Floating chat button click now opens the full chat box directly.
-3. Chat box starts with the required design:
-   - Header: Tiny Shiny Assistant
-   - No “We typically reply instantly” line
-   - First message: 👋 Hi! How can I help you today?
-   - Buttons:
-     Track my order
-     Product information
-     Return / Exchange
-     Contact Support
-4. Selected pink chat logo remains in use as public/chat-button.png.
+v20 update:
+1. Website chatbot redesigned to match the shared reference look.
+2. Header:
+   - Tiny Shiny Assistant
+   - Usually replies instantly
+3. Starter layout on open:
+   - Welcome bubble
+   - Big pink WhatsApp support button
+   - Quick chips: Confirm my order, Track my order, COD available?, Shipping charges, Return policy, WhatsApp support
+4. Bottom input + Send button styled like the reference.
+5. Floating pink chat logo remains in use.
 
 Base:
-- v18 ZIP used as base.
+- v19 ZIP used as base.
