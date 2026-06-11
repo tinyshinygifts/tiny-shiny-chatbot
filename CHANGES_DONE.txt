@@ -1,11 +1,11 @@
 CHANGES_DONE
 
-v21 update:
-1. Big pink "WhatsApp support" button removed from website chatbot.
-2. Quick chips arranged cleanly in exactly 2 lines:
-   Row 1: Confirm my order | Track my order | COD available?
-   Row 2: Shipping charges | Return policy | WhatsApp support
-3. Mobile layout adjusted so chips stay neat and do not wrap randomly.
+v22 update:
+1. Quick option chips moved to bottom and fixed above the input box.
+2. Chips remain always visible while chat messages scroll.
+3. Chips size reduced to 90% width.
+4. Text now fits inside chip boxes; no cut text.
+5. Horizontal scroll removed.
 
 Base:
-- v20 ZIP used as base.
+- v21 ZIP used as base.
