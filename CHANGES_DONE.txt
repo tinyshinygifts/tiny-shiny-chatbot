@@ -1,27 +1,21 @@
 CHANGES_DONE
 
 Latest fix:
-1. Website chatbot mobile/session fix.
-   - Customer mobile number is saved in the chat session after it is shared once.
-   - Chatbot will not ask for the mobile number again in the same visitor session.
-   - "Track my order" now uses the saved mobile number automatically.
+1. Website chatbot WhatsApp Support button fixed.
+   - WhatsApp Support click now returns action: open_whatsapp_support.
+   - Customer will no longer see the wrong "Track Shipment" button for WhatsApp support.
+   - Support reply no longer contains raw wa.me URL text that old widget could label incorrectly.
+   - Response includes Open WhatsApp Support button/link.
 
-2. Order privacy / strict matching fix.
-   - If mobile number is available, only orders matching that mobile number will be shown.
-   - If order number + mobile number are both available, both must match.
-   - Removed unsafe fallback that could show another customer's order.
-   - No order message is now English:
-     "No order was found for this mobile number. Please share your registered mobile number or order number."
-
-3. WhatsApp Support button fix.
-   - Removed .env technical error from customer-facing chatbot.
-   - Support number is read from saved/API settings or env.
-   - If missing, customer sees a friendly English message:
-     "WhatsApp support number is not configured yet. Please contact us from the website contact page."
+2. Added/updated public/widget.js
+   - WhatsApp Support quick button opens WhatsApp link directly in a new tab.
+   - Track Shipment label is used only for real tracking links.
+   - Uses visitorId session so saved mobile/session logic works.
 
 Previous included:
+- Website chatbot mobile/session fix.
+- Strict order privacy matching.
 - Campaign Report delivered/read status tracking.
 - Select Uploaded Image auto-fills Image URL.
 - Visit us variable.
 - Multi-customer selection/send fix.
-- Bulk direct Image + Text send mode.
