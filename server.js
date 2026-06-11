@@ -263,9 +263,13 @@ function envLine(key, env) {
   return `${key}=${env[key] || ''}`;
 }
 function configBackupText(env) {
-  const templates = readJson(whatsappTemplatesPath, []);
+  const templates = readWhatsAppTemplates();
   const whatsappInbox = readJson(whatsappInboxPath, []);
   const settings = readJson(settingsPath, {});
+  const faqs = readJson(faqPath, []);
+  const ndrSettings = readJson(ndrSettingsPath, {});
+  const broadcastCampaigns = readJson(broadcastCampaignsPath, []);
+  const templateMappings = getWhatsAppTemplateMappings(env);
   const sections = [
     ['Business', ['BUSINESS_NAME','WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER']],
     ['Admin Login Security', ['ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS']],
@@ -302,8 +306,18 @@ function configBackupText(env) {
   lines.push('==============================');
   lines.push(JSON.stringify(settings, null, 2));
   lines.push('');
+  lines.push('==============================');
+  lines.push('WhatsApp Template Mappings JSON');
+  lines.push('==============================');
+  lines.push(JSON.stringify(templateMappings, null, 2));
+  lines.push('');
+  lines.push('==============================');
+  lines.push('NDR Settings JSON');
+  lines.push('==============================');
+  lines.push(JSON.stringify(ndrSettings, null, 2));
+  lines.push('');
   lines.push('__TSG_BACKUP_JSON_START__');
-  lines.push(JSON.stringify({ version: 3, downloadedAt: nowIso(), env, whatsappTemplates: templates, whatsappInbox, settings }, null, 2));
+  lines.push(JSON.stringify({ version: 4, downloadedAt: nowIso(), env, whatsappTemplates: templates, whatsappInbox, settings, faqs, ndrSettings, broadcastCampaigns, templateMappings }, null, 2));
   lines.push('__TSG_BACKUP_JSON_END__');
   return lines.join('\n');
 }
@@ -319,7 +333,10 @@ function parseBackupText(text = '') {
       env: parsed.env || {},
       whatsappTemplates: Array.isArray(parsed.whatsappTemplates) ? parsed.whatsappTemplates : null,
       whatsappInbox: Array.isArray(parsed.whatsappInbox) ? parsed.whatsappInbox : null,
-      settings: parsed.settings && typeof parsed.settings === 'object' ? parsed.settings : null
+      settings: parsed.settings && typeof parsed.settings === 'object' ? parsed.settings : null,
+      faqs: Array.isArray(parsed.faqs) ? parsed.faqs : null,
+      ndrSettings: parsed.ndrSettings && typeof parsed.ndrSettings === 'object' ? parsed.ndrSettings : null,
+      broadcastCampaigns: Array.isArray(parsed.broadcastCampaigns) ? parsed.broadcastCampaigns : null
     };
   }
   const env = {};
@@ -331,7 +348,7 @@ function parseBackupText(text = '') {
     const value = trimmed.slice(idx + 1).trim();
     if (apiKeys.includes(key)) env[key] = value;
   }
-  return { env, whatsappTemplates: null, whatsappInbox: null, settings: null };
+  return { env, whatsappTemplates: null, whatsappInbox: null, settings: null, faqs: null, ndrSettings: null, broadcastCampaigns: null };
 }
 
 
@@ -670,6 +687,44 @@ function mappedTargetsForTemplate(tpl, env = readEnvFile()) {
     .map(([key]) => key);
   if (tpl && tpl.selectedForUse === true && !targets.includes('selected')) targets.unshift('selected');
   return targets;
+}
+function templateStubForMapping(name, mappingKey, lang) {
+  const labels = {
+    customer_followup: 'Customer follow-up template imported from settings',
+    order_confirmation: 'Order confirmation template imported from settings',
+    cod_order: 'COD order confirmation template imported from settings',
+    ndr: 'NDR WhatsApp template imported from settings',
+    broadcast: 'Bulk broadcast template imported from settings',
+    test_whatsapp: 'Test WhatsApp / owner template imported from settings'
+  };
+  const fallback = defaultWhatsAppTemplates.find(t => t.name === name) || {};
+  return normalizeTemplate({
+    ...fallback,
+    id: fallback.id || name,
+    name,
+    language: lang || fallback.language || 'en',
+    category: fallback.category || (mappingKey === 'customer_followup' || mappingKey === 'broadcast' ? 'Marketing' : 'Utility'),
+    headerType: fallback.headerType || 'None',
+    useCase: fallback.useCase || labels[mappingKey] || 'Imported template from settings',
+    body: fallback.body || `Hi {{1}}, this is ${name} template for Tiny Shiny Gifts.`,
+    variables: fallback.variables || ['Customer Name'],
+    buttons: fallback.buttons || [],
+    enabled: true
+  });
+}
+function ensureMappedTemplatesExist(env = readEnvFile()) {
+  const list = readWhatsAppTemplates();
+  const seen = new Set(list.map(t => t.name));
+  const maps = getWhatsAppTemplateMappings(env);
+  let changed = false;
+  for (const [key, m] of Object.entries(maps)) {
+    const name = String(m && m.name || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_|_$/g, '');
+    if (!name || seen.has(name)) continue;
+    list.push(templateStubForMapping(name, key, m.language));
+    seen.add(name);
+    changed = true;
+  }
+  return changed ? writeWhatsAppTemplates(list) : list;
 }
 
 function whatsappEndpoint() {
@@ -1162,6 +1217,9 @@ app.post('/api/config/upload', (req, res) => {
     const savedEnv = writeEnvFile(envUpdate);
     let templatesUpdated = false;
     let settingsUpdated = false;
+    let faqsUpdated = false;
+    let ndrSettingsUpdated = false;
+    let broadcastCampaignsUpdated = false;
     if (Array.isArray(parsed.whatsappTemplates)) {
       writeWhatsAppTemplates(parsed.whatsappTemplates);
       templatesUpdated = true;
@@ -1171,8 +1229,12 @@ app.post('/api/config/upload', (req, res) => {
       writeJson(settingsPath, { ...currentSettings, ...parsed.settings });
       settingsUpdated = true;
     }
+    if (Array.isArray(parsed.faqs)) { writeJson(faqPath, parsed.faqs); faqsUpdated = true; }
+    if (parsed.ndrSettings && typeof parsed.ndrSettings === 'object') { writeJson(ndrSettingsPath, { ...readJson(ndrSettingsPath, {}), ...parsed.ndrSettings }); ndrSettingsUpdated = true; }
+    if (Array.isArray(parsed.broadcastCampaigns)) { writeJson(broadcastCampaignsPath, parsed.broadcastCampaigns); broadcastCampaignsUpdated = true; }
+    ensureMappedTemplatesExist(savedEnv);
     const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, savedEnv) }));
-    res.json({ ok: true, message: 'API backup uploaded and settings updated.', updatedKeys: Object.keys(envUpdate), templatesUpdated, settingsUpdated, config: publicConfig(savedEnv), templates, mappings: getWhatsAppTemplateMappings(savedEnv) });
+    res.json({ ok: true, message: 'API backup uploaded and all settings/templates restored.', updatedKeys: Object.keys(envUpdate), templatesUpdated, settingsUpdated, faqsUpdated, ndrSettingsUpdated, broadcastCampaignsUpdated, config: publicConfig(savedEnv), templates, mappings: getWhatsAppTemplateMappings(savedEnv) });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || 'Invalid backup file' });
   }
@@ -1180,6 +1242,7 @@ app.post('/api/config/upload', (req, res) => {
 
 app.get('/api/whatsapp-templates', (req, res) => {
   const env = readEnvFile();
+  ensureMappedTemplatesExist(env);
   const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, env) }));
   res.json({ ok: true, templates, mappings: getWhatsAppTemplateMappings(env) });
 });

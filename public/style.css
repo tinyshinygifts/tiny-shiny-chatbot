@@ -1084,3 +1084,14 @@ html,body{max-width:100%;overflow-x:hidden!important;}
   .bulk-library-send-panel .section-head{display:block!important;}
   .bulk-library-send-panel .section-head .primary-btn{width:100%!important;}
 }
+
+
+/* v4 cleanup: templates page only Saved Templates + NDR; bulk sending stays in Admin Broadcast */
+.templates-library-page .templates-control-panel,
+.templates-library-page .customer-followup-library-panel,
+.templates-library-page .bulk-library-send-panel{display:none!important;}
+.broadcast-filter-grid{margin-top:10px;padding:12px;border:1px dashed var(--line);border-radius:18px;background:#fffafd;}
+.broadcast-contacts-list{max-height:420px!important;}
+.broadcast-row{align-items:center!important;}
+.broadcast-row input{width:auto!important;}
+@media(max-width:780px){.broadcast-filter-grid{grid-template-columns:1fr!important}.broadcast-contacts-list{max-height:320px!important}}

@@ -1,0 +1,10 @@
+Tiny Shiny Chatbot - V4 Changes
+
+1. Templates Library page se Bulk / Single WhatsApp Message section remove kiya. Bulk sending ab Admin Panel ke existing Bulk WhatsApp Broadcast tab me rahega.
+2. Templates Library page se Automation Template Selection aur Customer WhatsApp Follow-up alag sections remove/merge kiye. Template management ab Saved Templates me hi rahega.
+3. Saved Templates me Use unlimited selected mode maintained; duplicate templates avoid.
+4. Server side me API settings me selected/mapped template agar Saved Templates me missing ho to auto-create karke Saved Templates me add hota hai.
+5. Download API Backup me API Settings ke saath WhatsApp Templates, mappings, UI settings, NDR settings, FAQ, broadcast campaigns include.
+6. Upload API Backup se API Settings + WhatsApp Templates Library settings restore/merge hote hain.
+7. Admin Panel ke Bulk WhatsApp Broadcast tab me customer search/filter, name/phone/email/city/tag filter, single number optional, image + text options, CSV/Excel CSV upload UI add/fix.
+8. Broadcast template selection selected template/language/header ke hisaab se use karta hai; duplicate contacts avoid.

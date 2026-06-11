@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>WhatsApp Templates Library - Tiny Shiny Chatbot</title>
   <link rel="icon" href="/tiny-shiny-logo.jpg"/>
-  <link rel="stylesheet" href="/style.css?v=20260611121000"/>
+  <link rel="stylesheet" href="/style.css?v=20260611133000"/>
 </head>
 <body class="templates-library-page-body">
   <main class="admin-wrap templates-library-page">
@@ -27,53 +27,7 @@
         <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
       </div>
     </header>
-
-    <section class="panel templates-control-panel">
-      <div class="section-head">
-        <div><h2>Automation Template Selection</h2><p>Automation template select karo. Saved Templates me Use unlimited hai, duplicate templates nahi banenge.</p></div>
-        <button id="saveConfig" class="primary-btn" type="button">Save Automation Settings</button>
-      </div>
-      <div class="form-grid three template-quick-map compact-automation-selects">
-        <label>Customer Follow-up Template
-          <select id="API_CUSTOMER_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
-        </label>
-        <label>Order Confirmation Template
-          <select id="API_ORDER_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
-        </label>
-        <label>Test WhatsApp / Owner Template
-          <select id="API_TEST_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
-        </label>
-      </div>
-      <div class="form-grid three">
-        <label>Quick Use For
-          <select id="templateMapTarget"><option value="customer_followup">Customer Follow-up</option><option value="order_confirmation">Order Confirmation</option><option value="cod_order">COD Order</option><option value="ndr">NDR</option><option value="broadcast">Broadcast</option><option value="test_whatsapp">Test WhatsApp / Owner</option></select>
-        </label>
-        <label>Search Template <input id="templateSearch" placeholder="order, followup, shipped, offer"/></label>
-        <label>Filter Category
-          <select id="templateCategoryFilter"><option value="">All</option><option>Utility</option><option>Marketing</option><option>Authentication</option></select>
-        </label>
-      </div>
-      <p id="saveStatus" class="success"></p>
-    </section>
-
-    <section class="panel customer-followup-library-panel">
-      <div class="section-head"><div><h2>Customer WhatsApp Follow-up</h2><p>Product/cart follow-up aur order confirmation automation settings.</p></div></div>
-      <div class="form-grid two">
-        <label>Enable Customer WhatsApp Messages
-          <select id="CUSTOMER_WHATSAPP_MESSAGES_ENABLED"><option value="false">false</option><option value="true">true</option></select>
-        </label>
-        <label>Customer Follow-up Template Name <input id="CUSTOMER_WHATSAPP_TEMPLATE_NAME" placeholder="product_followup"/></label>
-        <label>Customer Follow-up Template Language <input id="CUSTOMER_WHATSAPP_TEMPLATE_LANG" placeholder="en"/></label>
-        <label>Enable Order Confirmation WhatsApp
-          <select id="ORDER_CONFIRMATION_WHATSAPP_ENABLED"><option value="false">false</option><option value="true">true</option></select>
-        </label>
-        <label>Order Confirmation Template Name <input id="ORDER_CONFIRMATION_TEMPLATE_NAME" placeholder="order_confirmation"/></label>
-        <label>Order Confirmation Template Language <input id="ORDER_CONFIRMATION_TEMPLATE_LANG" placeholder="en"/></label>
-      </div>
-      <p class="hint">Shopify webhook URL: <code>https://chat.tinyshinygifts.com/webhooks/shopify/orders/create</code></p>
-    </section>
-
-    <section class="panel api-ndr-settings-panel ndr-library-panel">
+<section class="panel api-ndr-settings-panel ndr-library-panel">
       <div class="section-head">
         <div><h2>NDR WhatsApp Settings</h2><p>Before delivery aur failed delivery NDR WhatsApp messages.</p></div>
         <button id="saveNdrApiSettings" class="primary-btn" type="button">Save NDR Settings</button>
@@ -92,34 +46,9 @@
       </div>
       <pre id="apiNdrResult"></pre>
     </section>
-
-
-    <section class="panel bulk-library-send-panel">
+<section class="panel api-template-library-panel templates-only-panel">
       <div class="section-head">
-        <div><h2>Bulk / Single WhatsApp Message</h2><p>festival_offer, thank_you_image ya koi bhi saved template se text, image, ya image + text single number ya bulk customers ko bhejo.</p></div>
-        <button id="sendBulkLibraryMessage" class="primary-btn" type="button">Send WhatsApp Message</button>
-      </div>
-      <div class="form-grid three">
-        <label>Send Mode
-          <select id="bulkLibraryMode"><option value="single">Single Number</option><option value="bulk">Bulk Selected / Pasted Numbers</option></select>
-        </label>
-        <label>Use Template
-          <select id="bulkLibraryTemplate"><option value="">Manual / Select template</option></select>
-        </label>
-        <label>Image URL Optional <input id="bulkLibraryImageUrl" placeholder="https://... image.jpg"/></label>
-      </div>
-      <div class="form-grid two">
-        <label id="bulkSingleBox">Single WhatsApp Number <input id="bulkLibrarySinglePhone" placeholder="919001727446"/></label>
-        <label id="bulkPhonesBox" style="display:none">Bulk Phone Numbers <textarea id="bulkLibraryPhones" placeholder="Paste numbers one per line or comma separated"></textarea></label>
-        <label>Text Message / Caption <textarea id="bulkLibraryMessage" placeholder="Write message. If image URL is added, this text will go as image caption."></textarea></label>
-      </div>
-      <p class="hint">Image URL blank hai to text only jayega. Image URL + text dono filled hain to image ke saath caption/message jayega.</p>
-      <pre id="bulkLibraryResult"></pre>
-    </section>
-
-    <section class="panel api-template-library-panel templates-only-panel">
-      <div class="section-head">
-        <div><h2>Saved Templates</h2><p>Saare templates yahi ek jagah maintain honge. Use unlimited hai aur duplicate template repeat nahi hoga.</p></div>
+        <div><h2>Saved Templates</h2><p>Saare WhatsApp templates yahi ek jagah maintain/manage honge. Use unlimited hai, duplicate template repeat nahi hoga.</p></div>
         <div class="inline-actions"><button id="newTemplateBtn" type="button" class="ghost-btn">+ Add Template</button></div>
       </div>
       <div class="template-workspace api-template-workspace compact-template-workspace">
@@ -156,7 +85,7 @@
       <p class="hint">Saved Templates me jo Use kiya hai ya automation me selected hai, uska short summary.</p>
     </section>
   </main>
-  <script src="/api-settings.js?v=20260611121000"></script>
+  <script src="/api-settings.js?v=20260611133000"></script>
   <div id="apiErrorLogModal" class="modal hidden api-error-log-modal">
     <div class="modal-card wide"><div class="modal-head"><h2 id="apiErrorLogTitle">API Error Log</h2><button type="button" class="ghost-btn" id="closeApiErrorLog">×</button></div><div id="apiErrorLogBody" class="api-error-log-body"></div><div class="modal-actions"><button type="button" class="ghost-btn" id="copyApiErrorLog">Copy Error</button><button type="button" class="primary-btn" id="testApiAgain">Test Again</button></div></div>
   </div>

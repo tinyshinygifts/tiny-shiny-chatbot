@@ -7,7 +7,7 @@
   <link rel="icon" href="/tiny-shiny-logo.jpg"/>
   <link rel="manifest" href="/manifest.json?v=20260610143416"/>
   <meta name="theme-color" content="#d63384"/>
-  <link rel="stylesheet" href="/style.css?v=20260611060041"/>
+  <link rel="stylesheet" href="/style.css?v=20260611133000"/>
 </head>
 <body>
   <main class="admin-wrap admin-fixed-layout">
@@ -217,11 +217,22 @@
       </div>
       <div class="form-grid four">
         <label>Campaign Name <input id="broadcastName" placeholder="Rakhi offer broadcast"/></label>
-        <label>Category Filter
+        <label>Category / Tag Filter
           <select id="broadcastCategory"><option value="">All</option><option>Rakhi</option><option>Home Décor</option><option>Divine</option><option>Candles</option></select>
         </label>
         <label>Approved Template <select id="broadcastTemplate"><option value="">Select template</option></select></label>
         <label>Template Language <input id="broadcastTemplateLang" value="en"/></label>
+      </div>
+      <div class="form-grid four broadcast-filter-grid">
+        <label>Customer Search / Type <input id="broadcastCustomerSearch" list="broadcastCustomerDatalist" placeholder="Type name, phone, email, city or tag"/></label>
+        <datalist id="broadcastCustomerDatalist"></datalist>
+        <label>Filter By
+          <select id="broadcastFilterBy"><option value="all">Name + Phone + Email + City + Tag</option><option value="name">Name</option><option value="phone">Phone Number</option><option value="email">Email</option><option value="city">City</option><option value="tag">Tag / Category</option></select>
+        </label>
+        <label>Single Number Optional <input id="broadcastSinglePhone" placeholder="919001727446"/></label>
+        <label>Message Type
+          <select id="broadcastMessageType"><option value="template">Template</option><option value="text">Text Only</option><option value="image">Image Only</option><option value="image_text">Image + Text</option></select>
+        </label>
       </div>
       <div class="form-grid four">
         <label>Image URL Optional <input id="broadcastImageUrl" placeholder="https://cdn.shopify.com/...jpg"/></label>
@@ -239,7 +250,7 @@
       <div class="form-grid two">
         <label>Google Sheet / CSV contacts paste karo <textarea id="broadcastPasteContacts" placeholder="name,phone,email,category
 Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
-        <label>Import CSV File <input id="broadcastCsvFile" type="file" accept=".csv,text/csv,text/plain"/><span class="hint">Columns: name, phone, email, category</span></label>
+        <label>Import CSV / Excel File <input id="broadcastCsvFile" type="file" accept=".csv,.txt,.tsv,.xls,.xlsx,text/csv,text/plain"/><span class="hint">Columns: name, phone, email, category, city, tag. Excel ko CSV export karke bhi upload kar sakte hain.</span></label>
       </div>
       <div class="inline-actions">
         <label class="select-all-line"><input id="broadcastSelectAll" type="checkbox"/> Select All</label>
@@ -252,11 +263,11 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
       <h3>Campaign History / Delivery Status</h3>
       
       <div class="broadcast-image-library" id="broadcastImageLibraryBox">
-        <h3>Image Messages</h3>
-        <p class="hint">Image upload/library ab Bulk WhatsApp Broadcast ke andar configure hoga.</p>
+        <h3>Image + Text Message</h3>
+        <p class="hint">Image URL upar dal sakte hain. File upload karne par image preview/filename yaha dikhega; live sending ke liye public Image URL best rahega.</p>
         <div class="form-grid two">
-          <label>Broadcast Image URL <input id="broadcastImageUrl" placeholder="https://... image link"/></label>
-          <label>Image Caption <input id="broadcastImageCaption" placeholder="Caption / offer text"/></label>
+          <label>Upload Image Optional <input id="broadcastImageFile" type="file" accept="image/*"/></label>
+          <label>Image Caption / Extra Text <input id="broadcastImageCaption" placeholder="Caption / offer text"/></label>
         </div>
         <div id="broadcastImageLibrary" class="image-library-inline"></div>
       </div>
@@ -562,6 +573,6 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
       <pre id="modalShopifyResult"></pre>
     </div>
   </div>
-  <script src="/admin.js?v=20260611060041"></script>
+  <script src="/admin.js?v=20260611133000"></script>
 </body>
 </html>

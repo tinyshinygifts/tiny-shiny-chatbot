@@ -358,7 +358,7 @@ async function uploadConfigBackup(fileInput){
   if(!confirm('This will update your current API settings from backup file. Continue?')) { fileInput.value=''; return; }
   const text = await file.text();
   const res = await fetch('/api/config/upload',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
-  if($('saveStatus')) $('saveStatus').textContent = res.message || (res.ok ? 'Backup uploaded.' : 'Upload failed');
+  if($('saveStatus')) $('saveStatus').textContent = res.message || (res.ok ? 'Backup uploaded. API settings and templates restored.' : 'Upload failed');
   if($('templateResult')) templateResult.textContent = JSON.stringify(res, null, 2);
   fileInput.value='';
   if(res.ok) await loadConfig();
@@ -411,7 +411,7 @@ async function saveConfig(){
   const body = {};
   keys.forEach(k => { if($(k)) body[k] = $(k).value.trim(); });
   const data = await fetch('/api/config',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json());
-  $('saveStatus').textContent = data.message || (data.ok ? 'Saved' : 'Save failed');
+  if($('saveStatus')) $('saveStatus').textContent = data.message || (data.ok ? 'Saved' : 'Save failed');
   if(data.ok) await loadApiTemplates();
   return data;
 }
