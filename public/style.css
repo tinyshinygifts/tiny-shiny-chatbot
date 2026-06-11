@@ -1116,3 +1116,5 @@ html,body{max-width:100%;overflow-x:hidden!important;}
 .broadcast-latest-preview{margin:12px 0}.select-all-line.toggle{cursor:pointer;user-select:none}
 
 .broadcast-latest-preview{display:none !important;}
+
+.broadcast-selected-names{margin-top:8px;color:#5f4b5d;font-weight:800;line-height:1.5;overflow-wrap:anywhere;}

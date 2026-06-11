@@ -1,24 +1,16 @@
 CHANGES_DONE
 
-Updated in this package:
-1. Bulk Broadcast Select All / Deselect All fixed.
-   - Blue tick sticky issue resolved.
-   - Manual deselect no longer auto-reselects all contacts.
+Latest fix:
+1. Bulk WhatsApp Broadcast multi-select fixed.
+   - Search/filter ab selected customers ko remove nahi karega.
+   - Multiple customers select karne ke baad sabko message jayega.
+   - Selected customer names/phone summary me show honge.
+   - Individual checkbox select/deselect now updates the actual selected list.
+   - Create / Send Broadcast no longer sends only currently visible searched contact.
 
-2. Uploaded Image Library improved.
-   - Duplicate image preview removed.
-   - Single clean library list with preview, Use, Copy Link, Remove.
-   - Select Uploaded Image dropdown now auto-fills Image URL field.
-
-3. Bulk Broadcast sending improved.
-   - Template mode still sends approved Meta template.
-   - Text / Image / Image+Text modes now send direct WhatsApp message.
-   - If a saved template is selected in direct mode, template body variables are auto-rendered into caption/text.
-   - This avoids Meta template approval error when using non-template direct send mode.
-
-4. Campaign report export added.
-   - New Report button added after Stop in Campaign History / Delivery Status.
-   - CSV report exports customer name, phone, status, failed reason, sent/delivered/read columns.
-
-5. Broadcast screen refresh.
-   - After sending a campaign, broadcast list and campaign analytics refresh automatically.
+Previous included:
+- Image library upload/preview/copy/remove.
+- Image URL dropdown auto-fill.
+- Select All/Deselect All toggle.
+- Normal Image + Text direct send mode.
+- Campaign Report CSV export.

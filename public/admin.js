@@ -822,13 +822,32 @@ function currentBroadcastCheckedPhones(){ return new Set([...document.querySelec
 let broadcastSelectedPhones = new Set();
 function renderBroadcastContacts(){
   const cat=$('broadcastCategory')?.value||'';
-  const liveChecked=currentBroadcastCheckedPhones();
-  if(liveChecked.size || document.querySelectorAll('.broadcast-check').length) broadcastSelectedPhones=liveChecked;
+
+  // Preserve selections across search/filter. Do not overwrite the selected set
+  // from only currently visible rows.
+  document.querySelectorAll('.broadcast-check').forEach(cb=>{
+    const phone=cb.dataset.phone;
+    if(!phone) return;
+    if(cb.checked) broadcastSelectedPhones.add(phone);
+  });
+
   renderBroadcastCustomerDatalist();
+
   const filtered=broadcastContacts.filter(c=>categoryMatch(c,cat)&&contactMatchesBroadcastFilter(c));
-  const selectedCount=broadcastSelectedPhones.size || document.querySelectorAll('.broadcast-check:checked').length;
-  if($('broadcastSummary')) broadcastSummary.textContent=`${filtered.length} contacts shown / ${selectedCount} selected / ${broadcastContacts.length} total`;
+  const selectedContacts=broadcastContacts.filter(c=>broadcastSelectedPhones.has(c.phone));
+  const selectedCount=selectedContacts.length;
+
+  if($('broadcastSummary')){
+    const selectedNames=selectedContacts.slice(0,25).map(c=>{
+      const nm=broadcastDisplayName(c);
+      return `${nm}${c.phone && nm!==c.phone ? ' ('+c.phone+')' : ''}`;
+    });
+    const extra=selectedCount ? `<div class="broadcast-selected-names"><b>Selected:</b> ${esc(selectedNames.join(', '))}${selectedCount>25?' ...':''}</div>` : '';
+    broadcastSummary.innerHTML=`${filtered.length} contacts shown / ${selectedCount} selected / ${broadcastContacts.length} total${extra}`;
+  }
+
   updateBroadcastSelectAllUi(filtered);
+
   if(!$('broadcastContactsList')) return;
   broadcastContactsList.innerHTML=filtered.map(c=>{
     const checked=broadcastSelectedPhones.has(c.phone);
@@ -848,7 +867,22 @@ function renderBroadcastCampaigns(){
 async function importShopifyToBroadcast(){ if(!shopifyCustomers.length) await loadShopifyCustomers(); broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(shopifyCustomers.map(c=>({id:c.id,name:c.name,phone:c.phone,email:c.email,city:c.city||c.raw?.default_address?.city||'',category:c.raw?.tags||'',source:'shopify',raw:c.raw})))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }
 async function importBroadcastPaste(){ const contacts=parseContactText($('broadcastPasteContacts')?.value||''); broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(contacts)); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }
 async function readBroadcastCsvFile(file){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(String(r.result||'')); r.onerror=reject; r.readAsText(file); }); }
-function selectedBroadcastContacts(){ const checked=[...document.querySelectorAll('.broadcast-check:checked')].map(x=>x.dataset.phone); if(checked.length || document.querySelectorAll('.broadcast-check').length) broadcastSelectedPhones=new Set(checked); const selected=broadcastContacts.filter(c=>broadcastSelectedPhones.has(c.phone)); const single=formatWaPhone($('broadcastSinglePhone')?.value||''); if(single && !selected.some(c=>c.phone===single)) selected.unshift({id:single,name:'Single Number',phone:single,source:'single'}); return dedupeBroadcastContacts(selected); }
+function selectedBroadcastContacts(){
+  // First sync currently visible checkbox changes into the global selection set.
+  document.querySelectorAll('.broadcast-check').forEach(cb=>{
+    const phone=cb.dataset.phone;
+    if(!phone) return;
+    if(cb.checked) broadcastSelectedPhones.add(phone);
+    else broadcastSelectedPhones.delete(phone);
+  });
+
+  const selected=broadcastContacts.filter(c=>broadcastSelectedPhones.has(c.phone));
+  const single=formatWaPhone($('broadcastSinglePhone')?.value||'');
+  if(single && !selected.some(c=>c.phone===single)) {
+    selected.unshift({id:single,name:'Single Number',phone:single,source:'single'});
+  }
+  return dedupeBroadcastContacts(selected);
+}
 
 function selectedBroadcastTemplate(){ const name=$('broadcastTemplate')?.value||''; return (broadcastTemplates||[]).find(t=>String(t.name)===String(name) || String(t.id)===String(name)) || {}; }
 function detectTemplateVariablesFromText(text='', vars=[]){
@@ -1127,7 +1161,7 @@ function setupPwaInstall(){
 setupPwaInstall();
 
 document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); if(e.target.id==='broadcastCategory'||e.target.id==='broadcastCustomerSearch'||e.target.id==='broadcastFilterBy') renderBroadcastContacts(); if(e.target.dataset && e.target.dataset.broadcastVarCustom!==undefined) updateBroadcastVariablesFromMap(); if(e.target.id==='salesOrderSearch') clearTimeout(window.__salesOrderSearchTimer), window.__salesOrderSearchTimer=setTimeout(searchSalesOrders,450); if(e.target.dataset.flowEdit){ const flow=activeFlow(); const i=Number(e.target.dataset.flowIndex); if(flow.blocks&&flow.blocks[i]){ flow.blocks[i][e.target.dataset.flowEdit]=e.target.value; } } const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); const allSelected=phones.length>0 && phones.every(p=>broadcastSelectedPhones.has(p)); if(allSelected){ phones.forEach(p=>broadcastSelectedPhones.delete(p)); } else { phones.forEach(p=>broadcastSelectedPhones.add(p)); } document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=!allSelected); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ uploadBroadcastImageFile(e.target.files[0]); } if(e.target.id==='broadcastUploadedImageSelect'){ const sel=e.target; const option=sel.selectedOptions && sel.selectedOptions[0]; const url=(option && option.dataset.url) || sel.value || ''; if($('broadcastImageUrl')) broadcastImageUrl.value=url; if(sel.value!==url) sel.value=url; } });
+document.addEventListener('change',e=>{ if(e.target.classList && e.target.classList.contains('broadcast-check')){ const phone=e.target.dataset.phone; if(phone){ if(e.target.checked) broadcastSelectedPhones.add(phone); else broadcastSelectedPhones.delete(phone); } renderBroadcastContacts(); return; } if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); const allSelected=phones.length>0 && phones.every(p=>broadcastSelectedPhones.has(p)); if(allSelected){ phones.forEach(p=>broadcastSelectedPhones.delete(p)); } else { phones.forEach(p=>broadcastSelectedPhones.add(p)); } document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=!allSelected); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ uploadBroadcastImageFile(e.target.files[0]); } if(e.target.id==='broadcastUploadedImageSelect'){ const sel=e.target; const option=sel.selectedOptions && sel.selectedOptions[0]; const url=(option && option.dataset.url) || sel.value || ''; if($('broadcastImageUrl')) broadcastImageUrl.value=url; if(sel.value!==url) sel.value=url; } });
 document.addEventListener('click',async e=>{
 
   if(e.target.classList && e.target.classList.contains('contact-tab')){ const target=e.target.dataset.target; const mode=e.target.dataset.contactFilter || 'with'; if(target==='crm'){ crmContactFilter=mode; renderCrm(); } if(target==='lead'){ leadContactFilter=mode; renderLeads(); } if(target==='activity'){ activityContactFilter=mode; renderEvents(); } return; }
