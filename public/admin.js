@@ -805,9 +805,10 @@ function renderBroadcastVariableMap(){
   const box=$('broadcastVariableMap'); if(!box) return;
   const tpl=selectedBroadcastTemplate();
   const vars=detectTemplateVariablesFromText(tpl.body||'', tpl.variables||[]);
-  if(!vars.length){ box.innerHTML='<p class="hint">Is template me variables detect nahi hue.</p>'; if($('broadcastVariables')) broadcastVariables.value=''; return; }
+  const imgHint = broadcastTemplateNeedsImageUi(tpl) ? '<p class="hint danger">Is template me Image header hai. Send se pehle public Image URL required hai.</p>' : '';
+  if(!vars.length){ box.innerHTML=imgHint + '<p class="hint">Is template me variables detect nahi hue.</p>'; if($('broadcastVariables')) broadcastVariables.value=''; return; }
   const options=[['{{name}}','Customer Name'],['{{phone}}','Phone'],['{{email}}','Email'],['{{link}}','Product / Collection Link'],['{{coupon}}','Coupon Code'],['{{category}}','Category / Tag'],['{{product}}','Product Name'],['custom','Custom Text']];
-  box.innerHTML=vars.map((v,i)=>{ const def=defaultVariableKey(i+1,v); return `<div class="broadcast-var-row" data-var-row="${esc(v)}"><b>${esc(v)}</b><select data-broadcast-var-select="${esc(v)}">${options.map(o=>`<option value="${esc(o[0])}" ${o[0]===def?'selected':''}>${esc(o[1])}</option>`).join('')}</select><input data-broadcast-var-custom="${esc(v)}" placeholder="Custom text" style="display:${def==='custom'?'block':'none'}"/></div>`; }).join('');
+  box.innerHTML=imgHint + vars.map((v,i)=>{ const def=defaultVariableKey(i+1,v); return `<div class="broadcast-var-row" data-var-row="${esc(v)}"><b>${esc(v)}</b><select data-broadcast-var-select="${esc(v)}">${options.map(o=>`<option value="${esc(o[0])}" ${o[0]===def?'selected':''}>${esc(o[1])}</option>`).join('')}</select><input data-broadcast-var-custom="${esc(v)}" placeholder="Custom text" style="display:${def==='custom'?'block':'none'}"/></div>`; }).join('');
   updateBroadcastVariablesFromMap();
 }
 function updateBroadcastVariablesFromMap(){
@@ -816,13 +817,46 @@ function updateBroadcastVariablesFromMap(){
   if($('broadcastVariables')) broadcastVariables.value=values.join('\n');
 }
 
+
+function broadcastTemplateNeedsImageUi(tpl){ return String(tpl?.headerType || '').toLowerCase() === 'image'; }
+function broadcastFriendlyResult(res){
+  if(!res) return 'No response';
+  if(!res.ok && res.error) return 'Error: ' + res.error;
+  const c=res.campaign||{};
+  const lines=[];
+  lines.push(`Campaign: ${c.name||''}`);
+  lines.push(`Template: ${c.templateName||''} (${c.templateLang||''})`);
+  lines.push(`Sent: ${c.sentCount||0} | Failed: ${c.failedCount||0} | Skipped: ${c.skippedCount||0}`);
+  (c.results||[]).forEach((r,i)=>{
+    const err=r.result?.friendlyError || r.result?.reason || r.result?.error || r.result?.json?.error?.message || '';
+    lines.push(`${i+1}. ${r.name||''} ${r.phone||''} - ${r.status}${err?' - '+err:''}`);
+  });
+  return lines.join('\n');
+}
+
 async function createBroadcast(){
   const contacts=selectedBroadcastContacts(); if(!contacts.length) return alert('Please import/select contacts first.');
   const templateName=$('broadcastTemplate')?.value||''; if(!templateName) return alert('Please select approved template.');
-  const variables=String($('broadcastVariables')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
-  const body={ name:$('broadcastName')?.value||'WhatsApp Broadcast', category:$('broadcastCategory')?.value||'All', templateName, templateLang:$('broadcastTemplateLang')?.value||'en', imageUrl:$('broadcastImageUrl')?.value||'', imageCaption:$('broadcastImageCaption')?.value||'', messageType:$('broadcastMessageType')?.value||'template', productLink:$('broadcastProductLink')?.value||'', couponCode:$('broadcastCouponCode')?.value||'', dailyLimit:Number($('broadcastDailyLimit')?.value||500), scheduleAt:$('broadcastScheduleAt')?.value||'', variables, contacts };
+  const tpl=selectedBroadcastTemplate();
+  const imageUrl=($('broadcastImageUrl')?.value||'').trim();
+  const msgType=($('broadcastMessageType')?.value||'template').trim();
+  if(broadcastTemplateNeedsImageUi(tpl) && !imageUrl){
+    return alert(`Template '${templateName}' me Image header hai. Please public Image URL add karo. File upload sirf preview ke liye hai.`);
+  }
+  if(msgType.includes('image') && !imageUrl){
+    return alert('Image / Image + Text selected hai. Please public Image URL add karo.');
+  }
+  if(tpl.language && $('broadcastTemplateLang') && broadcastTemplateLang.value !== tpl.language){
+    broadcastTemplateLang.value = tpl.language;
+  }
+  const variables=String($('broadcastVariables')?.value||'').split(/?
+/).map(x=>x.trim()).filter(Boolean);
+  const body={ name:$('broadcastName')?.value||'WhatsApp Broadcast', category:$('broadcastCategory')?.value||'All', templateName, templateLang:$('broadcastTemplateLang')?.value||tpl.language||'en', imageUrl, imageCaption:$('broadcastImageCaption')?.value||'', messageType:msgType, productLink:$('broadcastProductLink')?.value||'', couponCode:$('broadcastCouponCode')?.value||'', dailyLimit:Number($('broadcastDailyLimit')?.value||500), scheduleAt:$('broadcastScheduleAt')?.value||'', variables, contacts };
   const res=await fetch('/api/broadcast/campaigns',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
-  if($('broadcastResult')) broadcastResult.textContent=JSON.stringify(res,null,2);
+  if($('broadcastResult')) broadcastResult.textContent=broadcastFriendlyResult(res) + '
+
+' + JSON.stringify(res,null,2);
+  if(!res.ok) alert(res.error || 'Broadcast failed.');
   await loadBroadcasts();
 }
 

@@ -1585,6 +1585,53 @@ function normalizeBroadcastContact(c={}) {
   const phone=normalizeWhatsAppPhone(c.phone || c.mobile || c.whatsapp || c.number || '');
   return { id:String(c.id || phone || crypto.randomUUID()), name:String(c.name || c.customerName || [c.first_name,c.last_name].filter(Boolean).join(' ') || 'Customer').trim(), phone, email:String(c.email||'').trim(), category:String(c.category||c.tags||c.productType||'').trim(), city:String(c.city||c.raw?.default_address?.city||'').trim(), source:String(c.source||'manual'), raw:c };
 }
+
+function findBroadcastTemplateByName(name) {
+  const n = String(name || '').trim();
+  if (!n) return null;
+  return (readWhatsAppTemplates() || []).find(t => String(t.name || t.id || '').trim() === n) || null;
+}
+function broadcastTemplateNeedsImage(tpl) {
+  return String(tpl?.headerType || '').trim().toLowerCase() === 'image';
+}
+function readableWhatsappError(result={}, campaign={}) {
+  const err = result?.json?.error || {};
+  const code = Number(err.code || 0);
+  const msg = String(err.message || result.error || result.reason || '').trim();
+  const details = String(err.error_data?.details || '').trim();
+  const template = campaign.templateName || result.request?.template || '';
+  const lang = campaign.templateLang || 'en';
+  if (code === 132001 || /does not exist in the translation/i.test(msg + ' ' + details)) {
+    return `Template '${template}' Meta WhatsApp Manager me '${lang}' language me approved/exist nahi hai. Exact template name aur language check karo. Local Saved Templates me hona enough nahi hai; Meta me approved template bhi hona chahiye.`;
+  }
+  if (/number of parameters does not match/i.test(msg + ' ' + details)) {
+    return `Template '${template}' ke variables/parameters Meta template se match nahi kar rahe. Meta me jitne body variables hain utne hi values bhejo.`;
+  }
+  if (/media|image|header/i.test(msg + ' ' + details) && !campaign.imageUrl) {
+    return `Image header template selected hai, lekin Image URL blank hai. Public image URL add karo.`;
+  }
+  return details || msg || 'WhatsApp message failed. Template name, language, variables and image URL check karo.';
+}
+function validateBroadcastBeforeSend(body={}, contacts=[]) {
+  const templateName = String(body.templateName || '').trim();
+  const templateLang = String(body.templateLang || 'en').trim();
+  if (!templateName) return { ok:false, error:'Please select WhatsApp template.' };
+  const tpl = findBroadcastTemplateByName(templateName);
+  if (!tpl) return { ok:false, error:`Template '${templateName}' Saved Templates me nahi mila. Pehle WhatsApp Templates Library me add/save karo.` };
+  const savedLang = String(tpl.language || 'en').trim();
+  if (savedLang && templateLang && savedLang !== templateLang) {
+    return { ok:false, error:`Template '${templateName}' ki saved language '${savedLang}' hai, lekin campaign me '${templateLang}' selected hai. Language '${savedLang}' use karo ya Meta me same language approve karo.` };
+  }
+  if (broadcastTemplateNeedsImage(tpl) && !String(body.imageUrl || '').trim()) {
+    return { ok:false, error:`Template '${templateName}' me Image header hai. Send karne se pehle Image URL add karo. File upload sirf preview ke liye hai; live WhatsApp ke liye public image URL required hai.` };
+  }
+  if (String(body.messageType || '').toLowerCase().includes('image') && !String(body.imageUrl || '').trim()) {
+    return { ok:false, error:'Image/Image + Text message selected hai. Please public Image URL add karo.' };
+  }
+  if (!contacts.length) return { ok:false, error:'No valid contacts found.' };
+  return { ok:true, template:tpl };
+}
+
 function broadcastVariables(campaign={}, contact={}) {
   let vars=[];
   if(Array.isArray(campaign.variables)) vars=campaign.variables;
@@ -1602,15 +1649,18 @@ function broadcastTemplateComponents(campaign={}, contact={}) {
 }
 async function sendBroadcastTemplate(contact={}, campaign={}) {
   const c=normalizeBroadcastContact(contact);
-  if(!c.phone) return { ok:false, skipped:true, reason:'Invalid phone number', contact:c };
-  if(isOptedOut(c.phone)) return { ok:false, skipped:true, reason:'Customer unsubscribed/STOP', contact:c };
+  if(!c.phone) return { ok:false, skipped:true, reason:'Invalid phone number', friendlyError:'Invalid phone number', contact:c };
+  if(isOptedOut(c.phone)) return { ok:false, skipped:true, reason:'Customer unsubscribed/STOP', friendlyError:'Customer unsubscribed/STOP', contact:c };
   const template=String(campaign.templateName||'').trim();
   const lang=String(campaign.templateLang||'en').trim();
-  if(!template) return { ok:false, skipped:true, reason:'Approved template missing', contact:c };
+  if(!template) return { ok:false, skipped:true, reason:'Approved template missing', friendlyError:'Approved template missing', contact:c };
+  const tpl=findBroadcastTemplateByName(template);
+  if(tpl && broadcastTemplateNeedsImage(tpl) && !String(campaign.imageUrl||'').trim()) return { ok:false, skipped:true, reason:'Image URL required', friendlyError:`Template '${template}' me Image header hai. Public Image URL add karo.`, contact:c };
   const components=broadcastTemplateComponents(campaign,c);
   const result=await postWhatsApp(whatsappTemplateBody(c.phone, template, lang, components));
-  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:c.phone, customerName:c.name, type:'template', text:`Broadcast: ${template}`, createdAt:nowIso(), status:result.ok?'sent':'failed', raw:{ campaignId:campaign.id, result } });
-  return { ...result, contact:c };
+  const friendlyError = result.ok ? '' : readableWhatsappError(result, campaign);
+  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:c.phone, customerName:c.name, type:'template', text:`Broadcast: ${template}${friendlyError?' | Failed: '+friendlyError:''}`, createdAt:nowIso(), status:result.ok?'sent':'failed', raw:{ campaignId:campaign.id, result, friendlyError } });
+  return { ...result, friendlyError, contact:c };
 }
 async function processBroadcastCampaign(campaignId) {
   const campaigns=readJson(broadcastCampaignsPath, []);
@@ -1654,8 +1704,9 @@ app.post('/api/broadcast/campaigns', async (req,res)=>{
     const contacts=(Array.isArray(body.contacts)?body.contacts:[]).map(normalizeBroadcastContact).filter(c=>c.phone);
     const unique=[]; const seen=new Set();
     for(const c of contacts){ if(!seen.has(c.phone)){ seen.add(c.phone); unique.push(c); } }
-    if(!unique.length) return res.status(400).json({ ok:false, error:'No valid contacts found.' });
-    const campaign={ id:crypto.randomUUID(), name:String(body.name||'WhatsApp Broadcast').trim(), category:String(body.category||'All').trim(), templateName:String(body.templateName||'').trim(), templateLang:String(body.templateLang||'en').trim(), imageUrl:String(body.imageUrl||'').trim(), productLink:String(body.productLink||'').trim(), couponCode:String(body.couponCode||'').trim(), imageCaption:String(body.imageCaption||'').trim(), messageType:String(body.messageType||'template').trim(), variables:Array.isArray(body.variables)?body.variables:[], dailyLimit:Number(body.dailyLimit||500)||500, scheduleAt:body.scheduleAt||'', contacts:unique, results:[], status:body.scheduleAt && new Date(body.scheduleAt).getTime()>Date.now()?'scheduled':'queued', createdAt:nowIso(), updatedAt:nowIso() };
+    const validation = validateBroadcastBeforeSend(body, unique);
+    if(!validation.ok) return res.status(400).json({ ok:false, error:validation.error, validation });
+    const campaign={ id:crypto.randomUUID(), name:String(body.name||'WhatsApp Broadcast').trim(), category:String(body.category||'All').trim(), templateName:String(body.templateName||'').trim(), templateLang:String(body.templateLang||validation.template?.language||'en').trim(), imageUrl:String(body.imageUrl||'').trim(), productLink:String(body.productLink||'').trim(), couponCode:String(body.couponCode||'').trim(), imageCaption:String(body.imageCaption||'').trim(), messageType:String(body.messageType||'template').trim(), variables:Array.isArray(body.variables)?body.variables:[], dailyLimit:Number(body.dailyLimit||500)||500, scheduleAt:body.scheduleAt||'', contacts:unique, results:[], status:body.scheduleAt && new Date(body.scheduleAt).getTime()>Date.now()?'scheduled':'queued', createdAt:nowIso(), updatedAt:nowIso() };
     const campaigns=readJson(broadcastCampaignsPath, []); campaigns.unshift(campaign); writeJson(broadcastCampaignsPath,campaigns.slice(0,500));
     if(campaign.status==='queued') await processBroadcastCampaign(campaign.id);
     const saved=readJson(broadcastCampaignsPath, []).find(c=>c.id===campaign.id) || campaign;

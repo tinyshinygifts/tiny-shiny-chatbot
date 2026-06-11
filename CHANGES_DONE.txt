@@ -1,0 +1,20 @@
+Tiny Shiny Chatbot - Changes Done
+
+Latest V6 updates:
+1. Bulk WhatsApp Broadcast validation added before sending.
+2. Image header templates now require a public Image URL before send.
+3. If image/image+text mode is selected without Image URL, send is blocked with a clear warning.
+4. Template language mismatch is detected and corrected/blocked before sending.
+5. Meta error (#132001) is converted into a readable message: template name/language not approved or not found in Meta WhatsApp Manager.
+6. Parameter mismatch errors now show a readable variables warning.
+7. Broadcast result panel now shows Sent / Failed / Skipped summary with readable errors above raw JSON.
+8. Only this single CHANGES_DONE.txt file is kept in the ZIP.
+
+Previous updates retained:
+- Saved Templates unlimited Use selection.
+- Duplicate template prevention.
+- Templates Library cleanup.
+- Bulk WhatsApp Broadcast improvements.
+- Shopify Sales Analysis order tracking.
+- Mobile admin/chat inbox fixes.
+- API backup includes API settings and WhatsApp template settings.
