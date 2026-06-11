@@ -1,18 +1,17 @@
 CHANGES_DONE
 
-v25 update:
-1. CRM Dashboard Shopify order visibility fixed.
-   - Shopify order webhook leads are merged/backfilled into CRM when CRM loads.
-   - CRM cards now show order number, amount, payment method, COD flag, WhatsApp status and order status.
+v26 update:
+1. CRM Dashboard Shopify orders are now order-wise cards.
+   - Same customer ke multiple orders phone-wise merge hokar hide nahi honge.
+   - Each Shopify order webhook uses order number as CRM key.
+   - Example: #1038 and #1041 will show as separate cards.
 
-2. order_confirmation exact Meta template format added.
-   - Header Image + exactly 4 body variables + no button parameters.
+2. CRM search improved.
+   - Search by order number like 1041 or #1041 works.
+   - Search also checks order status, WhatsApp status, payment method and amount.
 
-3. COD customer Cancel reply -> Shopify cancel improved.
-   - On customer Cancel/No/Nahi reply, Shopify cancel API is called with retry bodies.
-   - Order tag/note update remains.
-   - Customer/Admin messages now show whether Shopify cancel succeeded or failed.
-   - CRM/lead status records Shopify cancel success/failure.
+3. CRM order cards labelled clearly.
+   - Shows Shopify Order / COD / payment / total / WhatsApp status.
 
 Base:
-- v24 ZIP used as base.
+- v25 ZIP used as base.

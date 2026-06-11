@@ -458,10 +458,14 @@ function flattenForSheet(obj, prefix = '', out = {}) {
 }
 function crmKey(record = {}) {
   const raw = record.raw || {};
+  const type = String(record.type || '').toLowerCase();
+  const orderId = cleanText(record.orderName || record.orderId || record.orderNumber || raw.name || raw.order_number || raw.id);
+  const orderTypes = ['shopify_order_webhook','cod_order_confirmed','cod_order_cancelled','order_confirmation','cod_confirmation'];
+  // Shopify order records must be order-wise, not phone-wise. Same customer can have many orders.
+  if (orderId && orderTypes.includes(type)) return `order:${orderId}`;
   const phone = normalizeWhatsAppPhone(record.phone || record.customerPhone || record.mobile || record.customer?.phone || raw.phone || raw.customer?.phone || raw.billing_address?.phone || raw.shipping_address?.phone || raw.customer?.default_address?.phone);
   const email = cleanText(record.email || record.customerEmail || record.customer?.email || raw.email || raw.customer?.email || raw.contact_email).toLowerCase();
   const visitor = cleanText(record.visitorId);
-  const orderId = cleanText(record.orderName || record.orderId || raw.name || raw.order_number || raw.id);
   return phone ? `phone:${phone}` : email ? `email:${email}` : visitor ? `visitor:${visitor}` : orderId ? `order:${orderId}` : `lead:${record.id || crypto.randomUUID()}`;
 }
 function upsertCrm(record = {}, source = 'lead') {
@@ -496,6 +500,8 @@ function upsertCrm(record = {}, source = 'lead') {
     orderStatus: cleanText(record.orderStatus || record.status || raw.fulfillment_status || raw.financial_status || '') || base.orderStatus || '',
     whatsappStatus: cleanText(record.whatsappStatus || record.whatsappResult?.ok && 'WhatsApp Sent' || record.whatsappResult?.friendlyError || record.whatsappResult?.reason || record.whatsappResult?.json?.error?.message || '') || base.whatsappStatus || '',
     isCodOrder: record.isCodOrder ?? base.isCodOrder ?? false,
+    isShopifyOrder: ['shopify_order_webhook','cod_order_confirmed','cod_order_cancelled','order_confirmation','cod_confirmation'].includes(String(record.type || '').toLowerCase()) || base.isShopifyOrder || false,
+    sourceType: cleanText(record.type || source) || base.sourceType || '',
     lastMessage: cleanText(record.message || record.note || record.caption || record.whatsappResult?.friendlyError || record.whatsappResult?.reason || record.whatsappResult?.json?.error?.message) || base.lastMessage || '',
     leadCount: (base.leadCount || 0) + (source === 'lead' ? 1 : 0),
     activityCount: (base.activityCount || 0) + (source === 'activity' ? 1 : 0),
@@ -2332,7 +2338,7 @@ app.get('/api/crm', (req, res) => {
   leads.filter(l => ['shopify_order_webhook','cod_order_confirmed','cod_order_cancelled','order_confirmation','cod_confirmation'].includes(String(l.type || ''))).forEach(l => {
     try { upsertCrm(l, 'lead'); } catch(e) {}
   });
-  const customers = readJson(crmPath, []);
+  const customers = readJson(crmPath, []).sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
   const summary = customers.reduce((acc, c) => { acc.total++; acc[c.status || 'New'] = (acc[c.status || 'New'] || 0) + 1; return acc; }, { total: 0 });
   res.json({ ok: true, customers, summary });
 });

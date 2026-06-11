@@ -597,7 +597,7 @@ async function saveShippingProvider(){
   shippingSettings=d.shipping||shippingSettings;
 }
 
-function crmValue(c){ return [c.name,c.phone,c.email,c.productTitle,c.pageUrl,c.orderName,c.lastMessage,c.status].join(' ').toLowerCase(); }
+function crmValue(c){ return [c.name,c.phone,c.email,c.productTitle,c.pageUrl,c.orderName,c.orderStatus,c.whatsappStatus,c.paymentMethod,c.total,c.lastMessage,c.status,c.sourceType].join(' ').toLowerCase(); }
 function shortUrl(u){ const s=String(u||''); return s.length>95 ? s.slice(0,95)+'…' : s; }
 function renderCrm(){
   const q=($('crmSearch')?.value||'').toLowerCase().trim();
@@ -614,7 +614,7 @@ function renderCrm(){
   }
   if(!$('crmList')) return;
   crmList.innerHTML=filtered.map(c=>{
-    const orderLine=[c.orderName?`Order: ${c.orderName}`:'', c.total?`Total: ${c.total}`:'', c.paymentMethod?`Payment: ${c.paymentMethod}`:'', c.isCodOrder?'COD':''].filter(Boolean).join(' • ');
+    const orderLine=[c.orderName?`Order: ${c.orderName}`:'', c.total?`Total: ${c.total}`:'', c.paymentMethod?`Payment: ${c.paymentMethod}`:'', c.isCodOrder?'COD':'', c.isShopifyOrder?'Shopify Order':''].filter(Boolean).join(' • ');
     const statusLine=[c.orderStatus?`Order Status: ${c.orderStatus}`:'', c.whatsappStatus?`WhatsApp: ${c.whatsappStatus}`:''].filter(Boolean).join(' | ');
     return `<div class="crm-card clean-crm-card" data-crm-id="${esc(c.id)}">
       <div class="crm-main"><b>${esc(c.name||'Customer')}</b><span>${esc(c.phone||'No phone')}${c.email?' • '+esc(c.email):''}</span></div>
