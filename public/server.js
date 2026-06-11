@@ -2148,7 +2148,21 @@ app.post('/api/chat', async (req, res) => {
 
   if (text.includes('whatsapp') || text.includes('support') || text.includes('agent')) {
     const wa = getSupportWhatsAppNumber();
-    return res.json({ ok: true, reply: wa ? `You can talk to our support team on WhatsApp: https://wa.me/${wa}` : 'WhatsApp support number is not configured yet. Please contact us from the website contact page.' });
+    if (wa) {
+      const url = `https://wa.me/${wa}`;
+      return res.json({
+        ok: true,
+        action: 'open_whatsapp_support',
+        openUrl: url,
+        redirectUrl: url,
+        supportUrl: url,
+        reply: '',
+        message: '',
+        trackingLinks: [],
+        buttons: [{ label: 'Open WhatsApp Support', url }]
+      });
+    }
+    return res.json({ ok: true, action: 'support_missing', reply: 'WhatsApp support number is not configured yet. Please contact us from the website contact page.' });
   }
 
   const faqAnswer = findFaqAnswer(raw);
