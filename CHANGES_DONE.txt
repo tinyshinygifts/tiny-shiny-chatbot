@@ -1,27 +1,14 @@
-Tiny Shiny Chatbot - Latest Changes
+Latest changes completed:
 
-1. Bulk WhatsApp Broadcast image upload fixed:
-   - Image file upload now saves on server through /api/media-images.
-   - Public image URL is generated automatically.
-   - Generated URL is filled into Image URL Optional field automatically.
-
-2. Bulk WhatsApp Broadcast image library added inside Bulk WhatsApp Broadcast tab:
-   - Uploaded Image Library section added below contacts area.
-   - Shows thumbnail, image name, public URL.
-   - Use button fills Image URL field.
-   - Copy Link button copies public URL.
-   - Remove button deletes image from library.
-
-3. Image URL dropdown added:
-   - Select Uploaded Image dropdown added near Image URL Optional.
-   - Uploaded images are available in dropdown.
-   - Selecting an image auto-fills Image URL field.
-
-4. WhatsApp image template support improved:
-   - Uploaded image URL uses app/chatbot domain for /uploads images.
-   - Broadcast campaign stores final public image URL.
-
-5. Existing fixes preserved:
-   - Admin JS hotfix retained.
-   - Bulk broadcast validation retained.
-   - One CHANGES_DONE.txt file only.
+1. Bulk WhatsApp Broadcast: "Image + Text Message" panel removed and merged inside Uploaded Image Library.
+2. Uploaded Image Library now includes:
+   - Upload Image Optional
+   - Image Caption / Extra Text
+   - image preview
+   - Use / Copy Link / Remove buttons
+3. Select All now works as a single toggle: select all / deselect all from the same checkbox label. Separate Deselect All button removed.
+4. Search Customer display improved:
+   - If name exists, name is shown first
+   - If name is missing, phone number is shown as primary text
+   - Secondary text shows phone/city/category cleanly
+5. Removing an uploaded image also clears selected Image URL/dropdown if that image was active.

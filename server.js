@@ -12,7 +12,8 @@ const app = express();
 const PORT = process.env.PORT || 5057;
 
 app.use(cors({ origin: true, credentials: true }));
-app.use(express.json({ limit: '20mb' }));
+app.use(express.json({ limit: '80mb' }));
+app.use(express.urlencoded({ limit: '80mb', extended: true }));
 
 const COOKIE_NAME = 'tsg_chatbot_admin';
 const SESSION_HOURS = Number(process.env.ADMIN_SESSION_HOURS || 12);
@@ -1981,6 +1982,32 @@ app.post('/api/lead-message', async (req, res) => {
 app.post('/api/visitor-event', (req, res) => {
   const event = appendJson(eventsPath, { id: crypto.randomUUID(), createdAt: nowIso(), ip: req.headers['x-forwarded-for'] || req.socket.remoteAddress, ...(req.body || {}) });
   res.json({ ok: true, event });
+});
+
+
+app.post('/api/broadcast-images/upload', requireAdmin, (req, res) => {
+  try {
+    const body = req.body || {};
+    const savedFile = saveImageFromDataUrl({ dataUrl: body.dataUrl, filename: body.filename || 'broadcast-image.jpg' });
+    const item = {
+      id: savedFile.id,
+      createdAt: nowIso(),
+      title: String(body.title || body.filename || 'Broadcast Image').trim(),
+      category: String(body.category || 'broadcast').trim(),
+      caption: String(body.caption || '').trim(),
+      url: savedFile.url,
+      absoluteUrl: absoluteUrl(req, savedFile.url),
+      mime: savedFile.mime,
+      filename: savedFile.filename,
+      originalName: body.filename || savedFile.filename
+    };
+    const images = readJson(mediaImagesPath, []);
+    images.unshift(item);
+    writeJson(mediaImagesPath, images.slice(0, 300));
+    res.json({ ok: true, image: item, url: item.absoluteUrl, message: 'Image uploaded successfully. Public URL generated.' });
+  } catch (e) {
+    res.status(400).json({ ok: false, error: e.message || 'Image upload failed.' });
+  }
 });
 
 app.get('/api/media-images', (req, res) => {

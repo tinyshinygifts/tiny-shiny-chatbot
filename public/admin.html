@@ -261,15 +261,6 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
         <label>Import CSV / Excel File <input id="broadcastCsvFile" type="file" accept=".csv,.txt,.tsv,.xls,.xlsx,text/csv,text/plain"/><span class="hint">Columns: name, phone, email, category, city, tag. Excel ko CSV export karke bhi upload kar sakte hain.</span></label>
       </div>
 
-      <div class="broadcast-image-library" id="broadcastImageLibraryBox">
-        <h3>Image + Text Message</h3>
-        <p class="hint">Yaha image upload karne par public URL auto generate hoga aur Image URL field me fill ho jayega. Uploaded images dropdown me bhi available rahengi.</p>
-        <div class="form-grid two">
-          <label>Upload Image Optional <input id="broadcastImageFile" type="file" accept="image/*"/></label>
-          <label>Image Caption / Extra Text <input id="broadcastImageCaption" placeholder="Caption / offer text"/></label>
-        </div>
-        <div id="broadcastImageUploadStatus" class="hint"></div>
-      </div>
       <div class="broadcast-contact-tools">
         <label>Search Customer <input id="broadcastCustomerSearch" list="broadcastCustomerDatalist" placeholder="Name, phone, email, city, tag"/></label>
         <datalist id="broadcastCustomerDatalist"></datalist>
@@ -279,8 +270,7 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
       </div>
       <div class="inline-actions broadcast-action-row">
         <button id="loadBroadcastContacts" class="ghost-btn" type="button">Import Shopify Customers</button>
-        <label class="select-all-line"><input id="broadcastSelectAll" type="checkbox"/> Select All</label>
-        <button id="broadcastDeselectAll" class="ghost-btn" type="button">Deselect All</button>
+        <label class="select-all-line toggle"><input id="broadcastSelectAll" type="checkbox"/> <span id="broadcastSelectAllLabel">Select All</span></label>
         <button id="importBroadcastPaste" class="ghost-btn" type="button">Import Pasted Contacts</button>
         <button id="clearBroadcastContacts" class="ghost-btn danger-outline" type="button">Clear Contacts</button>
         <button id="sendBroadcastNow" class="primary-btn" type="button">Create / Send Broadcast</button>
@@ -290,9 +280,15 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
 
       <div class="broadcast-image-manager panel-lite">
         <div class="section-head mini">
-          <div><h3>Uploaded Image Library</h3><p class="hint">Yaha se image manage karo. Copy Link se URL milega; dropdown se select karne par Image URL auto fill hoga.</p></div>
+          <div><h3>Uploaded Image Library</h3><p class="hint">Upload image, caption manage karo, preview dekho, link copy karo, ya remove karo. Select uploaded image se Image URL auto fill hoga.</p></div>
           <button id="refreshBroadcastImages" class="ghost-btn" type="button">Refresh Images</button>
         </div>
+        <div class="form-grid two image-library-upload-grid">
+          <label>Upload Image Optional <input id="broadcastImageFile" type="file" accept="image/*"/></label>
+          <label>Image Caption / Extra Text <input id="broadcastImageCaption" placeholder="Caption / offer text"/></label>
+        </div>
+        <div id="broadcastImageUploadStatus" class="hint">Image select karte hi upload hoga, preview dikhega aur public URL Image URL field me aa jayega.</div>
+        <div id="broadcastLatestImagePreview" class="broadcast-latest-preview hidden"></div>
         <div id="broadcastImageLibrary" class="image-library-inline"></div>
       </div>
 

@@ -611,6 +611,35 @@ function openCustomerTool(id){ const c=shopifyCustomers.find(x=>String(x.id)===S
 async function bulkCustomerMessage(saveOnly=false){ const selected=selectedCustomers(); if(!selected.length) return alert('Please select customers first.'); const message=$('bulkCustomerMessage')?.value.trim()||''; if(!message) return alert('Please write message text.'); const res=await fetch('/api/shopify/customers/bulk-message',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({customers:selected,message,saveOnly,sendVia:$('bulkSendVia')?.value||'whatsapp'})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if($('shopifyCustomersResult')) shopifyCustomersResult.textContent=JSON.stringify(res,null,2); }
 
 async function fileToDataUrl(file){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=reject; r.readAsDataURL(file); }); }
+
+async function imageFileToOptimizedDataUrl(file, maxSide=1600, quality=0.82){
+  if(!file) throw new Error('Image file missing.');
+  if(!/^image\//i.test(file.type||'')) throw new Error('Only image file upload karo.');
+  const originalDataUrl = await fileToDataUrl(file);
+  // GIF/WebP ko direct upload rakho. JPG/PNG ko resize/compress karke body-size issue avoid karein.
+  if(/image\/(gif|webp)/i.test(file.type||'')) return originalDataUrl;
+  return await new Promise((resolve)=>{
+    const img=new Image();
+    img.onload=()=>{
+      try{
+        let w=img.width||maxSide, h=img.height||maxSide;
+        const scale=Math.min(1, maxSide/Math.max(w,h));
+        w=Math.max(1, Math.round(w*scale)); h=Math.max(1, Math.round(h*scale));
+        const canvas=document.createElement('canvas'); canvas.width=w; canvas.height=h;
+        const ctx=canvas.getContext('2d'); ctx.drawImage(img,0,0,w,h);
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      }catch(e){ resolve(originalDataUrl); }
+    };
+    img.onerror=()=>resolve(originalDataUrl);
+    img.src=originalDataUrl;
+  });
+}
+async function parseJsonResponseSafe(response){
+  const text=await response.text();
+  try{ return JSON.parse(text || '{}'); }
+  catch(e){ return {ok:false,error:`Server returned non-JSON response (${response.status}). ${text.slice(0,160)}`}; }
+}
+
 async function uploadMedia(){
   const files=[...($('mediaFile')?.files||[])];
   if(!files.length) return alert('Please select one or more images first.');
@@ -738,12 +767,37 @@ function parseContactText(text=''){
     const obj={}; if(headers.length){ headers.forEach((h,i)=>obj[h]=parts[i]||''); }
     const phoneRaw=obj.phone||obj.mobile||obj.number||obj['phone number']||parts[1]||parts[0]||line;
     const p=formatWaPhone(phoneRaw); if(!p) continue;
-    const name=obj.name||obj.customer||parts[0]||'Customer';
-    out.push({id:p,name:name && !digitsOnly(name) ? name : 'Customer',phone:p,email:obj.email||parts[2]||'',category:obj.category||obj.tag||obj.tags||parts[3]||'',city:obj.city||parts[4]||'',source:'file'});
+    const name=obj.name||obj.customer||parts[0]||'';
+    out.push({id:p,name:name && !digitsOnly(name) ? name : '',phone:p,email:obj.email||parts[2]||'',category:obj.category||obj.tag||obj.tags||parts[3]||'',city:obj.city||parts[4]||'',source:'file'});
   }
   return out;
 }
 function dedupeBroadcastContacts(list){ const seen=new Set(); const out=[]; for(const c of list){ const phone=formatWaPhone(c.phone); if(!phone||seen.has(phone)) continue; seen.add(phone); out.push({...c,phone,id:c.id||phone}); } return out; }
+function broadcastDisplayName(c={}){
+  const nm=String(c.name||'').trim();
+  if(nm && !/^customer$/i.test(nm) && !digitsOnly(nm)) return nm;
+  const ph=formatWaPhone(c.phone)||String(c.phone||'').trim();
+  return ph || 'Customer';
+}
+function broadcastSecondaryText(c={}){
+  const parts=[];
+  const ph=formatWaPhone(c.phone)||String(c.phone||'').trim();
+  if(ph && broadcastDisplayName(c)!==ph) parts.push(ph);
+  if(c.city) parts.push(c.city);
+  else if(c.email) parts.push(c.email);
+  if(c.category) parts.push(c.category);
+  return parts.filter(Boolean).join(' • ');
+}
+function updateBroadcastSelectAllUi(filtered=[]){
+  const cb=$('broadcastSelectAll'); const lbl=$('broadcastSelectAllLabel');
+  if(!cb) return;
+  const visible=filtered.map(c=>c.phone);
+  const selectedVisible=visible.filter(p=>broadcastSelectedPhones.has(p)).length;
+  const allSelected=visible.length>0 && selectedVisible===visible.length;
+  cb.checked=allSelected;
+  cb.indeterminate=selectedVisible>0 && !allSelected;
+  if(lbl) lbl.textContent=allSelected ? 'Deselect All' : 'Select All';
+}
 function renderBroadcastTemplates(){ const sel=$('broadcastTemplate'); if(!sel) return; const current=sel.value; const seen=new Set(); const opts=(broadcastTemplates||[]).filter(t=>{const k=t.name||t.id;if(!k||seen.has(k)) return false; seen.add(k); return true;}); sel.innerHTML='<option value="">Select template</option>'+opts.map(t=>`<option value="${esc(t.name)}" data-lang="${esc(t.language||'en')}" data-header="${esc(t.headerType||'None')}" data-body="${esc(t.body||'')}" data-vars="${esc((t.variables||[]).join('|'))}">${esc(t.name)} (${esc(t.category||'')}, ${esc(t.language||'en')})</option>`).join(''); if(current && [...sel.options].some(o=>o.value===current)) sel.value=current; renderBroadcastVariableMap(); }
 function categoryMatch(c,cat){ if(!cat) return true; const hay=[c.category,c.tags,c.tag,c.name,c.email,c.city,c.orderStatus,c.raw?.tags].join(' ').toLowerCase(); const key=cat.toLowerCase().replace('é','e'); return hay.includes(key) || (cat==='Home Décor' && /home|decor|décor/.test(hay)); }
 function contactMatchesBroadcastFilter(c){
@@ -757,19 +811,30 @@ function contactMatchesBroadcastFilter(c){
 function renderBroadcastCustomerDatalist(){
   const dl=$('broadcastCustomerDatalist'); if(!dl) return;
   const items=(broadcastContacts.length?broadcastContacts:shopifyCustomers.map(c=>({name:c.name,phone:c.phone,email:c.email,city:c.city,category:c.raw?.tags||''}))).slice(0,500);
-  dl.innerHTML=items.map(c=>`<option value="${esc([c.name,c.phone,c.email,c.city,c.category].filter(Boolean).join(' • '))}"></option>`).join('');
+  dl.innerHTML=items.map(c=>{
+    const primary=esc(broadcastDisplayName(c));
+    const secondary=esc(broadcastSecondaryText(c) || c.email || '');
+    return `<option value="${primary}" label="${secondary}"></option>`;
+  }).join('');
 }
 function currentBroadcastCheckedPhones(){ return new Set([...document.querySelectorAll('.broadcast-check:checked')].map(x=>x.dataset.phone)); }
 let broadcastSelectedPhones = new Set();
 function renderBroadcastContacts(){
   const cat=$('broadcastCategory')?.value||'';
-  const liveChecked=currentBroadcastCheckedPhones(); if(liveChecked.size) broadcastSelectedPhones=liveChecked;
+  const liveChecked=currentBroadcastCheckedPhones(); if(liveChecked.size || document.querySelectorAll('.broadcast-check').length) broadcastSelectedPhones=liveChecked;
   renderBroadcastCustomerDatalist();
   const filtered=broadcastContacts.filter(c=>categoryMatch(c,cat)&&contactMatchesBroadcastFilter(c));
+  if(!broadcastSelectedPhones.size && broadcastContacts.length) broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone));
   const selectedCount=broadcastSelectedPhones.size || document.querySelectorAll('.broadcast-check:checked').length;
   if($('broadcastSummary')) broadcastSummary.textContent=`${filtered.length} contacts shown / ${selectedCount} selected / ${broadcastContacts.length} total`;
+  updateBroadcastSelectAllUi(filtered);
   if(!$('broadcastContactsList')) return;
-  broadcastContactsList.innerHTML=filtered.map(c=>{ const checked=broadcastSelectedPhones.size?broadcastSelectedPhones.has(c.phone):true; if(!broadcastSelectedPhones.size) broadcastSelectedPhones.add(c.phone); return `<label class="mini-customer-row broadcast-row"><input class="broadcast-check" type="checkbox" data-phone="${esc(c.phone)}" ${checked?'checked':''}/> <span><b>${esc(c.name||'Customer')}</b><small>${esc(c.phone)}${c.email?' • '+esc(c.email):''}${c.city?' • '+esc(c.city):''}${c.category?' • '+esc(c.category):''}</small></span></label>`; }).join('') || '<p>No contacts found. Import Shopify Customers, paste contacts, upload CSV/Excel CSV, or change filter.</p>';
+  broadcastContactsList.innerHTML=filtered.map(c=>{
+    const checked=broadcastSelectedPhones.has(c.phone);
+    const primary=broadcastDisplayName(c);
+    const secondary=broadcastSecondaryText(c);
+    return `<label class="mini-customer-row broadcast-row"><input class="broadcast-check" type="checkbox" data-phone="${esc(c.phone)}" ${checked?'checked':''}/> <span><b>${esc(primary)}</b><small>${esc(secondary)}</small></span></label>`;
+  }).join('') || '<p>No contacts found. Import Shopify Customers, paste contacts, upload CSV/Excel CSV, or change filter.</p>';
 }
 async function loadBroadcasts(){
   const d=await fetch('/api/broadcast/campaigns',{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,campaigns:[],templates:[]}));
@@ -1019,7 +1084,7 @@ function setupPwaInstall(){
 setupPwaInstall();
 
 document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); if(e.target.id==='broadcastCategory'||e.target.id==='broadcastCustomerSearch'||e.target.id==='broadcastFilterBy') renderBroadcastContacts(); if(e.target.dataset && e.target.dataset.broadcastVarCustom!==undefined) updateBroadcastVariablesFromMap(); if(e.target.id==='salesOrderSearch') clearTimeout(window.__salesOrderSearchTimer), window.__salesOrderSearchTimer=setTimeout(searchSalesOrders,450); if(e.target.dataset.flowEdit){ const flow=activeFlow(); const i=Number(e.target.dataset.flowIndex); if(flow.blocks&&flow.blocks[i]){ flow.blocks[i][e.target.dataset.flowEdit]=e.target.value; } } const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); if(e.target.checked) phones.forEach(p=>broadcastSelectedPhones.add(p)); else phones.forEach(p=>broadcastSelectedPhones.delete(p)); document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=e.target.checked); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ uploadBroadcastImageFile(e.target.files[0]); } if(e.target.id==='broadcastUploadedImageSelect'){ if($('broadcastImageUrl')) broadcastImageUrl.value=e.target.value||''; } });
+document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); const allSelected=phones.length>0 && phones.every(p=>broadcastSelectedPhones.has(p)); if(allSelected){ phones.forEach(p=>broadcastSelectedPhones.delete(p)); } else { phones.forEach(p=>broadcastSelectedPhones.add(p)); } document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=!allSelected); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ uploadBroadcastImageFile(e.target.files[0]); } if(e.target.id==='broadcastUploadedImageSelect'){ if($('broadcastImageUrl')) broadcastImageUrl.value=e.target.value||''; } });
 document.addEventListener('click',async e=>{
 
   if(e.target.classList && e.target.classList.contains('contact-tab')){ const target=e.target.dataset.target; const mode=e.target.dataset.contactFilter || 'with'; if(target==='crm'){ crmContactFilter=mode; renderCrm(); } if(target==='lead'){ leadContactFilter=mode; renderLeads(); } if(target==='activity'){ activityContactFilter=mode; renderEvents(); } return; }
@@ -1062,7 +1127,7 @@ document.addEventListener('click',async e=>{
   if(e.target.dataset.addShopifyPhone) addWhatsappCustomerToShopify(e.target.dataset.addShopifyPhone, e.target.dataset.addShopifyName || 'WhatsApp Customer');
   if(e.target.id==='loadBroadcastContacts') importShopifyToBroadcast();
   if(e.target.id==='importBroadcastPaste') importBroadcastPaste();
-  if(e.target.id==='clearBroadcastContacts'){ broadcastContacts=[]; broadcastSelectedPhones=new Set(); renderBroadcastContacts(); } if(e.target.id==='broadcastDeselectAll'){ broadcastSelectedPhones=new Set(); document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=false); renderBroadcastContacts(); }
+  if(e.target.id==='clearBroadcastContacts'){ broadcastContacts=[]; broadcastSelectedPhones=new Set(); renderBroadcastContacts(); }
   if(e.target.id==='refreshBroadcastImages') loadMedia();
   if(e.target.id==='sendBroadcastNow') createBroadcast();
   if(e.target.id==='refreshBroadcasts') loadBroadcasts();
@@ -1678,10 +1743,19 @@ function renderBroadcastUploadedImageDropdown(){
   sel.innerHTML='<option value="">Select uploaded image</option>' + (mediaImages||[]).map(img=>`<option value="${esc(broadcastImageUrl(img))}">${esc(img.title||img.originalName||img.filename||'Image')}</option>`).join('');
   if(current && [...sel.options].some(o=>o.value===current)) sel.value=current;
 }
+function renderBroadcastLatestImagePreview(img){
+  const box=$('broadcastLatestImagePreview');
+  if(!box) return;
+  if(!img){ box.classList.add('hidden'); box.innerHTML=''; return; }
+  const url=broadcastImageUrl(img);
+  box.classList.remove('hidden');
+  box.innerHTML=`<div class="broadcast-image-card latest"><img src="${esc(url)}" alt="${esc(img.title||img.filename||'Image')}"/><div class="broadcast-image-meta"><b>${esc(img.title||img.originalName||img.filename||'Image')}</b><small>${esc(url)}</small></div><div class="broadcast-image-actions"><button type="button" class="ghost-btn" data-use-broadcast-img="${esc(url)}">Use</button><button type="button" class="ghost-btn" data-copy-broadcast-img="${esc(url)}">Copy Link</button><button type="button" class="ghost-btn danger-outline" data-delete-broadcast-img="${esc(img.id)}">Remove</button></div></div>`;
+}
 function renderBroadcastImageLibrary(){
   renderBroadcastUploadedImageDropdown();
   const box=$('broadcastImageLibrary'); if(!box) return;
-  box.innerHTML=(mediaImages||[]).slice(0,80).map(img=>{
+  const items=(mediaImages||[]).slice(0,80);
+  box.innerHTML=items.map(img=>{
     const url=broadcastImageUrl(img);
     return `<div class="broadcast-image-card" data-broadcast-image-card="${esc(img.id)}">
       <img src="${esc(url)}" alt="${esc(img.title||img.filename||'Image')}"/>
@@ -1692,35 +1766,45 @@ function renderBroadcastImageLibrary(){
         <button type="button" class="ghost-btn danger-outline" data-delete-broadcast-img="${esc(img.id)}">Remove</button>
       </div>
     </div>`;
-  }).join('') || '<p class="hint">No saved images yet. Upar Upload Image Optional se image upload karo.</p>';
+  }).join('') || '<p class="hint">No saved images yet. Neeche choose file se image upload karo.</p>';
+  renderBroadcastLatestImagePreview(items[0] || null);
 }
 async function uploadBroadcastImageFile(file){
   if(!file) return;
   const status=$('broadcastImageUploadStatus');
-  if(status) status.textContent='Uploading image and creating public URL...';
+  const sendBtn=$('sendBroadcastNow');
+  if(status){ status.className='hint'; status.textContent='Uploading image and creating public URL... Please wait.'; }
+  if(sendBtn) sendBtn.disabled=true;
   try{
     if(!/^image\//i.test(file.type||'')) throw new Error('Only image file upload karo.');
-    if(file.size>8*1024*1024) throw new Error('Image 8 MB se choti honi chahiye.');
-    const dataUrl=await fileToDataUrl(file);
-    const res=await fetch('/api/media-images',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:file.name,title:file.name,category:'broadcast',caption:$('broadcastImageCaption')?.value||'',dataUrl})}).then(r=>r.json());
-    if(!res.ok) throw new Error(res.error||'Image upload failed');
-    await loadMedia();
-    const url=res.image?.absoluteUrl || res.image?.url || '';
+    if(file.size>15*1024*1024) throw new Error('Image 15 MB se choti honi chahiye. Large image ko compress karke upload karein.');
+    const dataUrl=await imageFileToOptimizedDataUrl(file,1600,0.82);
+    const response=await fetch('/api/broadcast-images/upload',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:file.name,title:file.name,category:'broadcast',caption:$('broadcastImageCaption')?.value||'',dataUrl})});
+    const res=await parseJsonResponseSafe(response);
+    if(!response.ok || !res.ok) throw new Error(res.error||`Upload failed with status ${response.status}`);
+    const url=res.image?.absoluteUrl || res.url || res.image?.url || '';
+    if(!url) throw new Error('Public URL generate nahi hua.');
     if($('broadcastImageUrl')) broadcastImageUrl.value=url;
+    await loadMedia();
+    const uploaded=res.image || (mediaImages||[]).find(img=>broadcastImageUrl(img)===url) || {url,absoluteUrl:url,title:file.name,filename:file.name};
     if($('broadcastUploadedImageSelect')) broadcastUploadedImageSelect.value=url;
-    if(status) status.textContent='Image uploaded. Public URL generated and filled in Image URL field.';
+    renderBroadcastImageLibrary();
+    renderBroadcastLatestImagePreview(uploaded);
+    if(status){ status.className='hint success'; status.innerHTML='Image uploaded successfully. Public URL ready: <code>'+esc(url)+'</code>'; }
   }catch(e){
-    if(status) status.textContent='Image upload failed: '+e.message;
+    if(status){ status.className='hint danger'; status.textContent='Image upload failed: '+e.message; }
     alert('Image upload failed: '+e.message);
+  }finally{
+    if(sendBtn) sendBtn.disabled=false;
   }
 }
 document.addEventListener('click', async e=>{
   const use=e.target.closest('[data-use-broadcast-img]');
-  if(use && $('broadcastImageUrl')){ broadcastImageUrl.value=use.dataset.useBroadcastImg; if($('broadcastUploadedImageSelect')) broadcastUploadedImageSelect.value=use.dataset.useBroadcastImg; return; }
+  if(use && $('broadcastImageUrl')){ broadcastImageUrl.value=use.dataset.useBroadcastImg; if($('broadcastUploadedImageSelect')) broadcastUploadedImageSelect.value=use.dataset.useBroadcastImg; const img=(mediaImages||[]).find(x=>broadcastImageUrl(x)===use.dataset.useBroadcastImg); if(img) renderBroadcastLatestImagePreview(img); return; }
   const copy=e.target.closest('[data-copy-broadcast-img]');
   if(copy){ try{ await navigator.clipboard.writeText(copy.dataset.copyBroadcastImg||''); alert('Image link copied.'); }catch(err){ prompt('Copy image link:', copy.dataset.copyBroadcastImg||''); } return; }
   const del=e.target.closest('[data-delete-broadcast-img]');
-  if(del){ if(confirm('Remove this image from library?')){ await fetch('/api/media-images/'+encodeURIComponent(del.dataset.deleteBroadcastImg),{method:'DELETE',credentials:'include'}); await loadMedia(); } return; }
+  if(del){ if(confirm('Remove this image from library?')){ const deleting=(mediaImages||[]).find(x=>String(x.id)===String(del.dataset.deleteBroadcastImg)); const deletingUrl=deleting?broadcastImageUrl(deleting):''; await fetch('/api/media-images/'+encodeURIComponent(del.dataset.deleteBroadcastImg),{method:'DELETE',credentials:'include'}); await loadMedia(); renderBroadcastImageLibrary(); if($('broadcastImageUrl') && $('broadcastImageUrl').value===deletingUrl) broadcastImageUrl.value=''; if($('broadcastUploadedImageSelect') && $('broadcastUploadedImageSelect').value===deletingUrl) broadcastUploadedImageSelect.value=''; } return; }
 });
 
 (function tsgLoaderSafetyMobileFinal(){
