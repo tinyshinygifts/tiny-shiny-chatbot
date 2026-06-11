@@ -597,14 +597,30 @@ async function saveShippingProvider(){
   shippingSettings=d.shipping||shippingSettings;
 }
 
-function crmValue(c){ return [c.name,c.phone,c.email,c.productTitle,c.pageUrl,c.orderName,c.orderStatus,c.whatsappStatus,c.paymentMethod,c.total,c.lastMessage,c.status,c.sourceType].join(' ').toLowerCase(); }
+function parseDateMs(v){ const t=Date.parse(String(v||'')); return Number.isFinite(t)?t:0; }
+function orderNoValue(v){ const m=String(v||'').match(/\d+/g); return m?Number(m[m.length-1]):0; }
+function crmSortValue(c){ return parseDateMs(c.orderSortAt||c.orderCreatedAt||c.updatedAt||c.createdAt); }
+function formatCrmDate(v){
+  const t=parseDateMs(v);
+  if(!t) return '';
+  const d=new Date(t);
+  const dd=String(d.getDate()).padStart(2,'0');
+  const mm=String(d.getMonth()+1).padStart(2,'0');
+  const yy=d.getFullYear();
+  let h=d.getHours();
+  const ap=h>=12?'PM':'AM';
+  h=h%12; if(!h) h=12;
+  const mi=String(d.getMinutes()).padStart(2,'0');
+  return `${dd}-${mm}-${yy} ${String(h).padStart(2,'0')}:${mi} ${ap}`;
+}
+function crmValue(c){ const on=String(c.orderName||''); return [c.name,c.phone,c.email,c.productTitle,c.pageUrl,on,on.replace('#',''),c.orderStatus,c.whatsappStatus,c.paymentMethod,c.total,c.lastMessage,c.status,c.sourceType,formatCrmDate(c.orderCreatedAt||c.updatedAt||c.createdAt)].join(' ').toLowerCase(); }
 function shortUrl(u){ const s=String(u||''); return s.length>95 ? s.slice(0,95)+'…' : s; }
 function renderCrm(){
   const q=($('crmSearch')?.value||'').toLowerCase().trim();
   const st=$('crmStatusFilter')?.value||'';
   renderCrmTabs();
   const base=contactFiltered(crmCustomers, crmContactFilter);
-  const filtered=base.filter(c=>(!q||crmValue(c).includes(q))&&(!st||(c.status||'New')===st)).sort((x,y)=>String(y.updatedAt||y.createdAt||'').localeCompare(String(x.updatedAt||x.createdAt||'')));
+  const filtered=base.filter(c=>(!q||crmValue(c).includes(q))&&(!st||(c.status||'New')===st)).sort((x,y)=>{ const dt=crmSortValue(y)-crmSortValue(x); if(dt) return dt; return orderNoValue(y.orderName||y.orderId)-orderNoValue(x.orderName||x.orderId); });
   if($('crmCount')) crmCount.textContent=crmCustomers.length;
   if($('crmSummary')){
     const counts=crmCustomers.reduce((a,c)=>{const k=c.status||'New';a[k]=(a[k]||0)+1;return a;},{});
@@ -618,7 +634,7 @@ function renderCrm(){
     const statusLine=[c.orderStatus?`Order Status: ${c.orderStatus}`:'', c.whatsappStatus?`WhatsApp: ${c.whatsappStatus}`:''].filter(Boolean).join(' | ');
     return `<div class="crm-card clean-crm-card" data-crm-id="${esc(c.id)}">
       <div class="crm-main"><b>${esc(c.name||'Customer')}</b><span>${esc(c.phone||'No phone')}${c.email?' • '+esc(c.email):''}</span></div>
-      <div class="crm-meta"><span class="status-chip">${esc(c.status||'New')}</span><span class="${hasContactNumber(c)?'contact-ok':'contact-missing'}">${hasContactNumber(c)?'With Contact Number':'Without Contact Number'}</span><span>${esc(c.updatedAt||c.createdAt)}</span><span>Leads: ${esc(c.leadCount||0)} • Activity: ${esc(c.activityCount||0)}</span></div>
+      <div class="crm-meta"><span class="status-chip">${esc(c.status||'New')}</span><span class="${hasContactNumber(c)?'contact-ok':'contact-missing'}">${hasContactNumber(c)?'With Contact Number':'Without Contact Number'}</span><span>${esc(formatCrmDate(c.orderCreatedAt||c.updatedAt||c.createdAt))}</span><span>Leads: ${esc(c.leadCount||0)} • Activity: ${esc(c.activityCount||0)}</span></div>
       ${orderLine?`<div class="crm-message"><b>${esc(orderLine)}</b></div>`:''}
       ${statusLine?`<div class="crm-message">${esc(statusLine)}</div>`:''}
       <div class="crm-product-row">${c.productImage?`<img src="${esc(c.productImage)}" alt=""/>`:''}<div><b>${esc(c.productTitle||'No product yet')}</b><br/><a href="${esc(c.pageUrl||'#')}" target="_blank" title="${esc(c.pageUrl||'')}">${esc(shortUrl(c.pageUrl||''))}</a><div class="crm-message">${esc(c.lastMessage||'')}</div></div></div>

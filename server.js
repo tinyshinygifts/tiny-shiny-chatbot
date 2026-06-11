@@ -478,6 +478,36 @@ function isOrderCrmType(record = {}) {
   const type = String(record.type || record.sourceType || '').toLowerCase();
   return ['shopify_order_webhook','cod_order_confirmed','cod_order_cancelled','order_confirmation','cod_confirmation'].includes(type) || Boolean(crmOrderIdFromRecord(record) && (record.isShopifyOrder || record.isCodOrder));
 }
+function validIso(value='') {
+  const t = Date.parse(String(value || ''));
+  return Number.isFinite(t) ? new Date(t).toISOString() : '';
+}
+function latestIso(a='', b='') {
+  const ia = validIso(a), ib = validIso(b);
+  if (!ia) return ib || '';
+  if (!ib) return ia || '';
+  return Date.parse(ia) >= Date.parse(ib) ? ia : ib;
+}
+function crmEventTime(record = {}, fallback = nowIso()) {
+  const raw = record.raw || {};
+  return validIso(record.updatedAt || record.createdAt || record.at || record.sentAt || raw.updated_at || raw.created_at || raw.processed_at || fallback) || fallback;
+}
+function crmOrderTime(record = {}, fallback = nowIso()) {
+  const raw = record.raw || {};
+  return validIso(record.orderCreatedAt || record.orderDate || raw.created_at || raw.processed_at || record.createdAt || fallback) || fallback;
+}
+function orderNumberValue(value='') {
+  const n = String(value || '').match(/\d+/g);
+  return n ? Number(n[n.length - 1]) : 0;
+}
+function crmSortRows(rows = []) {
+  return (rows || []).sort((a,b) => {
+    const at = Date.parse(a.orderSortAt || a.orderCreatedAt || a.updatedAt || a.createdAt || '') || 0;
+    const bt = Date.parse(b.orderSortAt || b.orderCreatedAt || b.updatedAt || b.createdAt || '') || 0;
+    if (bt !== at) return bt - at;
+    return orderNumberValue(b.orderName || b.orderId || '') - orderNumberValue(a.orderName || a.orderId || '');
+  });
+}
 function crmKey(record = {}) {
   const raw = record.raw || {};
   const orderId = crmOrderIdFromRecord(record);
@@ -502,10 +532,14 @@ function upsertCrm(record = {}, source = 'lead') {
   const pageUrl = cleanText(record.pageUrl || record.productUrl || record.product?.url || raw.order_status_url || raw.status_url);
   const eventType = cleanText(record.type || record.eventType || source);
   const now = nowIso();
-  const base = idx >= 0 ? all[idx] : { id: crypto.randomUUID(), crmKey: key, createdAt: now, status: 'New', notes: '', tags: [] };
+  const eventAt = crmEventTime(record, now);
+  const orderCreatedAt = crmOrderTime(record, eventAt);
+  const base = idx >= 0 ? all[idx] : { id: crypto.randomUUID(), crmKey: key, createdAt: orderCreatedAt || eventAt || now, status: 'New', notes: '', tags: [] };
   const next = {
     ...base,
-    updatedAt: now,
+    updatedAt: latestIso(base.updatedAt || base.createdAt, eventAt) || eventAt || now,
+    orderCreatedAt: base.orderCreatedAt || orderCreatedAt || '',
+    orderSortAt: latestIso(base.orderSortAt || base.orderCreatedAt || base.createdAt, orderCreatedAt || eventAt) || orderCreatedAt || eventAt || '',
     lastSource: source,
     lastEventType: eventType || base.lastEventType || '',
     name: name || base.name || '',
@@ -541,7 +575,7 @@ function upsertCrm(record = {}, source = 'lead') {
     }
     deduped.push(row);
   }
-  writeJson(crmPath, deduped.slice(0, 5000));
+  writeJson(crmPath, crmSortRows(deduped).slice(0, 5000));
   return next;
 }
 function googleSheetsEnabled() {
@@ -2385,11 +2419,13 @@ app.get('/api/crm', (req, res) => {
         existing.orderStatus = appendStatusLine(existing.orderStatus, row.orderStatus);
         existing.whatsappStatus = appendStatusLine(existing.whatsappStatus, row.whatsappStatus);
         existing.lastMessage = appendStatusLine(existing.lastMessage, row.lastMessage);
-        existing.updatedAt = String(existing.updatedAt||'') > String(row.updatedAt||'') ? existing.updatedAt : row.updatedAt;
+        existing.updatedAt = latestIso(existing.updatedAt || existing.createdAt, row.updatedAt || row.createdAt);
+        existing.orderCreatedAt = existing.orderCreatedAt || row.orderCreatedAt || row.createdAt || '';
+        existing.orderSortAt = latestIso(existing.orderSortAt || existing.orderCreatedAt || existing.createdAt, row.orderSortAt || row.orderCreatedAt || row.updatedAt || row.createdAt);
       }
     } else cleaned.push(row);
   }
-  const customers = [...byOrder.values(), ...cleaned].sort((a,b)=>String(b.updatedAt||b.createdAt||'').localeCompare(String(a.updatedAt||a.createdAt||'')));
+  const customers = crmSortRows([...byOrder.values(), ...cleaned]);
   writeJson(crmPath, customers.slice(0,5000));
   const summary = customers.reduce((acc, c) => { acc.total++; acc[c.status || 'New'] = (acc[c.status || 'New'] || 0) + 1; return acc; }, { total: 0 });
   res.json({ ok: true, customers, summary });

@@ -1,31 +1,28 @@
 CHANGES_DONE
 
-v27 update:
-1. CRM duplicate order fix.
-   - Same order number ab multiple CRM cards me repeat nahi hoga.
-   - Existing duplicate order cards CRM load par merge/clean honge.
-   - Same order ke status updates ek hi card me append honge.
+v30 update (base v28):
 
-2. Order status append format.
-   - Order status / WhatsApp status / message line me new updates "|" separator ke saath append honge.
-   - Example: COD Confirmation Pending - WhatsApp Sent | Customer Cancelled | Shopify Cancelled
+1. CRM same-time issue fixed.
+   - CRM dashboard refresh/backfill no longer sets all order cards to the same current time.
+   - Each Shopify order card uses actual Shopify order created time / webhook event time.
 
-3. CRM sorting fix.
-   - Latest updated/order card upar aayega.
-   - Purane orders niche jayenge.
+2. Readable date/time format added.
+   - CRM now shows date like: 11-06-2026 12:11 AM
+   - Raw ISO format is hidden from CRM card display.
 
-4. WhatsApp Cancel -> Shopify Cancel fix improved.
-   - Cancel/No/Nahi reply latest pending COD order se match hoga.
-   - Phone matching billing/shipping/customer/default phone sabse hoga.
-   - Cancel success/fail CRM me append hoga.
-   - CRM also updates when lead status changes.
+3. CRM sorting improved.
+   - Latest order/date-time appears at the top.
+   - If date/time is same, higher order number appears first.
+   - Example: #1041 appears above #1040.
+
+4. Order number search improved.
+   - Searching #1041 or 1041 both work.
+
+5. Preserved previous v28/v27 fixes.
+   - Duplicate order cards merge by order number.
+   - Same order status appends with "|" separator.
+   - WhatsApp Cancel -> Shopify Cancel improvements remain.
+   - Mobile chat button smaller and moved upward remains.
 
 Base:
-- v26 ZIP used as base.
-
-v28 update:
-1. Mobile site floating chat button reduced in size to about 90%.
-2. Mobile site floating chat button moved upward so it does not sit too low over the bottom nav.
-3. Mobile opened chat box also moved upward accordingly.
-Base:
-- v27 ZIP used as base.
+- v28 ZIP used as base.
