@@ -1114,3 +1114,5 @@ html,body{max-width:100%;overflow-x:hidden!important;}
 @media(max-width:760px){.form-grid.five{grid-template-columns:1fr}.image-library-inline{grid-template-columns:1fr}.broadcast-image-card{grid-template-columns:58px minmax(0,1fr)}.broadcast-image-card img{width:58px;height:58px}}
 
 .broadcast-latest-preview{margin:12px 0}.select-all-line.toggle{cursor:pointer;user-select:none}
+
+.broadcast-latest-preview{display:none !important;}

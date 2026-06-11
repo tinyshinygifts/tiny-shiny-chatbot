@@ -795,7 +795,8 @@ function updateBroadcastSelectAllUi(filtered=[]){
   const selectedVisible=visible.filter(p=>broadcastSelectedPhones.has(p)).length;
   const allSelected=visible.length>0 && selectedVisible===visible.length;
   cb.checked=allSelected;
-  cb.indeterminate=selectedVisible>0 && !allSelected;
+  cb.indeterminate=visible.length>0 && selectedVisible>0 && !allSelected;
+  if(!visible.length){ cb.checked=false; cb.indeterminate=false; }
   if(lbl) lbl.textContent=allSelected ? 'Deselect All' : 'Select All';
 }
 function renderBroadcastTemplates(){ const sel=$('broadcastTemplate'); if(!sel) return; const current=sel.value; const seen=new Set(); const opts=(broadcastTemplates||[]).filter(t=>{const k=t.name||t.id;if(!k||seen.has(k)) return false; seen.add(k); return true;}); sel.innerHTML='<option value="">Select template</option>'+opts.map(t=>`<option value="${esc(t.name)}" data-lang="${esc(t.language||'en')}" data-header="${esc(t.headerType||'None')}" data-body="${esc(t.body||'')}" data-vars="${esc((t.variables||[]).join('|'))}">${esc(t.name)} (${esc(t.category||'')}, ${esc(t.language||'en')})</option>`).join(''); if(current && [...sel.options].some(o=>o.value===current)) sel.value=current; renderBroadcastVariableMap(); }
@@ -821,10 +822,10 @@ function currentBroadcastCheckedPhones(){ return new Set([...document.querySelec
 let broadcastSelectedPhones = new Set();
 function renderBroadcastContacts(){
   const cat=$('broadcastCategory')?.value||'';
-  const liveChecked=currentBroadcastCheckedPhones(); if(liveChecked.size || document.querySelectorAll('.broadcast-check').length) broadcastSelectedPhones=liveChecked;
+  const liveChecked=currentBroadcastCheckedPhones();
+  if(liveChecked.size || document.querySelectorAll('.broadcast-check').length) broadcastSelectedPhones=liveChecked;
   renderBroadcastCustomerDatalist();
   const filtered=broadcastContacts.filter(c=>categoryMatch(c,cat)&&contactMatchesBroadcastFilter(c));
-  if(!broadcastSelectedPhones.size && broadcastContacts.length) broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone));
   const selectedCount=broadcastSelectedPhones.size || document.querySelectorAll('.broadcast-check:checked').length;
   if($('broadcastSummary')) broadcastSummary.textContent=`${filtered.length} contacts shown / ${selectedCount} selected / ${broadcastContacts.length} total`;
   updateBroadcastSelectAllUi(filtered);
@@ -901,17 +902,19 @@ function broadcastFriendlyResult(res){
 
 async function createBroadcast(){
   const contacts=selectedBroadcastContacts(); if(!contacts.length) return alert('Please import/select contacts first.');
-  const templateName=$('broadcastTemplate')?.value||''; if(!templateName) return alert('Please select approved template.');
+  const msgType=($('broadcastMessageType')?.value||'template').trim();
+  const templateName=$('broadcastTemplate')?.value||'';
   const tpl=selectedBroadcastTemplate();
   const imageUrl=($('broadcastImageUrl')?.value||'').trim();
-  const msgType=($('broadcastMessageType')?.value||'template').trim();
-  if(broadcastTemplateNeedsImageUi(tpl) && !imageUrl){
+  const selectedLang=$('broadcastTemplateLang')?.value||tpl.language||'en';
+  if(msgType==='template' && !templateName) return alert('Please select approved template.');
+  if(msgType==='template' && broadcastTemplateNeedsImageUi(tpl) && !imageUrl){
     return alert(`Template '${templateName}' me Image header hai. Please public Image URL add karo. File upload sirf preview ke liye hai.`);
   }
   if(msgType.includes('image') && !imageUrl){
     return alert('Image / Image + Text selected hai. Please public Image URL add karo.');
   }
-  if(tpl.language && $('broadcastTemplateLang') && broadcastTemplateLang.value !== tpl.language){
+  if(tpl.language && $('broadcastTemplateLang') && selectedLang !== tpl.language){
     broadcastTemplateLang.value = tpl.language;
   }
   const variables=String($('broadcastVariables')?.value||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
@@ -920,6 +923,7 @@ async function createBroadcast(){
   if($('broadcastResult')) broadcastResult.textContent=broadcastFriendlyResult(res) + '\n\n' + JSON.stringify(res,null,2);
   if(!res.ok) alert(res.error || 'Broadcast failed.');
   await loadBroadcasts();
+  await loadPhase2Analytics().catch(()=>{});
 }
 
 function defaultCatalogCategoriesUi(){
@@ -989,7 +993,7 @@ function renderPhase2Analytics(){
   const segs=phase2Segments||[];
   if($('phase2Segments')) phase2Segments.innerHTML=segs.map(seg=>`<div class="segment-card"><b>${esc(seg.name)}</b><span>${esc(seg.count||0)} contacts</span><small>${esc(seg.rule||'')}</small></div>`).join('')||'<p>No segments yet.</p>';
   const campaigns=s.campaignStats||[];
-  if($('phase2CampaignStats')) phase2CampaignStats.innerHTML=`<table class="customer-table"><thead><tr><th>Campaign</th><th>Status</th><th>Audience</th><th>Sent</th><th>Delivered</th><th>Read</th><th>Failed</th><th>Clicks</th><th>Actions</th></tr></thead><tbody>${campaigns.map(c=>`<tr><td>${esc(c.name||c.id)}</td><td>${esc(c.status)}</td><td>${esc(c.audienceCount||0)}</td><td>${esc(c.sentCount||0)}</td><td>${esc(c.deliveredCount||0)}</td><td>${esc(c.readCount||0)}</td><td>${esc(c.failedCount||0)}</td><td>${esc(c.clickCount||0)}</td><td><button class="ghost-btn" data-campaign-action="pause" data-campaign-id="${esc(c.id)}">Pause</button><button class="ghost-btn" data-campaign-action="resume" data-campaign-id="${esc(c.id)}">Resume</button><button class="ghost-btn danger-outline" data-campaign-action="stop" data-campaign-id="${esc(c.id)}">Stop</button></td></tr>`).join('')}</tbody></table>`;
+  if($('phase2CampaignStats')) phase2CampaignStats.innerHTML=`<table class="customer-table"><thead><tr><th>Campaign</th><th>Status</th><th>Audience</th><th>Sent</th><th>Delivered</th><th>Read</th><th>Failed</th><th>Clicks</th><th>Actions</th></tr></thead><tbody>${campaigns.map(c=>`<tr><td>${esc(c.name||c.id)}</td><td>${esc(c.status)}</td><td>${esc(c.audienceCount||0)}</td><td>${esc(c.sentCount||0)}</td><td>${esc(c.deliveredCount||0)}</td><td>${esc(c.readCount||0)}</td><td>${esc(c.failedCount||0)}</td><td>${esc(c.clickCount||0)}</td><td><button class="ghost-btn" data-campaign-action="pause" data-campaign-id="${esc(c.id)}">Pause</button><button class="ghost-btn" data-campaign-action="resume" data-campaign-id="${esc(c.id)}">Resume</button><button class="ghost-btn danger-outline" data-campaign-action="stop" data-campaign-id="${esc(c.id)}">Stop</button><button class="ghost-btn" data-campaign-action="report" data-campaign-id="${esc(c.id)}">Report</button></td></tr>`).join('')}</tbody></table>`;
 }
 async function loadPhase2Analytics(){
   await loadQuickReplySettings().catch(()=>{});
@@ -1000,7 +1004,46 @@ async function campaignAction(id,action){
   const d=await fetch(`/api/phase2/campaigns/${encodeURIComponent(id)}/${encodeURIComponent(action)}`,{method:'POST',credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
   if($('phase2Result')) phase2Result.textContent=JSON.stringify(d,null,2); await loadPhase2Analytics();
 }
-function renderDrips(){
+async function exportCampaignReport(id){
+  if(!broadcastCampaigns.length) await loadBroadcasts().catch(()=>{});
+  const campaign=(broadcastCampaigns||[]).find(c=>String(c.id)===String(id));
+  if(!campaign) return alert('Campaign report data not found.');
+  const rows=[];
+  rows.push(['Campaign Name', campaign.name||'']);
+  rows.push(['Template', campaign.templateName||'']);
+  rows.push(['Language', campaign.templateLang||'']);
+  rows.push(['Status', campaign.status||'']);
+  rows.push(['Audience', String((campaign.contacts||[]).length||0)]);
+  rows.push(['Sent', String(campaign.sentCount||0)]);
+  rows.push(['Delivered', String(campaign.deliveredCount||0)]);
+  rows.push(['Read', String(campaign.readCount||0)]);
+  rows.push(['Failed', String(campaign.failedCount||0)]);
+  rows.push(['Skipped', String(campaign.skippedCount||0)]);
+  rows.push([]);
+  rows.push(['Campaign','Customer Name','Phone','Status','Failed Reason','Sent Time','Delivered Time','Read Time']);
+  (campaign.results||[]).forEach(r=>{
+    const detail=r.result||{};
+    const err=detail.friendlyError || detail.reason || detail.error || detail.json?.error?.message || '';
+    rows.push([
+      campaign.name||'',
+      r.name || detail.contact?.name || '',
+      r.phone || detail.contact?.phone || '',
+      r.status || '',
+      err,
+      r.at || '',
+      r.deliveredAt || '',
+      r.readAt || ''
+    ]);
+  });
+  const csv=rows.map(row=>row.map(v=>`\"${String(v??'').replace(/\"/g,'\"\"')}\"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob);
+  const safe=(campaign.name||'campaign').toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+  a.download=`broadcast-report-${safe||'campaign'}-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+}function renderDrips(){
   if(!$('dripList')) return;
   dripList.innerHTML=(dripCampaigns||[]).map(d=>`<div class="campaign-card"><b>${esc(d.name)}</b><span>${esc(d.trigger||'')}</span><small>${esc(d.enabled?'Enabled':'Disabled')} • ${esc(d.updatedAt||d.createdAt||'')}</small><pre>${esc((d.steps||[]).map(s=>`${s.day||''} | ${s.template||''} | ${s.message||''}`).join('\n'))}</pre></div>`).join('')||'<p>No drip campaigns yet.</p>';
 }
@@ -1084,7 +1127,7 @@ function setupPwaInstall(){
 setupPwaInstall();
 
 document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); if(e.target.id==='broadcastCategory'||e.target.id==='broadcastCustomerSearch'||e.target.id==='broadcastFilterBy') renderBroadcastContacts(); if(e.target.dataset && e.target.dataset.broadcastVarCustom!==undefined) updateBroadcastVariablesFromMap(); if(e.target.id==='salesOrderSearch') clearTimeout(window.__salesOrderSearchTimer), window.__salesOrderSearchTimer=setTimeout(searchSalesOrders,450); if(e.target.dataset.flowEdit){ const flow=activeFlow(); const i=Number(e.target.dataset.flowIndex); if(flow.blocks&&flow.blocks[i]){ flow.blocks[i][e.target.dataset.flowEdit]=e.target.value; } } const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); const allSelected=phones.length>0 && phones.every(p=>broadcastSelectedPhones.has(p)); if(allSelected){ phones.forEach(p=>broadcastSelectedPhones.delete(p)); } else { phones.forEach(p=>broadcastSelectedPhones.add(p)); } document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=!allSelected); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ uploadBroadcastImageFile(e.target.files[0]); } if(e.target.id==='broadcastUploadedImageSelect'){ if($('broadcastImageUrl')) broadcastImageUrl.value=e.target.value||''; } });
+document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); const allSelected=phones.length>0 && phones.every(p=>broadcastSelectedPhones.has(p)); if(allSelected){ phones.forEach(p=>broadcastSelectedPhones.delete(p)); } else { phones.forEach(p=>broadcastSelectedPhones.add(p)); } document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=!allSelected); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ uploadBroadcastImageFile(e.target.files[0]); } if(e.target.id==='broadcastUploadedImageSelect'){ const sel=e.target; const option=sel.selectedOptions && sel.selectedOptions[0]; const url=(option && option.dataset.url) || sel.value || ''; if($('broadcastImageUrl')) broadcastImageUrl.value=url; if(sel.value!==url) sel.value=url; } });
 document.addEventListener('click',async e=>{
 
   if(e.target.classList && e.target.classList.contains('contact-tab')){ const target=e.target.dataset.target; const mode=e.target.dataset.contactFilter || 'with'; if(target==='crm'){ crmContactFilter=mode; renderCrm(); } if(target==='lead'){ leadContactFilter=mode; renderLeads(); } if(target==='activity'){ activityContactFilter=mode; renderEvents(); } return; }
@@ -1140,7 +1183,7 @@ document.addEventListener('click',async e=>{
   if(e.target.dataset.flowMove){ const flow=activeFlow(); const i=Number(e.target.dataset.flowIndex); const j=e.target.dataset.flowMove==='up'?i-1:i+1; if(flow.blocks && flow.blocks[i] && flow.blocks[j]){ [flow.blocks[i],flow.blocks[j]]=[flow.blocks[j],flow.blocks[i]]; renderFlowBuilder(); } }
   if(e.target.id==='refreshPhase2Analytics') loadPhase2Analytics();
   if(e.target.id==='saveQuickReplySettings') saveQuickReplySettings();
-  if(e.target.dataset.campaignAction) campaignAction(e.target.dataset.campaignId, e.target.dataset.campaignAction);
+  if(e.target.dataset.campaignAction){ if(e.target.dataset.campaignAction==='report') exportCampaignReport(e.target.dataset.campaignId); else campaignAction(e.target.dataset.campaignId, e.target.dataset.campaignAction); }
   if(e.target.id==='refreshDrips') loadDrips();
   if(e.target.id==='saveDripCampaign') saveDrip();
   if(e.target.id==='refreshInstagramInbox') loadInstagram();
@@ -1739,17 +1782,13 @@ document.addEventListener('change', e=>{ if(e.target.dataset.catActive!==undefin
 function broadcastImageUrl(img){ return img.absoluteUrl || img.url || ''; }
 function renderBroadcastUploadedImageDropdown(){
   const sel=$('broadcastUploadedImageSelect'); if(!sel) return;
-  const current=sel.value;
-  sel.innerHTML='<option value="">Select uploaded image</option>' + (mediaImages||[]).map(img=>`<option value="${esc(broadcastImageUrl(img))}">${esc(img.title||img.originalName||img.filename||'Image')}</option>`).join('');
-  if(current && [...sel.options].some(o=>o.value===current)) sel.value=current;
+  const current=($('broadcastImageUrl')?.value || sel.value || '').trim();
+  sel.innerHTML='<option value="">Select uploaded image</option>' + (mediaImages||[]).map(img=>{ const url=broadcastImageUrl(img); return `<option value="${esc(url)}" data-url="${esc(url)}" data-id="${esc(img.id||'')}">${esc(img.title||img.originalName||img.filename||'Image')}</option>`; }).join('');
+  if(current && [...sel.options].some(o=>o.value===current || o.dataset.url===current)) sel.value=current;
 }
 function renderBroadcastLatestImagePreview(img){
   const box=$('broadcastLatestImagePreview');
-  if(!box) return;
-  if(!img){ box.classList.add('hidden'); box.innerHTML=''; return; }
-  const url=broadcastImageUrl(img);
-  box.classList.remove('hidden');
-  box.innerHTML=`<div class="broadcast-image-card latest"><img src="${esc(url)}" alt="${esc(img.title||img.filename||'Image')}"/><div class="broadcast-image-meta"><b>${esc(img.title||img.originalName||img.filename||'Image')}</b><small>${esc(url)}</small></div><div class="broadcast-image-actions"><button type="button" class="ghost-btn" data-use-broadcast-img="${esc(url)}">Use</button><button type="button" class="ghost-btn" data-copy-broadcast-img="${esc(url)}">Copy Link</button><button type="button" class="ghost-btn danger-outline" data-delete-broadcast-img="${esc(img.id)}">Remove</button></div></div>`;
+  if(box){ box.classList.add('hidden'); box.innerHTML=''; }
 }
 function renderBroadcastImageLibrary(){
   renderBroadcastUploadedImageDropdown();
@@ -1767,7 +1806,7 @@ function renderBroadcastImageLibrary(){
       </div>
     </div>`;
   }).join('') || '<p class="hint">No saved images yet. Neeche choose file se image upload karo.</p>';
-  renderBroadcastLatestImagePreview(items[0] || null);
+
 }
 async function uploadBroadcastImageFile(file){
   if(!file) return;
@@ -1789,7 +1828,7 @@ async function uploadBroadcastImageFile(file){
     const uploaded=res.image || (mediaImages||[]).find(img=>broadcastImageUrl(img)===url) || {url,absoluteUrl:url,title:file.name,filename:file.name};
     if($('broadcastUploadedImageSelect')) broadcastUploadedImageSelect.value=url;
     renderBroadcastImageLibrary();
-    renderBroadcastLatestImagePreview(uploaded);
+
     if(status){ status.className='hint success'; status.innerHTML='Image uploaded successfully. Public URL ready: <code>'+esc(url)+'</code>'; }
   }catch(e){
     if(status){ status.className='hint danger'; status.textContent='Image upload failed: '+e.message; }
@@ -1800,7 +1839,7 @@ async function uploadBroadcastImageFile(file){
 }
 document.addEventListener('click', async e=>{
   const use=e.target.closest('[data-use-broadcast-img]');
-  if(use && $('broadcastImageUrl')){ broadcastImageUrl.value=use.dataset.useBroadcastImg; if($('broadcastUploadedImageSelect')) broadcastUploadedImageSelect.value=use.dataset.useBroadcastImg; const img=(mediaImages||[]).find(x=>broadcastImageUrl(x)===use.dataset.useBroadcastImg); if(img) renderBroadcastLatestImagePreview(img); return; }
+  if(use && $('broadcastImageUrl')){ broadcastImageUrl.value=use.dataset.useBroadcastImg; if($('broadcastUploadedImageSelect')) broadcastUploadedImageSelect.value=use.dataset.useBroadcastImg; const img=(mediaImages||[]).find(x=>broadcastImageUrl(x)===use.dataset.useBroadcastImg); return; }
   const copy=e.target.closest('[data-copy-broadcast-img]');
   if(copy){ try{ await navigator.clipboard.writeText(copy.dataset.copyBroadcastImg||''); alert('Image link copied.'); }catch(err){ prompt('Copy image link:', copy.dataset.copyBroadcastImg||''); } return; }
   const del=e.target.closest('[data-delete-broadcast-img]');

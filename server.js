@@ -1616,17 +1616,22 @@ function readableWhatsappError(result={}, campaign={}) {
 function validateBroadcastBeforeSend(body={}, contacts=[]) {
   const templateName = String(body.templateName || '').trim();
   const templateLang = String(body.templateLang || 'en').trim();
-  if (!templateName) return { ok:false, error:'Please select WhatsApp template.' };
-  const tpl = findBroadcastTemplateByName(templateName);
-  if (!tpl) return { ok:false, error:`Template '${templateName}' Saved Templates me nahi mila. Pehle WhatsApp Templates Library me add/save karo.` };
-  const savedLang = String(tpl.language || 'en').trim();
-  if (savedLang && templateLang && savedLang !== templateLang) {
-    return { ok:false, error:`Template '${templateName}' ki saved language '${savedLang}' hai, lekin campaign me '${templateLang}' selected hai. Language '${savedLang}' use karo ya Meta me same language approve karo.` };
+  const messageType = String(body.messageType || 'template').trim().toLowerCase();
+  const tpl = templateName ? findBroadcastTemplateByName(templateName) : null;
+  if (messageType === 'template') {
+    if (!templateName) return { ok:false, error:'Please select WhatsApp template.' };
+    if (!tpl) return { ok:false, error:`Template '${templateName}' Saved Templates me nahi mila. Pehle WhatsApp Templates Library me add/save karo.` };
+    const savedLang = String(tpl.language || 'en').trim();
+    if (savedLang && templateLang && savedLang !== templateLang) {
+      return { ok:false, error:`Template '${templateName}' ki saved language '${savedLang}' hai, lekin campaign me '${templateLang}' selected hai. Language '${savedLang}' use karo ya Meta me same language approve karo.` };
+    }
+    if (broadcastTemplateNeedsImage(tpl) && !String(body.imageUrl || '').trim()) {
+      return { ok:false, error:`Template '${templateName}' me Image header hai. Send karne se pehle Image URL add karo. File upload sirf preview ke liye hai; live WhatsApp ke liye public image URL required hai.` };
+    }
+  } else {
+    if (templateName && !tpl) return { ok:false, error:`Selected template '${templateName}' Saved Templates me nahi mila.` };
   }
-  if (broadcastTemplateNeedsImage(tpl) && !String(body.imageUrl || '').trim()) {
-    return { ok:false, error:`Template '${templateName}' me Image header hai. Send karne se pehle Image URL add karo. File upload sirf preview ke liye hai; live WhatsApp ke liye public image URL required hai.` };
-  }
-  if (String(body.messageType || '').toLowerCase().includes('image') && !String(body.imageUrl || '').trim()) {
+  if (messageType.includes('image') && !String(body.imageUrl || '').trim()) {
     return { ok:false, error:'Image/Image + Text message selected hai. Please public Image URL add karo.' };
   }
   if (!contacts.length) return { ok:false, error:'No valid contacts found.' };
@@ -1647,6 +1652,35 @@ function broadcastTemplateComponents(campaign={}, contact={}) {
   const vars=broadcastVariables(campaign, contact);
   if(vars.length) components.push({ type:'body', parameters:vars.map(textParam) });
   return components;
+}
+function broadcastRenderedText(campaign={}, contact={}) {
+  const tpl = findBroadcastTemplateByName(campaign.templateName || '');
+  const vars = broadcastVariables(campaign, contact);
+  let text = String(campaign.message || campaign.imageCaption || tpl?.body || '').trim();
+  if (tpl?.body && !String(campaign.message || '').trim() && !String(campaign.imageCaption || '').trim()) text = String(tpl.body || '').trim();
+  text = text.replace(/\{\{\s*(\d+)\s*\}\}/g, (_, n) => vars[Number(n)-1] || '');
+  text = replaceBroadcastVars(text, contact, campaign);
+  text = text.replace(/\{\{[^}]+\}\}/g, '').trim();
+  while (text.includes('\n\n\n')) text = text.replaceAll('\n\n\n', '\n\n');
+  if (!text && vars.length) text = vars.join(' | ');
+  return text.trim();
+}
+async function sendBroadcastDirectMessage(contact={}, campaign={}) {
+  const c=normalizeBroadcastContact(contact);
+  if(!c.phone) return { ok:false, skipped:true, reason:'Invalid phone number', friendlyError:'Invalid phone number', contact:c };
+  if(isOptedOut(c.phone)) return { ok:false, skipped:true, reason:'Customer unsubscribed/STOP', friendlyError:'Customer unsubscribed/STOP', contact:c };
+  const messageType=String(campaign.messageType||'text').trim().toLowerCase();
+  const imageUrl=String(campaign.imageUrl||'').trim();
+  const text=broadcastRenderedText(campaign, c);
+  let result;
+  if ((messageType==='image' || messageType==='image_text') && !imageUrl) {
+    return { ok:false, skipped:true, reason:'Image URL required', friendlyError:'Image URL required', contact:c };
+  }
+  if (messageType==='image' || messageType==='image_text') result = await sendWhatsAppImage({ to:c.phone, imageUrl:absoluteImageUrl(imageUrl), caption:text || '' });
+  else result = await sendWhatsAppTextManual({ to:c.phone, message:text || 'Hello from Tiny Shiny Gifts' });
+  const friendlyError = result.ok ? '' : readableWhatsappError(result, campaign);
+  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:c.phone, customerName:c.name, type:(messageType==='image' || messageType==='image_text')?'image':'text', text:text || '', imageUrl:imageUrl || '', createdAt:nowIso(), status:result.ok?'sent':'failed', raw:{ campaignId:campaign.id, mode:'direct', result, friendlyError } });
+  return { ...result, friendlyError, contact:c };
 }
 async function sendBroadcastTemplate(contact={}, campaign={}) {
   const c=normalizeBroadcastContact(contact);
@@ -1676,7 +1710,8 @@ async function processBroadcastCampaign(campaignId) {
   const batch=pending.slice(0, Math.max(0, limit-sentSoFar));
   const results=campaign.results||[];
   for(const c of batch){
-    const result=await sendBroadcastTemplate(c, campaign).catch(e=>({ ok:false, error:e.message, contact:c }));
+    const sendFn = String(campaign.messageType||'template').toLowerCase()==='template' ? sendBroadcastTemplate : sendBroadcastDirectMessage;
+    const result=await sendFn(c, campaign).catch(e=>({ ok:false, error:e.message, contact:c }));
     results.push({ phone:c.phone, name:c.name, status:result.ok?'sent':(result.skipped?'skipped':'failed'), result, at:nowIso() });
   }
   campaign.results=results;

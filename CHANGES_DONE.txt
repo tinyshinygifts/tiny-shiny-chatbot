@@ -1,14 +1,24 @@
-Latest changes completed:
+CHANGES_DONE
 
-1. Bulk WhatsApp Broadcast: "Image + Text Message" panel removed and merged inside Uploaded Image Library.
-2. Uploaded Image Library now includes:
-   - Upload Image Optional
-   - Image Caption / Extra Text
-   - image preview
-   - Use / Copy Link / Remove buttons
-3. Select All now works as a single toggle: select all / deselect all from the same checkbox label. Separate Deselect All button removed.
-4. Search Customer display improved:
-   - If name exists, name is shown first
-   - If name is missing, phone number is shown as primary text
-   - Secondary text shows phone/city/category cleanly
-5. Removing an uploaded image also clears selected Image URL/dropdown if that image was active.
+Updated in this package:
+1. Bulk Broadcast Select All / Deselect All fixed.
+   - Blue tick sticky issue resolved.
+   - Manual deselect no longer auto-reselects all contacts.
+
+2. Uploaded Image Library improved.
+   - Duplicate image preview removed.
+   - Single clean library list with preview, Use, Copy Link, Remove.
+   - Select Uploaded Image dropdown now auto-fills Image URL field.
+
+3. Bulk Broadcast sending improved.
+   - Template mode still sends approved Meta template.
+   - Text / Image / Image+Text modes now send direct WhatsApp message.
+   - If a saved template is selected in direct mode, template body variables are auto-rendered into caption/text.
+   - This avoids Meta template approval error when using non-template direct send mode.
+
+4. Campaign report export added.
+   - New Report button added after Stop in Campaign History / Delivery Status.
+   - CSV report exports customer name, phone, status, failed reason, sent/delivered/read columns.
+
+5. Broadcast screen refresh.
+   - After sending a campaign, broadcast list and campaign analytics refresh automatically.
