@@ -5,72 +5,102 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>WhatsApp Templates Library - Tiny Shiny Chatbot</title>
   <link rel="icon" href="/tiny-shiny-logo.jpg"/>
-  <link rel="stylesheet" href="/style.css?v=20260611060041"/>
+  <link rel="stylesheet" href="/style.css?v=20260611121000"/>
 </head>
-<body class="templates-library-body">
-  <main class="admin-wrap templates-library-wrap">
+<body class="templates-library-page-body">
+  <main class="admin-wrap templates-library-page">
     <header class="topbar glass-card">
       <div class="brand-head">
         <img class="brand-logo small" src="/tiny-shiny-logo.jpg" alt="Tiny Shiny Gifts"/>
-        <div class="badge">Tiny Shiny Gifts</div>
+        <div class="badge">WhatsApp Automation</div>
         <h1>WhatsApp Templates Library</h1>
-        <p>Add, edit, delete and use multiple WhatsApp templates without losing old selected templates.</p>
+        <p>Templates, customer follow-up, order confirmation aur NDR WhatsApp settings ek hi page par manage karo.</p>
       </div>
       <div class="top-actions api-top-actions">
         <button id="downloadConfig" type="button" class="ghost-btn">Download API Backup</button>
         <label class="ghost-btn file-upload-btn" for="uploadConfigFile">Upload API Backup</label>
         <input id="uploadConfigFile" type="file" accept=".txt,.json,text/plain,application/json" hidden/>
-        <a class="ghost-btn" href="/api-settings.html">API Settings</a>
-        <a class="pill-link" href="/admin.html">← Back to Admin</a>
+        <button id="refreshApiTemplates" type="button" class="ghost-btn">Refresh Templates</button>
+        <button id="restoreDefaultTemplates" type="button" class="ghost-btn">Restore Default 12</button>
+        <a class="pill-link" href="/api-settings.html">← API Settings</a>
+        <a class="pill-link" href="/admin.html">Admin Panel</a>
         <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
       </div>
     </header>
 
-    <section class="panel templates-library-main-panel">
+    <section class="panel templates-control-panel">
       <div class="section-head">
-        <div>
-          <h2>Template Library</h2>
-          <p>Yaha se jitne chahe templates select/use kar sakte ho. Purane selected templates remove nahi honge.</p>
-        </div>
-        <div class="inline-actions">
-          <button id="refreshApiTemplates" type="button" class="ghost-btn">Refresh Templates</button>
-          <button id="newTemplateBtn" type="button" class="ghost-btn">+ Add Template</button>
-          <button id="restoreDefaultTemplates" type="button" class="ghost-btn">Restore Default 12</button>
-        </div>
+        <div><h2>Automation Template Selection</h2><p>Yaha template ko automation ke liye select karo. Map button hata diya gaya hai; sirf Use button use hoga.</p></div>
+        <button id="saveConfig" class="primary-btn" type="button">Save Automation Settings</button>
       </div>
-
+      <div class="form-grid three template-quick-map compact-automation-selects">
+        <label>Customer Follow-up Template
+          <select id="API_CUSTOMER_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
+        </label>
+        <label>Order Confirmation Template
+          <select id="API_ORDER_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
+        </label>
+        <label>Test WhatsApp / Owner Template
+          <select id="API_TEST_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
+        </label>
+      </div>
       <div class="form-grid three">
+        <label>Quick Use For
+          <select id="templateMapTarget"><option value="customer_followup">Customer Follow-up</option><option value="order_confirmation">Order Confirmation</option><option value="cod_order">COD Order</option><option value="ndr">NDR</option><option value="broadcast">Broadcast</option><option value="test_whatsapp">Test WhatsApp / Owner</option></select>
+        </label>
         <label>Search Template <input id="templateSearch" placeholder="order, followup, shipped, offer"/></label>
         <label>Filter Category
           <select id="templateCategoryFilter"><option value="">All</option><option>Utility</option><option>Marketing</option><option>Authentication</option></select>
         </label>
-        <label>Map Automation
-          <select id="templateMapTarget">
-            <option value="customer_followup">Customer Follow-up</option>
-            <option value="order_confirmation">Order Confirmation</option>
-            <option value="cod_order">COD Order</option>
-            <option value="ndr">NDR</option>
-            <option value="broadcast">Broadcast</option>
-            <option value="test_whatsapp">Test WhatsApp / Owner</option>
-          </select>
+      </div>
+      <p id="saveStatus" class="success"></p>
+    </section>
+
+    <section class="panel customer-followup-library-panel">
+      <div class="section-head"><div><h2>Customer WhatsApp Follow-up</h2><p>Product/cart follow-up aur order confirmation automation settings.</p></div></div>
+      <div class="form-grid two">
+        <label>Enable Customer WhatsApp Messages
+          <select id="CUSTOMER_WHATSAPP_MESSAGES_ENABLED"><option value="false">false</option><option value="true">true</option></select>
         </label>
+        <label>Customer Follow-up Template Name <input id="CUSTOMER_WHATSAPP_TEMPLATE_NAME" placeholder="product_followup"/></label>
+        <label>Customer Follow-up Template Language <input id="CUSTOMER_WHATSAPP_TEMPLATE_LANG" placeholder="en"/></label>
+        <label>Enable Order Confirmation WhatsApp
+          <select id="ORDER_CONFIRMATION_WHATSAPP_ENABLED"><option value="false">false</option><option value="true">true</option></select>
+        </label>
+        <label>Order Confirmation Template Name <input id="ORDER_CONFIRMATION_TEMPLATE_NAME" placeholder="order_confirmation"/></label>
+        <label>Order Confirmation Template Language <input id="ORDER_CONFIRMATION_TEMPLATE_LANG" placeholder="en"/></label>
       </div>
+      <p class="hint">Shopify webhook URL: <code>https://chat.tinyshinygifts.com/webhooks/shopify/orders/create</code></p>
+    </section>
 
-      <div class="selected-templates-panel">
-        <div class="section-head mini">
-          <div>
-            <h3>Selected Templates</h3>
-            <p class="hint">Use button se selected templates yaha save honge. 2 se zyada templates bhi safe rahenge.</p>
-          </div>
-          <button id="clearSelectedTemplates" type="button" class="ghost-btn danger-outline">Clear Selected</button>
-        </div>
-        <div id="selectedTemplatesList" class="selected-template-list"></div>
+    <section class="panel api-ndr-settings-panel ndr-library-panel">
+      <div class="section-head">
+        <div><h2>NDR WhatsApp Settings</h2><p>Before delivery aur failed delivery NDR WhatsApp messages.</p></div>
+        <button id="saveNdrApiSettings" class="primary-btn" type="button">Save NDR Settings</button>
       </div>
+      <div class="form-grid three">
+        <label class="checkline"><input id="apiNdrBeforeDeliveryEnabled" type="checkbox"/> Before delivery message ON</label>
+        <label class="checkline"><input id="apiNdrFailedDeliveryEnabled" type="checkbox"/> NDR failed delivery message ON</label>
+        <label>Reminder delay hours <input id="apiNdrReminderHours" type="number" min="1" placeholder="24"/></label>
+        <label>Admin alert number <input id="apiNdrAdminNumber" placeholder="919001727446"/></label>
+        <label>Before delivery template name <input id="apiNdrBeforeTemplate" placeholder="order_out_for_delivery"/></label>
+        <label>NDR template name <input id="apiNdrFailedTemplate" placeholder="ndr_failed_delivery"/></label>
+      </div>
+      <div class="form-grid two">
+        <label>Before delivery message <textarea id="apiNdrBeforeMessage"></textarea></label>
+        <label>NDR failed delivery message <textarea id="apiNdrFailedMessage"></textarea></label>
+      </div>
+      <pre id="apiNdrResult"></pre>
+    </section>
 
-      <div class="template-workspace api-template-workspace templates-library-workspace">
+    <section class="panel api-template-library-panel templates-only-panel">
+      <div class="section-head">
+        <div><h2>Saved Templates</h2><p>Cards compact kar diye gaye hain. Inner scroll remove hai aur preview short dikhega.</p></div>
+        <div class="inline-actions"><button id="newTemplateBtn" type="button" class="ghost-btn">+ Add Template</button></div>
+      </div>
+      <div class="template-workspace api-template-workspace compact-template-workspace">
         <div>
-          <h3>Saved Templates</h3>
-          <div id="templateList" class="template-grid"></div>
+          <div id="templateList" class="template-grid compact-template-grid"></div>
         </div>
         <div class="template-editor template-editor-fixed">
           <h3 id="templateEditorTitle">Add / Modify Template</h3>
@@ -78,40 +108,33 @@
           <div class="template-form-grid">
             <label>Template Name <input id="templateName" placeholder="order_confirmation"/></label>
             <label>Language Code <input id="templateLanguage" placeholder="en"/></label>
-            <label>Category
-              <select id="templateCategory"><option>Utility</option><option>Marketing</option><option>Authentication</option></select>
-            </label>
-            <label>Header Type
-              <select id="templateHeaderType"><option>None</option><option>Image</option><option>Video</option><option>Document</option><option>Text</option></select>
-            </label>
+            <label>Category <select id="templateCategory"><option>Utility</option><option>Marketing</option><option>Authentication</option></select></label>
+            <label>Header Type <select id="templateHeaderType"><option>None</option><option>Image</option><option>Video</option><option>Document</option><option>Text</option></select></label>
           </div>
           <label>Use Case <input id="templateUseCase" placeholder="Kis automation ke liye use hoga"/></label>
-          <label>Body Text <textarea id="templateBody" rows="8" placeholder="Hi {{1}}, your order {{2}}..."></textarea></label>
+          <label>Body Text <textarea id="templateBody" rows="7" placeholder="Hi {{1}}, your order {{2}}..."></textarea></label>
           <label>Variables <textarea id="templateVariables" rows="3" placeholder="Customer Name&#10;Order Number&#10;Order Amount"></textarea></label>
           <label>Buttons <textarea id="templateButtons" rows="3" placeholder="Quick Reply | Interested&#10;URL | Shop Now | https://www.tinyshinygifts.com"></textarea></label>
           <label class="checkline"><input id="templateEnabled" type="checkbox" checked/> Enabled in library</label>
           <div class="inline-actions">
             <button id="saveTemplate" class="primary-btn" type="button">Save Template</button>
-            <button id="mapTemplateToAutomation" class="ghost-btn" type="button">Map Selected to Automation</button>
+            <button id="mapTemplateToAutomation" class="ghost-btn" type="button">Use Selected</button>
             <button id="clearTemplateForm" class="ghost-btn" type="button">Clear</button>
           </div>
           <pre id="templateResult"></pre>
-          <p class="hint">Map Automation dropdown me target select karke template card ke Map/USED button se automation mapping kar sakte ho. Use button selected list ke liye hai.</p>
         </div>
       </div>
-
-      <h3>Template Automation Status</h3>
-      <div id="apiTemplateList" class="template-status-list"></div>
     </section>
 
-    <section class="panel settings-card">
-      <h2>COD WhatsApp Debug</h2>
-      <p class="hint">COD order message nahi jaye to yaha webhook, phone, COD detect aur WhatsApp API result dikhega.</p>
-      <button id="refreshCodDebugLogs" type="button" class="ghost-btn">Refresh COD Debug Logs</button>
-      <pre id="codDebugLogs" class="api-result-box"></pre>
+    <section class="panel template-status-clean-panel">
+      <h2>Selected / Used Templates</h2>
+      <div id="apiTemplateList" class="template-status-list compact-status-list"></div>
+      <p class="hint">Jis automation me template selected hai uspar USED dikhega.</p>
     </section>
   </main>
-
-  <script src="/api-settings.js?v=20260611060041"></script>
+  <script src="/api-settings.js?v=20260611121000"></script>
+  <div id="apiErrorLogModal" class="modal hidden api-error-log-modal">
+    <div class="modal-card wide"><div class="modal-head"><h2 id="apiErrorLogTitle">API Error Log</h2><button type="button" class="ghost-btn" id="closeApiErrorLog">×</button></div><div id="apiErrorLogBody" class="api-error-log-body"></div><div class="modal-actions"><button type="button" class="ghost-btn" id="copyApiErrorLog">Copy Error</button><button type="button" class="primary-btn" id="testApiAgain">Test Again</button></div></div>
+  </div>
 </body>
 </html>

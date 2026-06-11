@@ -1,54 +1,34 @@
-Tiny Shiny Chatbot ZIP Updated
-================================
+Changes done in this ZIP:
 
-Base ZIP used:
-tiny-shiny-chatbot-api-template-tab-cod-debug-scroll.zip
+1. API Settings page cleaned:
+   - Removed WhatsApp Templates Library block
+   - Removed Unlimited WhatsApp API Formats block
+   - Removed COD WhatsApp Debug block
+   - Removed NDR WhatsApp Settings block
+   - Removed Customer WhatsApp Follow-up block
 
-Changes done in this same project:
-1. Added separate WhatsApp Templates Library page:
-   public/templates-library.html
+2. New page added: public/templates-library.html
+   - Saved Templates
+   - Customer WhatsApp Follow-up settings
+   - Order Confirmation settings
+   - NDR WhatsApp Settings
+   - Selected / Used Templates status
+   - Backup upload/download
 
-2. Added Templates Library links:
-   - Admin top actions
-   - Admin quick nav
-   - API Settings top actions
+3. Saved Templates UI fixed:
+   - Map button removed from cards
+   - Compact card size
+   - Inner scroll removed
+   - Short preview with 3-4 lines
 
-3. Fixed broken/mixed API Settings Templates section:
-   - Removed malformed injected template editor HTML from api-settings.html
-   - Kept API Settings clean for quick template mapping/status
-   - COD WhatsApp Debug and Unlimited WhatsApp API Formats panels kept safely
+4. Mobile Chat Inbox fixed:
+   - Mobile uses full-screen single-panel layout
+   - Chat list shows first
+   - Clicking a chat opens full-screen chat
+   - Back button added
+   - Horizontal overflow removed
+   - Reply box visible properly
 
-4. Fixed 2-template limit issue:
-   - Added selectedWhatsappTemplateIds server-side storage in data/settings.json
-   - Added /api/whatsapp-templates/select
-   - Added /api/whatsapp-templates/unselect
-   - Added /api/whatsapp-templates/clear-selected
-   - Old selected templates are not removed when selecting new templates
-
-5. Added selected templates UI:
-   - Selected Templates panel
-   - Use / Selected button
-   - Unselect button
-   - Clear Selected button
-
-6. Existing API settings are preserved:
-   - API backup upload/download still available
-   - Settings merge is safe
-   - Shopify / WhatsApp / ICARRY / Google Sheet data is not reset
-
-7. Mobile/scroll fixes:
-   - Responsive template grid
-   - Mobile single-column layout
-   - Scroll-friendly template page
-
-Files changed:
-- server.js
-- public/admin.html
-- public/api-settings.html
-- public/api-settings.js
-- public/style.css
-- public/service-worker.js
-- public/manifest.json
-
-Files added:
-- public/templates-library.html
+5. Existing API data safe:
+   - No reset logic added
+   - Existing /api/config and /api/ndr/settings save endpoints used

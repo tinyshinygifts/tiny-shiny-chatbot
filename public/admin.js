@@ -1303,8 +1303,10 @@ document.addEventListener('click', e=>{ if(e.target.id==='saveMessengerSettings'
       return `${dateSep}<div class="wa-bubble ${dir}">${extra?`<img src="${esc(extra)}" alt="" class="wa-bubble-img"/>`:''}<div class="wa-message-text">${esc(txt || '[message]')}</div><div class="wa-msg-time">${esc(timeShort(m.createdAt))}${dir==='outbound'?' ✓✓':''}</div></div>`;
     }).join('');
     pane.className='wa-active-chat wati-chat-window';
+    document.body.classList.add('wa-mobile-chat-open');
     pane.innerHTML=`
-      <div class="wati-chat-header">
+      <div class="wati-chat-header mobile-wa-topbar">
+        <button type="button" class="mobile-back-btn" data-mobile-chat-back>← Back</button>
         <div class="contact-head"><span class="wa-avatar ${esc(ch)}">${esc(initials(name,group.phone))}</span><div><h3>${esc(name)}</h3><span>${(typeof channelBadge==='function'?channelBadge(ch):'')} ${esc(String(group.phone).replace(/^instagram:/,'').replace(/^messenger:/,''))}</span></div></div>
         <div class="wati-chat-tools">
           <select id="waThreadStatusTop" class="status-mini-select"><option value="open">Open</option><option value="pending">Pending</option><option value="resolved">Resolved</option></select>

@@ -62,7 +62,7 @@ function requireAdmin(req, res, next) {
 
 // Protect admin pages and admin JavaScript files. Public chatbot widget remains open.
 app.use((req, res, next) => {
-  const protectedFiles = ['/admin.html', '/api-settings.html', '/templates-library.html', '/admin.js', '/api-settings.js', '/templates-library.js'];
+  const protectedFiles = ['/admin.html', '/api-settings.html', '/admin.js', '/api-settings.js'];
   if (protectedFiles.includes(req.path)) return requireAdmin(req, res, next);
   return next();
 });
@@ -391,32 +391,6 @@ function writeJson(filePath, data) {
   mongoJsonCache.set(key, deepClone(data));
   mongoSaveSoon(key, data);
 }
-
-function readSelectedWhatsappTemplateIds() {
-  const settings = readJson(settingsPath, {});
-  const ids = Array.isArray(settings.selectedWhatsappTemplateIds)
-    ? settings.selectedWhatsappTemplateIds
-    : (Array.isArray(settings.selectedWhatsappTemplates) ? settings.selectedWhatsappTemplates.map(x => String(x.id || x.name || x)).filter(Boolean) : []);
-  return [...new Set(ids.map(x => String(x)).filter(Boolean))];
-}
-function writeSelectedWhatsappTemplateIds(ids) {
-  const current = readJson(settingsPath, {});
-  const clean = [...new Set((ids || []).map(x => String(x)).filter(Boolean))];
-  const next = { ...current, selectedWhatsappTemplateIds: clean };
-  writeJson(settingsPath, next);
-  return clean;
-}
-function templatesWithSelection(env = readEnvFile()) {
-  const selectedIds = readSelectedWhatsappTemplateIds();
-  const selectedSet = new Set(selectedIds);
-  const templates = readWhatsAppTemplates().map(t => ({
-    ...t,
-    selected: selectedSet.has(String(t.id)) || selectedSet.has(String(t.name)),
-    usedTargets: mappedTargetsForTemplate(t, env)
-  }));
-  return { templates, selectedTemplateIds: selectedIds };
-}
-
 function appendJson(filePath, item) {
   const arr = readJson(filePath, []);
   arr.unshift(item);
@@ -1171,8 +1145,8 @@ app.post('/api/config/upload', (req, res) => {
       writeJson(settingsPath, { ...currentSettings, ...parsed.settings });
       settingsUpdated = true;
     }
-    const selected = templatesWithSelection(savedEnv);
-    res.json({ ok: true, message: 'API backup uploaded and settings updated.', updatedKeys: Object.keys(envUpdate), templatesUpdated, settingsUpdated, config: publicConfig(savedEnv), templates: selected.templates, selectedTemplateIds: selected.selectedTemplateIds, mappings: getWhatsAppTemplateMappings(savedEnv) });
+    const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, savedEnv) }));
+    res.json({ ok: true, message: 'API backup uploaded and settings updated.', updatedKeys: Object.keys(envUpdate), templatesUpdated, settingsUpdated, config: publicConfig(savedEnv), templates, mappings: getWhatsAppTemplateMappings(savedEnv) });
   } catch (e) {
     res.status(400).json({ ok: false, error: e.message || 'Invalid backup file' });
   }
@@ -1180,8 +1154,8 @@ app.post('/api/config/upload', (req, res) => {
 
 app.get('/api/whatsapp-templates', (req, res) => {
   const env = readEnvFile();
-  const selected = templatesWithSelection(env);
-  res.json({ ok: true, templates: selected.templates, selectedTemplateIds: selected.selectedTemplateIds, mappings: getWhatsAppTemplateMappings(env) });
+  const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, env) }));
+  res.json({ ok: true, templates, mappings: getWhatsAppTemplateMappings(env) });
 });
 app.post('/api/whatsapp-templates', (req, res) => {
   const body = req.body || {};
@@ -1194,9 +1168,8 @@ app.post('/api/whatsapp-templates', (req, res) => {
   else list.unshift(tpl);
   {
     const env = readEnvFile();
-    writeWhatsAppTemplates(list);
-    const selected = templatesWithSelection(env);
-    res.json({ ok:true, templates: selected.templates, selectedTemplateIds: selected.selectedTemplateIds, mappings: getWhatsAppTemplateMappings(env), template: tpl, message:'Template saved in Template Library.' });
+    const templates = writeWhatsAppTemplates(list).map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, env) }));
+    res.json({ ok:true, templates, mappings: getWhatsAppTemplateMappings(env), template: tpl, message:'Template saved in Template Library.' });
   }
 });
 app.delete('/api/whatsapp-templates/:id', (req, res) => {
@@ -1204,50 +1177,17 @@ app.delete('/api/whatsapp-templates/:id', (req, res) => {
   const next = readWhatsAppTemplates().filter(t => String(t.id) !== id && t.name !== id);
   {
     const env = readEnvFile();
-    writeWhatsAppTemplates(next);
-    writeSelectedWhatsappTemplateIds(readSelectedWhatsappTemplateIds().filter(x => String(x) !== id));
-    const selected = templatesWithSelection(env);
-    res.json({ ok:true, templates: selected.templates, selectedTemplateIds: selected.selectedTemplateIds, mappings: getWhatsAppTemplateMappings(env), message:'Template removed.' });
+    const templates = writeWhatsAppTemplates(next).map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, env) }));
+    res.json({ ok:true, templates, mappings: getWhatsAppTemplateMappings(env), message:'Template removed.' });
   }
 });
 app.post('/api/whatsapp-templates/reset-defaults', (req, res) => {
   {
     const env = readEnvFile();
-    writeWhatsAppTemplates(defaultWhatsAppTemplates);
-    writeSelectedWhatsappTemplateIds([]);
-    const selected = templatesWithSelection(env);
-    res.json({ ok:true, templates: selected.templates, selectedTemplateIds: selected.selectedTemplateIds, mappings: getWhatsAppTemplateMappings(env), message:'Default Tiny Shiny templates restored.' });
+    const templates = writeWhatsAppTemplates(defaultWhatsAppTemplates).map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, env) }));
+    res.json({ ok:true, templates, mappings: getWhatsAppTemplateMappings(env), message:'Default Tiny Shiny templates restored.' });
   }
 });
-
-app.post('/api/whatsapp-templates/select', (req, res) => {
-  const { id } = req.body || {};
-  const tpl = readWhatsAppTemplates().find(t => String(t.id) === String(id) || t.name === id);
-  if (!tpl) return res.status(404).json({ ok:false, error:'Template not found' });
-  const ids = readSelectedWhatsappTemplateIds();
-  const key = String(tpl.id || tpl.name);
-  if (!ids.includes(key)) ids.push(key);
-  const selectedTemplateIds = writeSelectedWhatsappTemplateIds(ids);
-  const env = readEnvFile();
-  const selected = templatesWithSelection(env);
-  res.json({ ok:true, template:tpl, templates:selected.templates, selectedTemplateIds, mappings:getWhatsAppTemplateMappings(env), message:`${tpl.name} selected. Old selected templates are kept.` });
-});
-app.post('/api/whatsapp-templates/unselect', (req, res) => {
-  const { id } = req.body || {};
-  const tpl = readWhatsAppTemplates().find(t => String(t.id) === String(id) || t.name === id);
-  const removeKeys = new Set([String(id || ''), String(tpl?.id || ''), String(tpl?.name || '')].filter(Boolean));
-  const selectedTemplateIds = writeSelectedWhatsappTemplateIds(readSelectedWhatsappTemplateIds().filter(x => !removeKeys.has(String(x))));
-  const env = readEnvFile();
-  const selected = templatesWithSelection(env);
-  res.json({ ok:true, templates:selected.templates, selectedTemplateIds, mappings:getWhatsAppTemplateMappings(env), message:'Template unselected.' });
-});
-app.post('/api/whatsapp-templates/clear-selected', (req, res) => {
-  const selectedTemplateIds = writeSelectedWhatsappTemplateIds([]);
-  const env = readEnvFile();
-  const selected = templatesWithSelection(env);
-  res.json({ ok:true, templates:selected.templates, selectedTemplateIds, mappings:getWhatsAppTemplateMappings(env), message:'All selected templates cleared.' });
-});
-
 app.post('/api/whatsapp-templates/use', (req, res) => {
   const { id, target } = req.body || {};
   const tpl = readWhatsAppTemplates().find(t => String(t.id) === String(id) || t.name === id);
@@ -1281,8 +1221,8 @@ app.post('/api/whatsapp-templates/use', (req, res) => {
   writeEnvFile({ ...env, ...update });
   {
     const savedEnv = readEnvFile();
-    const selected = templatesWithSelection(savedEnv);
-    res.json({ ok:true, template:tpl, target, templates: selected.templates, selectedTemplateIds: selected.selectedTemplateIds, mappings: getWhatsAppTemplateMappings(savedEnv), message:`${tpl.name} mapped to ${target}. API Settings updated.` });
+    const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, savedEnv) }));
+    res.json({ ok:true, template:tpl, target, templates, mappings: getWhatsAppTemplateMappings(savedEnv), message:`${tpl.name} mapped to ${target}. API Settings updated.` });
   }
 });
 
@@ -1305,22 +1245,6 @@ app.post('/api/whatsapp-templates/unuse', (req, res) => {
       update.ORDER_CONFIRMATION_TEMPLATE_NAME = '';
       update.ORDER_CONFIRMATION_TEMPLATE_LANG = env.ORDER_CONFIRMATION_TEMPLATE_LANG || 'en';
     }
-  } else if (target === 'cod_order') {
-    if ((env.COD_ORDER_CONFIRMATION_TEMPLATE_NAME || '') === tpl.name) {
-      update.COD_CONFIRMATION_WHATSAPP_ENABLED = 'false';
-      update.COD_ORDER_CONFIRMATION_TEMPLATE_NAME = '';
-      update.COD_ORDER_CONFIRMATION_TEMPLATE_LANG = env.COD_ORDER_CONFIRMATION_TEMPLATE_LANG || 'en';
-    }
-  } else if (target === 'ndr') {
-    if ((env.NDR_TEMPLATE_NAME || '') === tpl.name) {
-      update.NDR_TEMPLATE_NAME = '';
-      update.NDR_TEMPLATE_LANG = env.NDR_TEMPLATE_LANG || 'en';
-    }
-  } else if (target === 'broadcast') {
-    if ((env.BROADCAST_TEMPLATE_NAME || '') === tpl.name) {
-      update.BROADCAST_TEMPLATE_NAME = '';
-      update.BROADCAST_TEMPLATE_LANG = env.BROADCAST_TEMPLATE_LANG || 'en';
-    }
   } else if (target === 'test_whatsapp') {
     if ((env.WHATSAPP_TEST_TEMPLATE_NAME || '') === tpl.name) {
       update.WHATSAPP_TEST_TEMPLATE_NAME = '';
@@ -1331,8 +1255,8 @@ app.post('/api/whatsapp-templates/unuse', (req, res) => {
   }
   writeEnvFile({ ...env, ...update });
   const savedEnv = readEnvFile();
-  const selected = templatesWithSelection(savedEnv);
-  res.json({ ok:true, template:tpl, target, templates: selected.templates, selectedTemplateIds: selected.selectedTemplateIds, mappings: getWhatsAppTemplateMappings(savedEnv), message:`${tpl.name} removed from ${target}.` });
+  const templates = readWhatsAppTemplates().map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, savedEnv) }));
+  res.json({ ok:true, template:tpl, target, templates, mappings: getWhatsAppTemplateMappings(savedEnv), message:`${tpl.name} removed from ${target}.` });
 });
 
 

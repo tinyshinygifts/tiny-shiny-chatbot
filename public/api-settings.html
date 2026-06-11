@@ -20,7 +20,7 @@
         <button id="downloadConfig" type="button" class="ghost-btn">Download API Backup</button>
         <label class="ghost-btn file-upload-btn" for="uploadConfigFile">Upload API Backup</label>
         <input id="uploadConfigFile" type="file" accept=".txt,.json,text/plain,application/json" hidden/>
-        <a id="openTemplatesLibraryTop" class="ghost-btn templates-library-top-btn" href="/templates-library.html">WhatsApp Templates Library</a>
+        <a class="ghost-btn templates-library-top-btn" href="/templates-library.html">WhatsApp Templates Library</a>
         <a class="pill-link" href="/admin.html">← Back to Admin</a>
         <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
       </div>
@@ -115,29 +115,7 @@
       <div id="faqList" class="faq-list-settings"></div>
       <pre id="faqResult"></pre>
     </section>
-
-
-    <section class="panel api-ndr-settings-panel">
-      <div class="section-head">
-        <div><h2>NDR WhatsApp Settings</h2><p>Before delivery aur failed delivery NDR WhatsApp messages.</p></div>
-        <button id="saveNdrApiSettings" class="primary-btn" type="button">Save NDR Settings</button>
-      </div>
-      <div class="form-grid two">
-        <label class="checkline"><input id="apiNdrBeforeDeliveryEnabled" type="checkbox"/> Before delivery message ON</label>
-        <label class="checkline"><input id="apiNdrFailedDeliveryEnabled" type="checkbox"/> NDR failed delivery message ON</label>
-        <label>Reminder delay hours <input id="apiNdrReminderHours" type="number" min="1" placeholder="24"/></label>
-        <label>Admin alert number <input id="apiNdrAdminNumber" placeholder="919001727446"/></label>
-        <label>Before delivery template name <input id="apiNdrBeforeTemplate" placeholder="order_out_for_delivery"/></label>
-        <label>NDR template name <input id="apiNdrFailedTemplate" placeholder="ndr_failed_delivery"/></label>
-      </div>
-      <div class="form-grid two">
-        <label>Before delivery message <textarea id="apiNdrBeforeMessage"></textarea></label>
-        <label>NDR failed delivery message <textarea id="apiNdrFailedMessage"></textarea></label>
-      </div>
-      <pre id="apiNdrResult"></pre>
-    </section>
-
-    <section class="panel security-panel">
+<section class="panel security-panel">
       <h2>Login Security</h2>
       <p>Fields are editable here. Defaults are admin / admin until you change them.</p>
       <div class="form-grid two">
@@ -220,90 +198,7 @@
         <label>Shiprocket Password <input id="SHIPROCKET_PASSWORD" type="password" placeholder="Password if token generation is used later"/></label>
       </div>
     </section>
-
-    <section class="panel api-template-library-panel api-template-library-compact">
-      <div class="section-head">
-        <div>
-          <h2>WhatsApp Templates Library</h2>
-          <p>Templates Library ko ab separate page me shift kar diya gaya hai. API settings safe rahengi aur yaha sirf quick mapping/status dikhega.</p>
-        </div>
-        <div class="inline-actions">
-          <a href="/templates-library.html" class="primary-btn templates-library-open-link">Open Templates Library</a>
-          <button id="refreshApiTemplates" type="button" class="ghost-btn">Refresh Templates</button>
-          <button id="restoreDefaultTemplates" type="button" class="ghost-btn">Restore Default 12</button>
-        </div>
-      </div>
-
-      <div class="form-grid three template-quick-map">
-        <label>Customer Follow-up Template
-          <select id="API_CUSTOMER_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
-        </label>
-        <label>Order Confirmation Template
-          <select id="API_ORDER_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
-        </label>
-        <label>Test WhatsApp / Owner Template
-          <select id="API_TEST_TEMPLATE_SELECT_2"><option value="">Manual / Select template</option></select>
-        </label>
-      </div>
-
-      <h3>Selected Templates</h3>
-      <p class="hint">Separate page me jitne bhi templates par Use click karoge, sab yaha selected list me dikh jayenge. 2 template ki limit hata di gayi hai.</p>
-      <div id="selectedTemplatesCompact" class="selected-template-list compact"></div>
-
-      <h3>Template Use Status</h3>
-      <div id="apiTemplateList" class="template-status-list"></div>
-      <p class="hint">Jo template automation me mapped hoga uspar USED dikhega. Full add/edit/delete ke liye Open Templates Library button use karo.</p>
-    </section>
-
-    <section class="panel settings-card unlimited-template-card">
-      <div class="section-head">
-        <div>
-          <h2>Unlimited WhatsApp API Formats</h2>
-          <p class="hint">Yaha all formats/templates ka quick view hai. New format add/edit karne ke liye Templates Library page open karo.</p>
-        </div>
-        <a href="/templates-library.html#templateEditorTitle" class="ghost-btn">+ Add / Edit Format</a>
-      </div>
-      <div id="unlimitedWhatsappFormats" class="unlimited-formats-list"></div>
-    </section>
-
-    <section class="panel settings-card">
-      <h2>COD WhatsApp Debug</h2>
-      <p class="hint">COD order message nahi jaye to yaha webhook, phone, COD detect aur WhatsApp API result dikhega.</p>
-      <button id="refreshCodDebugLogs" type="button" class="ghost-btn">Refresh COD Debug Logs</button>
-      <pre id="codDebugLogs" class="api-result-box"></pre>
-    </section>
-
-    <section class="panel">
-      <h2>Customer WhatsApp Follow-up</h2>
-      <p>This sends product/cart follow-up to customers only after they share their phone number and consent.</p>
-      <label>Enable Customer WhatsApp Messages
-        <select id="CUSTOMER_WHATSAPP_MESSAGES_ENABLED"><option value="false">false</option><option value="true">true</option></select>
-      </label>
-      <label>Use Template From Library
-        <select id="API_CUSTOMER_TEMPLATE_SELECT_2"><option value="">Manual / Select template</option></select>
-      </label>
-      <div class="form-grid two">
-        <label>Approved Template Name <input id="CUSTOMER_WHATSAPP_TEMPLATE_NAME" placeholder="product_followup"/></label>
-        <label>Template Language <input id="CUSTOMER_WHATSAPP_TEMPLATE_LANG" placeholder="en"/></label>
-      </div>
-      <hr class="soft-line"/>
-      <h3>Order Confirmation Automation</h3>
-      <p class="hint">When Shopify sends an order webhook, the chatbot can WhatsApp the customer for order confirmation and notify owner/team.</p>
-      <label>Enable Order Confirmation WhatsApp
-        <select id="ORDER_CONFIRMATION_WHATSAPP_ENABLED"><option value="false">false</option><option value="true">true</option></select>
-      </label>
-      <label>Use Template From Library
-        <select id="API_ORDER_TEMPLATE_SELECT_2"><option value="">Manual / Select template</option></select>
-      </label>
-      <div class="form-grid two">
-        <label>Order Confirmation Template Name <input id="ORDER_CONFIRMATION_TEMPLATE_NAME" placeholder="order_confirmation"/></label>
-        <label>Order Confirmation Template Language <input id="ORDER_CONFIRMATION_TEMPLATE_LANG" placeholder="en"/></label>
-      </div>
-      <p class="hint">Shopify webhook URL: <code>https://chat.tinyshinygifts.com/webhooks/shopify/orders/create</code></p>
-    </section>
-
-
-    <section class="panel">
+<section class="panel">
       <h2>Google Sheets CRM Auto-save</h2>
       <p>Use this to save every lead, visitor activity, buy message and CRM update into Google Sheets automatically.</p>
       <label>Enable Google Sheets Auto-save
