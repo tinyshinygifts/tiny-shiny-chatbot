@@ -1,16 +1,19 @@
 CHANGES_DONE
 
-Latest fix:
-1. Bulk WhatsApp Broadcast multi-select fixed.
-   - Search/filter ab selected customers ko remove nahi karega.
-   - Multiple customers select karne ke baad sabko message jayega.
-   - Selected customer names/phone summary me show honge.
-   - Individual checkbox select/deselect now updates the actual selected list.
-   - Create / Send Broadcast no longer sends only currently visible searched contact.
+Added in this update:
+1. Select Uploaded Image dropdown fix.
+   - Dropdown me image select karte hi Image URL Optional field me selected image ka public URL auto-fill hoga.
+   - Upload ke baad bhi selected image ka URL auto-fill hoga.
+   - Use button se select karne par bhi Image URL field sync hoga.
+
+2. Template Variables mapping update.
+   - New option added: Visit us
+   - Visit us maps to {{website}}
+   - Website value resolves to: https://www.tinyshinygifts.com
+   - Template body/direct send me {{website}} and {{visit_us}} dono support added.
 
 Previous included:
-- Image library upload/preview/copy/remove.
-- Image URL dropdown auto-fill.
-- Select All/Deselect All toggle.
-- Normal Image + Text direct send mode.
-- Campaign Report CSV export.
+- Multi-customer selection/send fix
+- Campaign report CSV export
+- Bulk direct Image + Text send mode
+- Uploaded image library management

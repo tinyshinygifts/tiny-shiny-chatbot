@@ -1569,12 +1569,15 @@ function addOptout(phone, source='whatsapp', reason='STOP') {
   list.unshift(item); writeJson(whatsappOptoutsPath,list.slice(0,10000)); return item;
 }
 function replaceBroadcastVars(value, contact={}, campaign={}) {
+  const website = campaign.websiteUrl || campaign.website || 'https://www.tinyshinygifts.com';
   return String(value||'')
     .replace(/\{\{?name\}?\}/gi, contact.name || 'Customer')
     .replace(/\{\{?phone\}?\}/gi, contact.phone || '')
     .replace(/\{\{?email\}?\}/gi, contact.email || '')
     .replace(/\{\{?link\}?\}/gi, campaign.productLink || campaign.link || '')
     .replace(/\{\{?product_link\}?\}/gi, campaign.productLink || '')
+    .replace(/\{\{?website\}?\}/gi, website)
+    .replace(/\{\{?visit_us\}?\}/gi, website)
     .replace(/\{\{?coupon\}?\}/gi, campaign.couponCode || '')
     .replace(/\{\{?coupon_code\}?\}/gi, campaign.couponCode || '')
     .replace(/\{\{?category\}?\}/gi, campaign.category || '')
@@ -1743,7 +1746,7 @@ app.post('/api/broadcast/campaigns', async (req,res)=>{
     const validation = validateBroadcastBeforeSend(body, unique);
     if(!validation.ok) return res.status(400).json({ ok:false, error:validation.error, validation });
     const finalImageUrl = String(body.imageUrl || '').trim() ? absoluteUrl(req, String(body.imageUrl || '').trim()) : '';
-    const campaign={ id:crypto.randomUUID(), name:String(body.name||'WhatsApp Broadcast').trim(), category:String(body.category||'All').trim(), templateName:String(body.templateName||'').trim(), templateLang:String(body.templateLang||validation.template?.language||'en').trim(), imageUrl:finalImageUrl, productLink:String(body.productLink||'').trim(), couponCode:String(body.couponCode||'').trim(), imageCaption:String(body.imageCaption||'').trim(), messageType:String(body.messageType||'template').trim(), variables:Array.isArray(body.variables)?body.variables:[], dailyLimit:Number(body.dailyLimit||500)||500, scheduleAt:body.scheduleAt||'', contacts:unique, results:[], status:body.scheduleAt && new Date(body.scheduleAt).getTime()>Date.now()?'scheduled':'queued', createdAt:nowIso(), updatedAt:nowIso() };
+    const campaign={ id:crypto.randomUUID(), name:String(body.name||'WhatsApp Broadcast').trim(), category:String(body.category||'All').trim(), templateName:String(body.templateName||'').trim(), templateLang:String(body.templateLang||validation.template?.language||'en').trim(), imageUrl:finalImageUrl, productLink:String(body.productLink||'').trim(), couponCode:String(body.couponCode||'').trim(), imageCaption:String(body.imageCaption||'').trim(), messageType:String(body.messageType||'template').trim(), websiteUrl:String(body.websiteUrl||body.website||'https://www.tinyshinygifts.com').trim(), variables:Array.isArray(body.variables)?body.variables:[], dailyLimit:Number(body.dailyLimit||500)||500, scheduleAt:body.scheduleAt||'', contacts:unique, results:[], status:body.scheduleAt && new Date(body.scheduleAt).getTime()>Date.now()?'scheduled':'queued', createdAt:nowIso(), updatedAt:nowIso() };
     const campaigns=readJson(broadcastCampaignsPath, []); campaigns.unshift(campaign); writeJson(broadcastCampaignsPath,campaigns.slice(0,500));
     if(campaign.status==='queued') await processBroadcastCampaign(campaign.id);
     const saved=readJson(broadcastCampaignsPath, []).find(c=>c.id===campaign.id) || campaign;

@@ -891,14 +891,15 @@ function detectTemplateVariablesFromText(text='', vars=[]){
   if(!found.length && Array.isArray(vars) && vars.length) found.push(...vars.map((_,i)=>'{{'+(i+1)+'}}'));
   return found;
 }
-function defaultVariableKey(index, token){
-  const i=Number(index)||1; const t=String(token||'').toLowerCase();
+function defaultVariableKey(index, token, hint=''){
+  const i=Number(index)||1; const t=String((token||'')+' '+(hint||'')).toLowerCase();
   if(t.includes('name') || i===1) return '{{name}}';
   if(t.includes('phone')) return '{{phone}}';
   if(t.includes('email')) return '{{email}}';
+  if(t.includes('visit') || t.includes('website') || t.includes('site')) return '{{website}}';
   if(t.includes('coupon') || i===3) return '{{coupon}}';
-  if(t.includes('link') || i===2 || i===4 || i===5) return '{{link}}';
   if(t.includes('product')) return '{{product}}';
+  if(t.includes('link') || i===2 || i===4 || i===5) return '{{link}}';
   return 'custom';
 }
 function renderBroadcastVariableMap(){
@@ -907,8 +908,8 @@ function renderBroadcastVariableMap(){
   const vars=detectTemplateVariablesFromText(tpl.body||'', tpl.variables||[]);
   const imgHint = broadcastTemplateNeedsImageUi(tpl) ? '<p class="hint danger">Is template me Image header hai. Send se pehle public Image URL required hai.</p>' : '';
   if(!vars.length){ box.innerHTML=imgHint + '<p class="hint">Is template me variables detect nahi hue.</p>'; if($('broadcastVariables')) broadcastVariables.value=''; return; }
-  const options=[['{{name}}','Customer Name'],['{{phone}}','Phone'],['{{email}}','Email'],['{{link}}','Product / Collection Link'],['{{coupon}}','Coupon Code'],['{{category}}','Category / Tag'],['{{product}}','Product Name'],['custom','Custom Text']];
-  box.innerHTML=imgHint + vars.map((v,i)=>{ const def=defaultVariableKey(i+1,v); return `<div class="broadcast-var-row" data-var-row="${esc(v)}"><b>${esc(v)}</b><select data-broadcast-var-select="${esc(v)}">${options.map(o=>`<option value="${esc(o[0])}" ${o[0]===def?'selected':''}>${esc(o[1])}</option>`).join('')}</select><input data-broadcast-var-custom="${esc(v)}" placeholder="Custom text" style="display:${def==='custom'?'block':'none'}"/></div>`; }).join('');
+  const options=[['{{name}}','Customer Name'],['{{phone}}','Phone'],['{{email}}','Email'],['{{link}}','Product / Collection Link'],['{{website}}','Visit us'],['{{coupon}}','Coupon Code'],['{{category}}','Category / Tag'],['{{product}}','Product Name'],['custom','Custom Text']];
+  box.innerHTML=imgHint + vars.map((v,i)=>{ const hint=Array.isArray(tpl.variables)?tpl.variables[i]||'':''; const def=defaultVariableKey(i+1,v,hint); return `<div class="broadcast-var-row" data-var-row="${esc(v)}"><b>${esc(v)}</b><select data-broadcast-var-select="${esc(v)}">${options.map(o=>`<option value="${esc(o[0])}" ${o[0]===def?'selected':''}>${esc(o[1])}</option>`).join('')}</select><input data-broadcast-var-custom="${esc(v)}" placeholder="Custom text" style="display:${def==='custom'?'block':'none'}"/></div>`; }).join('');
   updateBroadcastVariablesFromMap();
 }
 function updateBroadcastVariablesFromMap(){
@@ -1161,7 +1162,7 @@ function setupPwaInstall(){
 setupPwaInstall();
 
 document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); if(e.target.id==='broadcastCategory'||e.target.id==='broadcastCustomerSearch'||e.target.id==='broadcastFilterBy') renderBroadcastContacts(); if(e.target.dataset && e.target.dataset.broadcastVarCustom!==undefined) updateBroadcastVariablesFromMap(); if(e.target.id==='salesOrderSearch') clearTimeout(window.__salesOrderSearchTimer), window.__salesOrderSearchTimer=setTimeout(searchSalesOrders,450); if(e.target.dataset.flowEdit){ const flow=activeFlow(); const i=Number(e.target.dataset.flowIndex); if(flow.blocks&&flow.blocks[i]){ flow.blocks[i][e.target.dataset.flowEdit]=e.target.value; } } const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.classList && e.target.classList.contains('broadcast-check')){ const phone=e.target.dataset.phone; if(phone){ if(e.target.checked) broadcastSelectedPhones.add(phone); else broadcastSelectedPhones.delete(phone); } renderBroadcastContacts(); return; } if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); const allSelected=phones.length>0 && phones.every(p=>broadcastSelectedPhones.has(p)); if(allSelected){ phones.forEach(p=>broadcastSelectedPhones.delete(p)); } else { phones.forEach(p=>broadcastSelectedPhones.add(p)); } document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=!allSelected); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ uploadBroadcastImageFile(e.target.files[0]); } if(e.target.id==='broadcastUploadedImageSelect'){ const sel=e.target; const option=sel.selectedOptions && sel.selectedOptions[0]; const url=(option && option.dataset.url) || sel.value || ''; if($('broadcastImageUrl')) broadcastImageUrl.value=url; if(sel.value!==url) sel.value=url; } });
+document.addEventListener('change',e=>{ if(e.target.classList && e.target.classList.contains('broadcast-check')){ const phone=e.target.dataset.phone; if(phone){ if(e.target.checked) broadcastSelectedPhones.add(phone); else broadcastSelectedPhones.delete(phone); } renderBroadcastContacts(); return; } if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); const allSelected=phones.length>0 && phones.every(p=>broadcastSelectedPhones.has(p)); if(allSelected){ phones.forEach(p=>broadcastSelectedPhones.delete(p)); } else { phones.forEach(p=>broadcastSelectedPhones.add(p)); } document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=!allSelected); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ uploadBroadcastImageFile(e.target.files[0]); } if(e.target.id==='broadcastUploadedImageSelect'){ syncBroadcastSelectedImageUrl(); } });
 document.addEventListener('click',async e=>{
 
   if(e.target.classList && e.target.classList.contains('contact-tab')){ const target=e.target.dataset.target; const mode=e.target.dataset.contactFilter || 'with'; if(target==='crm'){ crmContactFilter=mode; renderCrm(); } if(target==='lead'){ leadContactFilter=mode; renderLeads(); } if(target==='activity'){ activityContactFilter=mode; renderEvents(); } return; }
@@ -1814,11 +1815,25 @@ document.addEventListener('input', e=>{ if(e.target.dataset.catName!==undefined 
 document.addEventListener('change', e=>{ if(e.target.dataset.catActive!==undefined){ waBotSettings.catalogCategories=collectCatalogCategories(); }});
 
 function broadcastImageUrl(img){ return img.absoluteUrl || img.url || ''; }
+function syncBroadcastSelectedImageUrl(selected){
+  const sel=$('broadcastUploadedImageSelect');
+  const urlField=$('broadcastImageUrl');
+  if(!sel || !urlField) return '';
+  let url='';
+  if(typeof selected==='string' && selected.trim()) url=selected.trim();
+  else {
+    const option=sel.selectedOptions && sel.selectedOptions[0];
+    url=(option && (option.dataset.url || option.value)) || sel.value || '';
+  }
+  if(url){ urlField.value=url; sel.value=url; }
+  return url;
+}
 function renderBroadcastUploadedImageDropdown(){
   const sel=$('broadcastUploadedImageSelect'); if(!sel) return;
   const current=($('broadcastImageUrl')?.value || sel.value || '').trim();
   sel.innerHTML='<option value="">Select uploaded image</option>' + (mediaImages||[]).map(img=>{ const url=broadcastImageUrl(img); return `<option value="${esc(url)}" data-url="${esc(url)}" data-id="${esc(img.id||'')}">${esc(img.title||img.originalName||img.filename||'Image')}</option>`; }).join('');
   if(current && [...sel.options].some(o=>o.value===current || o.dataset.url===current)) sel.value=current;
+  if(sel.value) syncBroadcastSelectedImageUrl(sel.value);
 }
 function renderBroadcastLatestImagePreview(img){
   const box=$('broadcastLatestImagePreview');
@@ -1861,7 +1876,9 @@ async function uploadBroadcastImageFile(file){
     await loadMedia();
     const uploaded=res.image || (mediaImages||[]).find(img=>broadcastImageUrl(img)===url) || {url,absoluteUrl:url,title:file.name,filename:file.name};
     if($('broadcastUploadedImageSelect')) broadcastUploadedImageSelect.value=url;
+    if($('broadcastImageUrl')) broadcastImageUrl.value=url;
     renderBroadcastImageLibrary();
+    syncBroadcastSelectedImageUrl(url);
 
     if(status){ status.className='hint success'; status.innerHTML='Image uploaded successfully. Public URL ready: <code>'+esc(url)+'</code>'; }
   }catch(e){
@@ -1873,11 +1890,11 @@ async function uploadBroadcastImageFile(file){
 }
 document.addEventListener('click', async e=>{
   const use=e.target.closest('[data-use-broadcast-img]');
-  if(use && $('broadcastImageUrl')){ broadcastImageUrl.value=use.dataset.useBroadcastImg; if($('broadcastUploadedImageSelect')) broadcastUploadedImageSelect.value=use.dataset.useBroadcastImg; const img=(mediaImages||[]).find(x=>broadcastImageUrl(x)===use.dataset.useBroadcastImg); return; }
+  if(use && $('broadcastImageUrl')){ broadcastImageUrl.value=use.dataset.useBroadcastImg; if($('broadcastUploadedImageSelect')) broadcastUploadedImageSelect.value=use.dataset.useBroadcastImg; syncBroadcastSelectedImageUrl(use.dataset.useBroadcastImg); const img=(mediaImages||[]).find(x=>broadcastImageUrl(x)===use.dataset.useBroadcastImg); return; }
   const copy=e.target.closest('[data-copy-broadcast-img]');
   if(copy){ try{ await navigator.clipboard.writeText(copy.dataset.copyBroadcastImg||''); alert('Image link copied.'); }catch(err){ prompt('Copy image link:', copy.dataset.copyBroadcastImg||''); } return; }
   const del=e.target.closest('[data-delete-broadcast-img]');
-  if(del){ if(confirm('Remove this image from library?')){ const deleting=(mediaImages||[]).find(x=>String(x.id)===String(del.dataset.deleteBroadcastImg)); const deletingUrl=deleting?broadcastImageUrl(deleting):''; await fetch('/api/media-images/'+encodeURIComponent(del.dataset.deleteBroadcastImg),{method:'DELETE',credentials:'include'}); await loadMedia(); renderBroadcastImageLibrary(); if($('broadcastImageUrl') && $('broadcastImageUrl').value===deletingUrl) broadcastImageUrl.value=''; if($('broadcastUploadedImageSelect') && $('broadcastUploadedImageSelect').value===deletingUrl) broadcastUploadedImageSelect.value=''; } return; }
+  if(del){ if(confirm('Remove this image from library?')){ const deleting=(mediaImages||[]).find(x=>String(x.id)===String(del.dataset.deleteBroadcastImg)); const deletingUrl=deleting?broadcastImageUrl(deleting):''; await fetch('/api/media-images/'+encodeURIComponent(del.dataset.deleteBroadcastImg),{method:'DELETE',credentials:'include'}); await loadMedia(); renderBroadcastImageLibrary(); if($('broadcastImageUrl') && $('broadcastImageUrl').value===deletingUrl) broadcastImageUrl.value=''; if($('broadcastUploadedImageSelect') && $('broadcastUploadedImageSelect').value===deletingUrl) broadcastUploadedImageSelect.value=''; syncBroadcastSelectedImageUrl(''); } return; }
 });
 
 (function tsgLoaderSafetyMobileFinal(){
