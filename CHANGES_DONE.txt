@@ -1,27 +1,10 @@
 CHANGES_DONE
 
-Latest fix:
-1. Website chatbot mobile/session fix.
-   - Customer mobile number is saved in the chat session after it is shared once.
-   - Chatbot will not ask for the mobile number again in the same visitor session.
-   - "Track my order" now uses the saved mobile number automatically.
+v17 rollback:
+1. Website chatbot restored back like previous v14 behavior.
+2. v16 WhatsApp Support direct-open/widget patch removed.
+3. v15 changes were not used.
+4. Base used: v14 ZIP.
 
-2. Order privacy / strict matching fix.
-   - If mobile number is available, only orders matching that mobile number will be shown.
-   - If order number + mobile number are both available, both must match.
-   - Removed unsafe fallback that could show another customer's order.
-   - No order message is now English:
-     "No order was found for this mobile number. Please share your registered mobile number or order number."
-
-3. WhatsApp Support button fix.
-   - Removed .env technical error from customer-facing chatbot.
-   - Support number is read from saved/API settings or env.
-   - If missing, customer sees a friendly English message:
-     "WhatsApp support number is not configured yet. Please contact us from the website contact page."
-
-Previous included:
-- Campaign Report delivered/read status tracking.
-- Select Uploaded Image auto-fills Image URL.
-- Visit us variable.
-- Multi-customer selection/send fix.
-- Bulk direct Image + Text send mode.
+Note:
+- This keeps the website chatbot as it was in v14.

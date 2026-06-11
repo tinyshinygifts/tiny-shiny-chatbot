@@ -1,9 +1,0 @@
-Final Updated v5 changes:
-1. Shopify Sales Analysis me Order Tracking / Customer Order Search add kiya.
-2. Name, mobile, email, order number se Shopify orders search; tracking URL par click open.
-3. Bulk WhatsApp Broadcast se old large Customer Search / Filter By box remove kiya.
-4. Import Shopify Customers button contacts action row me add.
-5. Select All / Deselect All / multiple select fix.
-6. Image + Text Message section contacts buttons ke upar shift.
-7. Template Variables auto detect + dropdown mapping added.
-8. CSV/pasted/shopify contacts dedupe and selected template use flow improved.
