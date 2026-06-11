@@ -1,28 +1,18 @@
 CHANGES_DONE
 
-v18 update:
-1. Website chatbot floating button changed to selected pink cute chat logo.
-   - Added public/chat-button.png.
-   - New widget uses the selected design.
-
-2. Chat button now shows options first:
-   - Track My Order
-   - Product Information
-   - Return / Exchange
-   - WhatsApp Support
-   - COD Confirmation
-   - Talk to Support
-
-3. Widget reads API Settings:
-   - chatbotEnabled
-   - botName
-   - welcomeMessage
-   - fallbackMessage
-   - themeColor/accentColor
-
-4. WhatsApp Support option opens WhatsApp directly.
-   - No extra message shown.
-   - No wrong Track Shipment button.
+v19 update:
+1. WhatsApp Support option removed from website chat menu.
+2. Floating chat button click now opens the full chat box directly.
+3. Chat box starts with the required design:
+   - Header: Tiny Shiny Assistant
+   - No “We typically reply instantly” line
+   - First message: 👋 Hi! How can I help you today?
+   - Buttons:
+     Track my order
+     Product information
+     Return / Exchange
+     Contact Support
+4. Selected pink chat logo remains in use as public/chat-button.png.
 
 Base:
-- v17 ZIP used as base.
+- v18 ZIP used as base.

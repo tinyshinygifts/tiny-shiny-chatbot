@@ -1,6 +1,6 @@
 (function(){
-  if(window.__TSG_CHAT_WIDGET_V18__) return;
-  window.__TSG_CHAT_WIDGET_V18__ = true;
+  if(window.__TSG_CHAT_WIDGET_V19__) return;
+  window.__TSG_CHAT_WIDGET_V19__ = true;
 
   const script = document.currentScript;
   const BASE = script && script.src ? new URL(script.src).origin : 'https://chat.tinyshinygifts.com';
@@ -12,33 +12,39 @@
   }
 
   let settings = {};
-  const defaultWelcome = 'Hello! Welcome to Tiny Shiny Gifts. I can help with product details, order tracking, COD, delivery, returns, and WhatsApp support.';
+  const fixedBotName = 'Tiny Shiny Assistant';
+  const defaultWelcome = '👋 Hi! How can I help you today?';
   const defaultFallback = 'I need a little more detail to help you.';
 
   function injectCss(color){
     const pink = color || '#d63384';
     const css = `
       #tsgChatFab{position:fixed;right:18px;bottom:18px;z-index:2147483000;width:116px;height:78px;border:0;background:transparent url('${BASE}/chat-button.png') center/contain no-repeat;cursor:pointer;filter:drop-shadow(0 10px 22px rgba(214,51,132,.32));}
-      #tsgQuickMenu{position:fixed;right:18px;bottom:102px;z-index:2147483000;width:230px;background:#fff;border:1px solid #f3cfe3;border-radius:18px;box-shadow:0 18px 50px rgba(55,18,46,.18);padding:10px;display:none;font-family:Arial,sans-serif}
-      #tsgQuickMenu button{width:100%;border:1px solid #f2c8df;background:#fff;color:${pink};border-radius:999px;padding:10px 12px;margin:4px 0;font-weight:900;cursor:pointer;text-align:left}
-      #tsgQuickMenu button:hover{background:#fff3f9}
       #tsgChatBox{position:fixed;right:18px;bottom:102px;width:min(370px,calc(100vw - 24px));max-height:74vh;background:#fff;border:1px solid #f2cfe1;border-radius:22px;box-shadow:0 18px 60px rgba(58,22,50,.22);z-index:2147483001;display:none;overflow:hidden;font-family:Arial,sans-serif}
       #tsgChatHead{background:linear-gradient(135deg,${pink},#9b2a76);color:#fff;padding:12px 14px;font-weight:900;display:flex;justify-content:space-between;align-items:center}
-      #tsgChatClose{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:50%;width:28px;height:28px;font-weight:900;cursor:pointer}
+      #tsgChatTitle{display:flex;align-items:center;gap:10px;min-width:0}
+      #tsgChatLogo{width:38px;height:38px;border-radius:50%;background:#fff;color:${pink};font-size:10px;font-weight:900;display:flex;align-items:center;justify-content:center;line-height:1;text-align:center;flex:none}
+      #tsgChatTitleText{font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+      #tsgChatClose{background:rgba(255,255,255,.18);border:0;color:#fff;border-radius:50%;width:30px;height:30px;font-weight:900;cursor:pointer;font-size:20px;line-height:28px}
       #tsgChatMsgs{padding:12px;height:320px;max-height:48vh;overflow:auto;background:#fff7fb}
       .tsgMsg{margin:8px 0;padding:10px 12px;border-radius:16px;white-space:pre-wrap;line-height:1.35;font-size:14px}
       .tsgUser{margin-left:42px;background:${pink};color:#fff;border-bottom-right-radius:4px}
       .tsgBot{margin-right:28px;background:#fff;border:1px solid #f3d0e3;color:#2d1830;border-bottom-left-radius:4px}
+      .tsgOptionList{display:flex;flex-direction:column;gap:8px;margin-top:10px}
+      .tsgOption{width:100%;border:1px solid ${pink};background:#fff;color:${pink};border-radius:8px;padding:10px 12px;font-weight:900;cursor:pointer;text-align:center}
+      .tsgOption:hover{background:#fff3f9}
       .tsgActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
       .tsgAction{border:0;background:${pink};color:#fff;border-radius:999px;padding:9px 12px;font-weight:900;cursor:pointer;text-decoration:none;display:inline-flex}
       #tsgChatForm{display:flex;gap:8px;padding:10px;border-top:1px solid #f2d2e4;background:#fff}
       #tsgChatInput{flex:1;border:1px solid #edd0e1;border-radius:999px;padding:10px 12px;outline:none}
       #tsgChatSend{border:0;background:${pink};color:#fff;border-radius:999px;padding:10px 14px;font-weight:900;cursor:pointer}
-      @media(max-width:520px){#tsgChatFab{right:10px;bottom:10px;width:96px;height:66px}#tsgQuickMenu{right:10px;bottom:82px;width:min(230px,calc(100vw - 20px))}#tsgChatBox{right:8px;left:8px;bottom:84px;width:auto;max-height:78vh}#tsgChatMsgs{height:360px;max-height:58vh}}
+      @media(max-width:520px){#tsgChatFab{right:10px;bottom:10px;width:96px;height:66px}#tsgChatBox{right:8px;left:8px;bottom:84px;width:auto;max-height:78vh}#tsgChatMsgs{height:360px;max-height:58vh}}
     `;
     const st=document.createElement('style'); st.id='tsgChatStyle'; st.textContent=css; document.head.appendChild(st);
   }
+
   function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));}
+
   function currentProduct(){
     return {
       pageUrl: location.href,
@@ -55,25 +61,15 @@
     fab.type='button';
     fab.setAttribute('aria-label','Chat');
 
-    const menu=document.createElement('div');
-    menu.id='tsgQuickMenu';
-    const items=[
-      ['Track My Order','Track my order'],
-      ['Product Information','Product information'],
-      ['Return / Exchange','Return / Exchange'],
-      ['WhatsApp Support','WhatsApp support'],
-      ['COD Confirmation','COD Confirmation'],
-      ['Talk to Support','Talk to Support']
-    ];
-    menu.innerHTML=items.map(([label,msg])=>`<button type="button" data-msg="${esc(msg)}">${esc(label)}</button>`).join('');
-
     const box=document.createElement('div');
     box.id='tsgChatBox';
-    box.innerHTML=`<div id="tsgChatHead"><span>${esc(settings.botName || 'Tiny Shiny Assistant')}</span><button id="tsgChatClose" type="button">×</button></div>
+    box.innerHTML=`<div id="tsgChatHead">
+        <div id="tsgChatTitle"><span id="tsgChatLogo">TINY<br>SHINY</span><span id="tsgChatTitleText">${esc(fixedBotName)}</span></div>
+        <button id="tsgChatClose" type="button">×</button>
+      </div>
       <div id="tsgChatMsgs"></div>
-      <form id="tsgChatForm"><input id="tsgChatInput" placeholder="Type your message..." autocomplete="off"/><button id="tsgChatSend" type="submit">Send</button></form>`;
+      <form id="tsgChatForm"><input id="tsgChatInput" placeholder="Type your message..." autocomplete="off"/><button id="tsgChatSend" type="submit">➤</button></form>`;
 
-    document.body.appendChild(menu);
     document.body.appendChild(box);
     document.body.appendChild(fab);
 
@@ -97,21 +93,44 @@
         });
         d.appendChild(a);
       }
-      msgs.appendChild(d); msgs.scrollTop=msgs.scrollHeight;
+      msgs.appendChild(d);
+      msgs.scrollTop=msgs.scrollHeight;
     }
+
+    function renderDefaultOptions(){
+      const wrap=document.createElement('div');
+      wrap.className='tsgOptionList';
+      const options=[
+        ['Track my order','Track my order'],
+        ['Product information','Product information'],
+        ['Return / Exchange','Return / Exchange'],
+        ['Contact Support','Contact Support']
+      ];
+      options.forEach(([label,msg])=>{
+        const b=document.createElement('button');
+        b.type='button';
+        b.className='tsgOption';
+        b.textContent=label;
+        b.onclick=()=>send(msg);
+        wrap.appendChild(b);
+      });
+      msgs.appendChild(wrap);
+    }
+
     function openBox(){
-      menu.style.display='none';
       box.style.display='block';
       if(!msgs.dataset.welcome){
         msgs.dataset.welcome='1';
         addMsg(settings.welcomeMessage || defaultWelcome, 'bot');
+        renderDefaultOptions();
       }
     }
+
     async function send(message){
       const text=String(message||'').trim();
       if(!text) return;
-      if(!/whatsapp support|support on whatsapp/i.test(text)) openBox();
-      if(!/whatsapp support/i.test(text)) addMsg(text,'user');
+      openBox();
+      addMsg(text,'user');
       input.value='';
       try{
         const res=await fetch(BASE+'/api/chat',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({message:text,visitorId,...currentProduct()})});
@@ -132,17 +151,9 @@
     }
 
     fab.onclick=()=>{
-      if(box.style.display==='block'){ box.style.display='none'; return; }
-      menu.style.display = menu.style.display==='block' ? 'none' : 'block';
+      if(box.style.display==='block') box.style.display='none';
+      else openBox();
     };
-    menu.addEventListener('click', e=>{
-      const btn=e.target.closest('button[data-msg]');
-      if(!btn) return;
-      const msg=btn.dataset.msg;
-      if(/whatsapp support/i.test(msg)){ send(msg); return; }
-      openBox();
-      send(msg);
-    });
     box.querySelector('#tsgChatClose').onclick=()=>box.style.display='none';
     box.querySelector('#tsgChatForm').onsubmit=e=>{e.preventDefault(); send(input.value);};
   }
