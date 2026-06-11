@@ -83,6 +83,7 @@ const shopifyOAuthStatePath = path.join(dataDir, 'shopify-oauth-state.json');
 const broadcastCampaignsPath = path.join(dataDir, 'broadcast-campaigns.json');
 const whatsappOptoutsPath = path.join(dataDir, 'whatsapp-optouts.json');
 const whatsappTeamMetaPath = path.join(dataDir, 'whatsapp-team-meta.json');
+const chatSessionsPath = path.join(dataDir, 'chat-sessions.json');
 const chatbotFlowsPath = path.join(dataDir, 'chatbot-flows.json');
 const instagramInboxPath = path.join(dataDir, 'instagram-inbox.json');
 const instagramSettingsPath = path.join(dataDir, 'instagram-settings.json');
@@ -111,7 +112,7 @@ const mongoJsonCache = new Map();
 function deepClone(value) { return value === undefined ? value : JSON.parse(JSON.stringify(value)); }
 function mongoKeyFromPath(filePath) { return 'json:' + path.basename(String(filePath || 'unknown.json')); }
 function readLocalJson(filePath, fallback) { try { return JSON.parse(fs.readFileSync(filePath, 'utf8')); } catch { return fallback; } }
-function mongoKnownPaths() { return [faqPath, settingsPath, leadsPath, eventsPath, leadMessagesPath, mediaImagesPath, crmPath, whatsappTemplatesPath, whatsappInboxPath, shopifyOAuthStatePath, broadcastCampaignsPath, whatsappOptoutsPath, whatsappTeamMetaPath, chatbotFlowsPath, instagramInboxPath, instagramSettingsPath, messengerInboxPath, messengerSettingsPath, advancedCampaignsPath, customerSegmentsPath, dripCampaignsPath, quickReplySettingsPath, linkClicksPath, automationRulesPath, ndrPath, ndrSettingsPath]; }
+function mongoKnownPaths() { return [faqPath, settingsPath, leadsPath, eventsPath, leadMessagesPath, mediaImagesPath, crmPath, whatsappTemplatesPath, whatsappInboxPath, shopifyOAuthStatePath, broadcastCampaignsPath, whatsappOptoutsPath, whatsappTeamMetaPath, chatSessionsPath, chatbotFlowsPath, instagramInboxPath, instagramSettingsPath, messengerInboxPath, messengerSettingsPath, advancedCampaignsPath, customerSegmentsPath, dripCampaignsPath, quickReplySettingsPath, linkClicksPath, automationRulesPath, ndrPath, ndrSettingsPath]; }
 async function mongoSave(key, value) {
   if (!mongoReady || !mongoCollection) return;
   try { await mongoCollection.updateOne({ key }, { $set: { key, value, updatedAt: new Date() } }, { upsert: true }); }
@@ -565,6 +566,51 @@ function extractOrderId(text) {
   const m = String(text || '').match(/(?:order\s*#?|order\s*id|id)[:\s-]*([A-Za-z0-9-]{4,})/i) || String(text || '').match(/\b(?:TSG|TS)?[0-9]{4,}\b/i);
   return m ? String(m[1] || m[0]).replace('#','').trim() : '';
 }
+
+function chatSessionKey(visitorId='', req={}) {
+  const raw = String(visitorId || req.headers?.['x-forwarded-for'] || req.ip || 'guest').split(',')[0].trim();
+  return raw.replace(/[^a-zA-Z0-9_.:-]/g, '_').slice(0, 120) || 'guest';
+}
+function readChatSessions(){ return readJson(chatSessionsPath, {}); }
+function writeChatSessions(v){ writeJson(chatSessionsPath, v && typeof v==='object' ? v : {}); }
+function getChatSession(visitorId='', req={}) {
+  const key = chatSessionKey(visitorId, req);
+  const all = readChatSessions();
+  const item = all[key] || {};
+  return { key, all, item };
+}
+function saveChatSession(visitorId='', req={}, patch={}) {
+  const s = getChatSession(visitorId, req);
+  s.all[s.key] = { ...(s.item||{}), ...(patch||{}), updatedAt: nowIso() };
+  writeChatSessions(s.all);
+  return s.all[s.key];
+}
+function customerPhoneMatchesOrder(order={}, phone='') {
+  const variants = phoneVariants(phone).map(cleanPhone).filter(Boolean);
+  if(!variants.length) return false;
+  const values = orderPhoneValues(order).map(cleanPhone).filter(Boolean);
+  return values.some(v => variants.some(p => v.endsWith(p) || p.endsWith(v)));
+}
+function getSupportWhatsAppNumber() {
+  const env = readEnvFile();
+  const settings = readJson(settingsPath, {});
+  return cleanPhone(
+    settings.supportWhatsAppNumber ||
+    settings.whatsappSupportNumber ||
+    settings.businessWhatsAppNumber ||
+    settings.whatsappNumber ||
+    settings.ownerWhatsappNumber ||
+    settings.ownerWhatsAppNumber ||
+    env.SUPPORT_WHATSAPP_NUMBER ||
+    env.WHATSAPP_NUMBER ||
+    env.OWNER_WHATSAPP_NUMBER ||
+    process.env.SUPPORT_WHATSAPP_NUMBER ||
+    process.env.WHATSAPP_NUMBER ||
+    process.env.OWNER_WHATSAPP_NUMBER ||
+    ''
+  );
+}
+
 function productSummary(p = {}) {
   return [p.title || p.productTitle || 'Product', p.price ? `Price: ${p.price}` : '', p.discountText ? `Discount: ${p.discountText}` : '', p.url || p.pageUrl || ''].filter(Boolean).join('\n');
 }
@@ -907,15 +953,19 @@ function orderPhoneValues(order = {}) {
 }
 function orderMatchesInput(order, { orderId, phone }) {
   const oid = String(orderId || '').replace(/^#/, '').trim().toLowerCase();
-  if (oid) {
+  const hasOrder = !!oid;
+  const hasPhone = !!cleanPhone(phone || '');
+  let orderOk = false;
+  if (hasOrder) {
     const names = [order.name, order.order_number, order.id].map(v => String(v || '').replace(/^#/, '').toLowerCase());
-    if (names.some(v => v === oid || v.includes(oid))) return true;
+    orderOk = names.some(v => v === oid || v.includes(oid));
   }
-  const variants = phoneVariants(phone).map(cleanPhone);
-  if (variants.length) {
-    const values = orderPhoneValues(order).map(cleanPhone);
-    if (values.some(v => variants.some(p => v.endsWith(p) || p.endsWith(v)))) return true;
-  }
+  const phoneOk = hasPhone ? customerPhoneMatchesOrder(order, phone) : false;
+
+  // Privacy rule: if both order number and phone are available, BOTH must match.
+  if (hasOrder && hasPhone) return orderOk && phoneOk;
+  if (hasOrder) return orderOk;
+  if (hasPhone) return phoneOk;
   return false;
 }
 async function shopifyFetch(pathAndQuery, options = {}) {
@@ -986,24 +1036,33 @@ function buildOrderReply(simple, shiprocket) {
   return `Order ${simple.name || simple.order_number}\nCustomer: ${simple.customer_name || '-'}\nPayment status: ${simple.financial_status || '-'}\nOrder/Fulfillment status: ${simple.cancelled_at ? 'cancelled' : simple.fulfillment_status}\nTotal: ${simple.currency} ${simple.total_price || '-'}\nItems: ${items || '-'}\nTracking: ${tracking}${shipLine}`;
 }
 async function getShopifyOrderStatus({ orderId, phone }) {
-  if (!process.env.SHOPIFY_STORE_DOMAIN || !process.env.SHOPIFY_ADMIN_ACCESS_TOKEN) return { ok: false, skipped: true, message: 'Shopify API is not connected yet.' };
+  const envNow = readEnvFile();
+  const storeOk = envNow.SHOPIFY_STORE_DOMAIN || process.env.SHOPIFY_STORE_DOMAIN;
+  const tokenOk = envNow.SHOPIFY_ADMIN_ACCESS_TOKEN || process.env.SHOPIFY_ADMIN_ACCESS_TOKEN;
+  if (!storeOk || !tokenOk || tokenOk === '********') return { ok: false, skipped: true, message: 'Shopify API is not connected yet.' };
+
+  const safeOrderId = String(orderId || '').replace(/^#/, '').trim();
+  const safePhone = cleanPhone(phone || '');
+  if (!safeOrderId && !safePhone) return { ok:false, message:'No order number or registered mobile number provided.' };
+
   const queries = [];
-  if (orderId) {
-    const clean = String(orderId).replace(/^#/, '').trim();
-    queries.push(`name:#${clean}`);
-    queries.push(`#${clean}`);
+  if (safeOrderId) {
+    queries.push(`name:#${safeOrderId}`);
+    queries.push(`#${safeOrderId}`);
   }
-  if (phone) {
-    for (const p of phoneVariants(phone)) queries.push(`phone:${p}`);
+  if (safePhone) {
+    for (const p of phoneVariants(safePhone)) queries.push(`phone:${p}`);
   }
+
+  // Last broad fallback is only for strict local matching, never blindly returns first order.
   queries.push('');
-  let orders = [];
-  for (const q of queries) {
+
+  for (const q of [...new Set(queries)]) {
     const query = q ? `&query=${encodeURIComponent(q)}` : '';
-    const r = await shopifyFetch(`orders.json?status=any&limit=50&fields=id,name,order_number,created_at,email,phone,customer,billing_address,shipping_address,financial_status,fulfillment_status,total_price,currency,fulfillments,line_items,cancelled_at,cancel_reason${query}`);
+    const r = await shopifyFetch(`orders.json?status=any&limit=100&fields=id,name,order_number,created_at,email,phone,customer,billing_address,shipping_address,financial_status,fulfillment_status,total_price,currency,fulfillments,line_items,cancelled_at,cancel_reason${query}`);
     if (!r.ok) return { ok: false, message: 'Shopify order lookup failed.', detail: r.json || r };
-    orders = (r.json.orders || []);
-    const matched = orders.find(o => orderMatchesInput(o, { orderId, phone })) || orders[0];
+    const orders = (r.json.orders || []);
+    const matched = orders.find(o => orderMatchesInput(o, { orderId: safeOrderId, phone: safePhone }));
     if (matched) {
       const simple = simplifyOrder(matched);
       const shiprocket = await getShiprocketTracking(simple).catch(e => ({ ok: false, error: e.message }));
@@ -1011,7 +1070,8 @@ async function getShopifyOrderStatus({ orderId, phone }) {
       return { ok: true, order: simple, shiprocket, trackingLinks, reply: buildOrderReply(simple, shiprocket) };
     }
   }
-  return { ok: false, message: 'No matching order found for this mobile/order number.' };
+
+  return { ok: false, message: 'No order was found for this mobile number. Please share your registered mobile number or order number.' };
 }
 
 async function createShopifyDraftOrder(lead) {
@@ -2046,38 +2106,56 @@ app.post('/api/chat', async (req, res) => {
   const settings = readJson(settingsPath, {});
   const raw = String(message || '').trim();
   const text = raw.toLowerCase();
+  const session = getChatSession(visitorId, req);
+  let savedPhone = cleanPhone(session.item.phone || '');
   if (!raw) return res.json({ ok: true, reply: settings.welcomeMessage || 'Hello! How can I help you?' });
+
   const phone = extractPhone(raw);
+  if (phone) {
+    savedPhone = phone;
+    saveChatSession(visitorId, req, { phone: savedPhone });
+  }
+
   const wantsConfirm = /confirm|confirmation|place order|book order|buy this|order now|i want this/i.test(raw);
   const orderIdFromText = extractOrderId(raw);
   const looksLikeTrackingInput = Boolean(phone || orderIdFromText) && !wantsConfirm;
   const wantsTrack = /track|tracking|order status|where is my order|dispatch|shipped|shipment/i.test(raw) || looksLikeTrackingInput;
   const product = { title: productTitle, handle: productHandle, image: productImage, price: productPrice, discountText, url: pageUrl };
+
   if (wantsConfirm) {
-    const lead = appendJson(leadsPath, { id: crypto.randomUUID(), type: 'order_confirmation', createdAt: nowIso(), phone, pageUrl, productTitle, productHandle, productImage, productPrice, discountText, message: raw, visitorId });
-    const waMsg = `New chatbot order confirmation request\nWebsite: Tiny Shiny Gifts\nPhone: ${phone || 'Not shared'}\n${productSummary(product)}\nCustomer message: ${raw}`;
+    const lead = appendJson(leadsPath, { id: crypto.randomUUID(), type: 'order_confirmation', createdAt: nowIso(), phone: savedPhone || phone, pageUrl, productTitle, productHandle, productImage, productPrice, discountText, message: raw, visitorId });
+    const waMsg = `New chatbot order confirmation request\nWebsite: Tiny Shiny Gifts\nPhone: ${savedPhone || phone || 'Not shared'}\n${productSummary(product)}\nCustomer message: ${raw}`;
     sendOwnerWhatsApp(waMsg).catch(err => console.error('WhatsApp notify error:', err.message));
-    createShopifyDraftOrder({ phone, productTitle, pageUrl, price: productPrice, message: raw }).catch(err => console.error('Shopify draft error:', err.message));
-    return res.json({ ok: true, action: 'order_confirmation_saved', reply: phone ? 'Thank you. Your order confirmation request has been sent to our team. We will confirm it on WhatsApp shortly.' : 'Sure. Please share your mobile number, product name/link and quantity so our team can confirm your order on WhatsApp.' });
+    createShopifyDraftOrder({ phone: savedPhone || phone, productTitle, pageUrl, price: productPrice, message: raw }).catch(err => console.error('Shopify draft error:', err.message));
+    return res.json({ ok: true, action: 'order_confirmation_saved', reply: (savedPhone || phone) ? 'Thank you. Your order confirmation request has been sent to our team. We will confirm it on WhatsApp shortly.' : 'Sure. Please share your mobile number, product name/link and quantity so our team can confirm your order on WhatsApp.' });
   }
+
   if (wantsTrack) {
     const orderId = orderIdFromText || extractOrderId(raw);
-    if (!orderId && !phone) return res.json({ ok: true, action: 'ask_order_number', reply: 'Please share your order number or registered mobile number to check your order tracking.' });
-    const status = await getShopifyOrderStatus({ orderId, phone });
+    const lookupPhone = phone || savedPhone;
+    if (!orderId && !lookupPhone) {
+      return res.json({ ok: true, action: 'ask_order_number', reply: 'Please share your order number or registered mobile number to check your order tracking.' });
+    }
+    const status = await getShopifyOrderStatus({ orderId, phone: lookupPhone });
     if (status.ok) {
+      if (lookupPhone) saveChatSession(visitorId, req, { phone: lookupPhone, lastOrderId: status.order?.name || status.order?.order_number || orderId || '' });
       return res.json({ ok: true, action: 'order_status', order: status.order, shiprocket: status.shiprocket, reply: status.reply || 'Order details found.' });
     }
-    appendJson(leadsPath, { id: crypto.randomUUID(), type: 'tracking_request', createdAt: nowIso(), phone, orderId, pageUrl, message: raw, visitorId });
-    sendOwnerWhatsApp(`New chatbot tracking request\nOrder/Mobile: ${orderId || phone}\nPage: ${pageUrl || ''}\nMessage: ${raw}`).catch(() => {});
-    return res.json({ ok: true, action: 'tracking_forwarded', reply: `${status.message || 'I could not check the tracking automatically yet.'} I have forwarded your tracking request to our team.` });
+    appendJson(leadsPath, { id: crypto.randomUUID(), type: 'tracking_request', createdAt: nowIso(), phone: lookupPhone, orderId, pageUrl, message: raw, visitorId });
+    sendOwnerWhatsApp(`New chatbot tracking request\nOrder/Mobile: ${orderId || lookupPhone}\nPage: ${pageUrl || ''}\nMessage: ${raw}`).catch(() => {});
+    return res.json({ ok: true, action: 'tracking_not_found', reply: status.message || 'No order was found for this mobile number. Please share your registered mobile number or order number.' });
   }
+
   if (text.includes('whatsapp') || text.includes('support') || text.includes('agent')) {
-    const wa = cleanPhone(process.env.WHATSAPP_NUMBER || '');
-    return res.json({ ok: true, reply: wa ? `You can talk to our support team on WhatsApp: https://wa.me/${wa}` : 'WhatsApp number is not added yet. Please add WHATSAPP_NUMBER in the .env file.' });
+    const wa = getSupportWhatsAppNumber();
+    return res.json({ ok: true, reply: wa ? `You can talk to our support team on WhatsApp: https://wa.me/${wa}` : 'WhatsApp support number is not configured yet. Please contact us from the website contact page.' });
   }
+
   const faqAnswer = findFaqAnswer(raw);
   if (faqAnswer) return res.json({ ok: true, reply: faqAnswer });
-  return res.json({ ok: true, reply: settings.fallbackMessage || 'I need a little more detail to help you.' });
+
+  const fallback = settings.fallbackMessage || 'I need a little more detail to help you.';
+  return res.json({ ok: true, reply: savedPhone ? fallback : `${fallback} You can share your mobile number if you want our team to contact you on WhatsApp.` });
 });
 
 app.post('/api/order-confirmation', async (req, res) => {

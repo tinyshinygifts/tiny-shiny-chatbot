@@ -1,19 +1,27 @@
 CHANGES_DONE
 
 Latest fix:
-1. Campaign Report me Delivered / Read status fix.
-   - WhatsApp webhook delivery statuses now update broadcast campaign results.
-   - Delivered, Read, Failed status and timing are stored in campaign rows.
-   - Report export reloads latest campaign data before CSV download.
-   - Report CSV now includes WhatsApp Message ID, Status, Failed Reason, Sent Time, Delivered Time, Read Time, Failed Time.
+1. Website chatbot mobile/session fix.
+   - Customer mobile number is saved in the chat session after it is shared once.
+   - Chatbot will not ask for the mobile number again in the same visitor session.
+   - "Track my order" now uses the saved mobile number automatically.
 
-2. Existing statuses are refreshed from WhatsApp Inbox status rows when campaigns are loaded.
-   - /api/broadcast/campaigns refreshes delivered/read status from saved webhook records.
-   - Campaign Analytics counts now use refreshed delivery status.
+2. Order privacy / strict matching fix.
+   - If mobile number is available, only orders matching that mobile number will be shown.
+   - If order number + mobile number are both available, both must match.
+   - Removed unsafe fallback that could show another customer's order.
+   - No order message is now English:
+     "No order was found for this mobile number. Please share your registered mobile number or order number."
+
+3. WhatsApp Support button fix.
+   - Removed .env technical error from customer-facing chatbot.
+   - Support number is read from saved/API settings or env.
+   - If missing, customer sees a friendly English message:
+     "WhatsApp support number is not configured yet. Please contact us from the website contact page."
 
 Previous included:
+- Campaign Report delivered/read status tracking.
 - Select Uploaded Image auto-fills Image URL.
-- Visit us variable added.
+- Visit us variable.
 - Multi-customer selection/send fix.
 - Bulk direct Image + Text send mode.
-- Uploaded image library management.
