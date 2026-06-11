@@ -3020,6 +3020,34 @@ function orderTemplateValueForVariable(order = {}, variableName = '', fallbackIn
   const fallback3 = [customer, orderNo, amount];
   return (fallbackIndex < 4 ? fallback4[fallbackIndex] : fallback3[fallbackIndex]) || '-';
 }
+function orderTemplateUrlValue(order = {}) {
+  return String(order.order_status_url || order.status_url || order.checkout_url || process.env.WEBSITE_URL || readEnvFile().WEBSITE_URL || 'https://www.tinyshinygifts.com');
+}
+function orderTemplateButtonComponents(order = {}, template = null) {
+  const buttons = Array.isArray(template?.buttons) ? template.buttons : [];
+  const components = [];
+  buttons.forEach((btn, i) => {
+    const type = String(btn.type || '').toUpperCase();
+    const url = String(btn.url || btn.link || '');
+    const text = String(btn.text || '');
+    if (type === 'URL' && /{{\s*\d+\s*}}/.test(url + text)) {
+      components.push({
+        type: 'button',
+        sub_type: 'url',
+        index: String(i),
+        parameters: [textParam(orderTemplateUrlValue(order))]
+      });
+    }
+  });
+  return components;
+}
+function readableTemplateMismatchReason(templateName, result = {}) {
+  const msg = result?.json?.error?.message || result?.json?.error?.error_data?.details || result?.reason || result?.error || '';
+  if (isWhatsAppParamMismatch(result)) {
+    return `Template variables mismatch for '${templateName}'. Meta approved template body/header/button parameters do not match the values sent. Please check template variable count, header type and URL button variables.`;
+  }
+  return msg || 'WhatsApp template send failed.';
+}
 function orderBodyParameters(order = {}, options = {}) {
   const tpl = options.template || null;
   const explicitCount = Number(options.variableCount || 0);
@@ -3042,13 +3070,16 @@ async function orderTemplateComponents(order = {}, options = {}) {
       parameters: [{ type: 'image', image: { link: imageUrl } }]
     });
   }
-  components.push({ type: 'body', parameters: orderBodyParameters(order, { template, variableCount: options.variableCount }) });
+  const bodyParams = orderBodyParameters(order, { template, variableCount: options.variableCount });
+  if (bodyParams.length) components.push({ type: 'body', parameters: bodyParams });
+  components.push(...orderTemplateButtonComponents(order, template));
   return components;
 }
 function isWhatsAppParamMismatch(result = {}) {
   const code = result?.json?.error?.code;
-  const msg = String(result?.json?.error?.message || result?.json?.error?.error_data?.details || '').toLowerCase();
-  return code === 132000 || (code === 100 && /parameter|param/.test(msg));
+  const subcode = result?.json?.error?.error_subcode;
+  const msg = String(result?.json?.error?.message || result?.json?.error?.error_data?.details || result?.reason || result?.error || '').toLowerCase();
+  return code === 132000 || code === 132012 || subcode === 132012 || (code === 100 && /parameter|param|format/.test(msg)) || /parameter|param|format|does not match/.test(msg);
 }
 async function sendTemplateWithOrderFallback(phone, templateName, lang, order = {}, productImage = '') {
   const template = findWhatsAppTemplate(templateName);
@@ -3056,44 +3087,65 @@ async function sendTemplateWithOrderFallback(phone, templateName, lang, order = 
   const attempt = async (label, opts = {}) => {
     const components = await orderTemplateComponents(order, { templateName, template, imageUrl: productImage, ...opts });
     const result = await postWhatsApp(whatsappTemplateBody(phone, templateName, lang, components));
-    attempts.push({ label, ok: result.ok, status: result.status, error: result.json?.error?.message || result.reason || result.error || '', request: result.request });
-    return result;
+    const friendlyError = result.ok ? '' : readableTemplateMismatchReason(templateName, result);
+    attempts.push({
+      label,
+      ok: result.ok,
+      status: result.status,
+      error: result.json?.error?.message || result.json?.error?.error_data?.details || result.reason || result.error || '',
+      friendlyError,
+      request: result.request
+    });
+    return { ...result, friendlyError };
   };
 
+  const localCount = Array.isArray(template?.variables) && template.variables.length
+    ? template.variables.length
+    : templateParameterCountFromBody(template?.body || '');
+
+  const counts = [];
+  for (const c of [localCount, 4, 3, 5, 2, 1, 0]) {
+    if ((c || c === 0) && !counts.includes(c)) counts.push(c);
+  }
+
+  // First try exact local library template.
   let result = await attempt('library-template');
   if (result.ok || !isWhatsAppParamMismatch(result)) return { ...result, attempts };
 
-  // If a product image is available and the local template is marked as Image header,
-  // never fall back to a text-header/no-image send first. Some old Meta templates had
-  // a TEXT header that literally says "Image"; sending without a media header makes
-  // customers see the word "Image" instead of the actual product image.
-  const requiresImageHeader = Boolean(productImage && String(template?.headerType || 'Image').toLowerCase() === 'image');
-
-  // Fallbacks: useful when Meta template variable count is not yet updated exactly like the local library.
-  const counts = [];
-  const localCount = Array.isArray(template?.variables) && template.variables.length ? template.variables.length : templateParameterCountFromBody(template?.body || '');
-  for (const c of [localCount, 4, 3, 5, 2, 1, 0]) if ((c || c===0) && !counts.includes(c)) counts.push(c);
-
+  // Then try image-header attempts with different body variable counts.
   for (const c of counts) {
     if (productImage) {
       result = await attempt(`image-${c}-body-vars`, { variableCount: c });
       if (result.ok || !isWhatsAppParamMismatch(result)) return { ...result, attempts };
     }
-    if (!requiresImageHeader) {
-      result = await attempt(`no-image-${c}-body-vars`, { noHeader: true, variableCount: c });
-      if (result.ok || !isWhatsAppParamMismatch(result)) return { ...result, attempts };
-    }
   }
 
-  if (requiresImageHeader) {
-    return {
-      ...result,
-      ok: false,
-      attempts,
-      reason: 'Product image is available but Meta template did not accept image header. Please approve this template in Meta with Header Type = Image. Text/no-image fallback was skipped so customer does not receive an "Image" text header.'
-    };
+  // Then try no-image/no-header attempts. This is important for Meta templates
+  // that are approved without media header or where local header type is different.
+  for (const c of counts) {
+    result = await attempt(`no-image-${c}-body-vars`, { noHeader: true, variableCount: c });
+    if (result.ok || !isWhatsAppParamMismatch(result)) return { ...result, attempts };
   }
-  return { ...result, attempts };
+
+  // Last attempt: template name + language without components, for templates with no parameters.
+  result = await postWhatsApp(whatsappTemplateBody(phone, templateName, lang, []));
+  attempts.push({
+    label: 'template-no-components',
+    ok: result.ok,
+    status: result.status,
+    error: result.json?.error?.message || result.json?.error?.error_data?.details || result.reason || result.error || '',
+    friendlyError: result.ok ? '' : readableTemplateMismatchReason(templateName, result),
+    request: result.request
+  });
+  if (result.ok) return { ...result, attempts };
+
+  return {
+    ...result,
+    ok: false,
+    attempts,
+    friendlyError: readableTemplateMismatchReason(templateName, result),
+    reason: readableTemplateMismatchReason(templateName, result)
+  };
 }
 
 function isCodOrder(order = {}) {
@@ -3216,7 +3268,11 @@ async function sendOrderConfirmationToCustomer(order = {}) {
   if (!template) return { ok:false, skipped:true, reason:'Order confirmation template name missing.' };
   
   const productImage = await getOrderProductImage(order).catch(() => '');
-  const result = await sendTemplateWithOrderFallback(phone, template, lang, order, productImage);
+  let result = await sendTemplateWithOrderFallback(phone, template, lang, order, productImage);
+  if(!result.ok && productImage && isWhatsAppParamMismatch(result)){
+    const retry = await sendTemplateWithOrderFallback(phone, template, lang, order, '');
+    result = retry.ok ? retry : { ...result, noImageRetry: retry };
+  }
   return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage && (result.request?.components || []).some(c => c.type === 'header')) };
 }
 
@@ -3226,7 +3282,7 @@ app.get('/api/cod/debug-logs', requireAdmin, (req,res)=>{
   res.json({ok:true, count:leads.length, logs:leads.map(l=>{
     const err = l.whatsappResult?.json?.error?.message || l.whatsappResult?.error || l.whatsappResult?.reason || l.message || '';
     const hindiReason = String(err).includes('132012')
-      ? 'Meta template ka header/body parameter format tool ke sent parameters se match nahi kar raha. Template body params count/header type check karo.'
+      ? 'Template variables mismatch. Please check Meta approved template body variables count, header type, and URL button variables.'
       : (err || '');
     return {
       createdAt:l.createdAt, orderName:l.orderName, phone:l.phone, isCodOrder:l.isCodOrder,

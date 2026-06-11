@@ -1,11 +1,17 @@
 CHANGES_DONE
 
-v22 update:
-1. Quick option chips moved to bottom and fixed above the input box.
-2. Chips remain always visible while chat messages scroll.
-3. Chips size reduced to 90% width.
-4. Text now fits inside chip boxes; no cut text.
-5. Horizontal scroll removed.
+v23 update:
+1. Shopify order WhatsApp template mismatch fix.
+   - Meta error #132012 now detected as template parameter mismatch.
+   - Order confirmation/COD template sending now retries with:
+     image header + variable counts,
+     no-image/no-header + variable counts,
+     template with no components when needed.
+   - Dynamic URL button variables are now supported in order templates.
+   - Normal order confirmation also retries without image if image/header format mismatch occurs.
+
+2. CRM/debug error now shows clear reason:
+   "Template variables mismatch. Please check Meta approved template body variables count, header type, and URL button variables."
 
 Base:
-- v21 ZIP used as base.
+- v22 ZIP used as base.
