@@ -3044,7 +3044,7 @@ function orderTemplateButtonComponents(order = {}, template = null) {
 function readableTemplateMismatchReason(templateName, result = {}) {
   const msg = result?.json?.error?.message || result?.json?.error?.error_data?.details || result?.reason || result?.error || '';
   if (isWhatsAppParamMismatch(result)) {
-    return `Template variables mismatch for '${templateName}'. Meta approved template body/header/button parameters do not match the values sent. Please check template variable count, header type and URL button variables.`;
+    return `Template variables mismatch for '${templateName}'. Meta approved template expects Header Image + exactly 4 body variables + no button parameters for Confirm/Cancel/Visit website. Please check Meta template is approved with this exact format.`;
   }
   return msg || 'WhatsApp template send failed.';
 }
@@ -3164,9 +3164,53 @@ async function codTemplateComponents(order = {}, options = {}) {
   // COD template also uses image header when product image is available.
   return orderTemplateComponents(order, options);
 }
+
+function codOrderExactBodyParams(order = {}) {
+  return [
+    textParam(orderCustomerName(order) || 'Customer'),
+    textParam(orderFirstProductTitle(order) || 'Product'),
+    textParam(String(order.name || order.order_number || order.id || '-')),
+    textParam(String(order.total_price || order.current_total_price || order.subtotal_price || '0'))
+  ];
+}
+function codOrderExactComponents(order = {}, imageUrl = '') {
+  const components = [];
+  if (imageUrl) {
+    components.push({ type: 'header', parameters: [{ type: 'image', image: { link: absoluteImageUrl(imageUrl) } }] });
+  }
+  components.push({ type: 'body', parameters: codOrderExactBodyParams(order) });
+  // Confirm/Cancel quick reply buttons and static Visit website URL button do not need parameters.
+  return components;
+}
+async function sendCodTemplateExact(phone, templateName, lang, order = {}, productImage = '') {
+  const attempts = [];
+  const attempt = async (label, imageUrl) => {
+    const components = codOrderExactComponents(order, imageUrl);
+    const result = await postWhatsApp(whatsappTemplateBody(phone, templateName, lang, components));
+    attempts.push({
+      label,
+      ok: result.ok,
+      status: result.status,
+      error: result.json?.error?.message || result.json?.error?.error_data?.details || result.reason || result.error || '',
+      request: result.request
+    });
+    return result;
+  };
+
+  let result = await attempt('cod-exact-image-4-body-no-button-params', productImage || '');
+  if (result.ok) return { ...result, attempts, codExactFormat:true };
+
+  if (productImage && isWhatsAppParamMismatch(result)) {
+    const retry = await attempt('cod-exact-no-image-4-body-no-button-params', '');
+    if (retry.ok) return { ...retry, attempts, codExactFormat:true, noImageFallback:true };
+    return { ...retry, ok:false, attempts, codExactFormat:true, originalResult:result, friendlyError: readableTemplateMismatchReason(templateName, retry), reason: readableTemplateMismatchReason(templateName, retry) };
+  }
+
+  return { ...result, ok:false, attempts, codExactFormat:true, friendlyError: readableTemplateMismatchReason(templateName, result), reason: readableTemplateMismatchReason(templateName, result) };
+}
+
 async function sendCodConfirmationToCustomer(order = {}) {
   const env = readEnvFile();
-  // COD confirmation has its own switch. It should work even when normal prepaid order confirmation is OFF.
   const codEnabledRaw = process.env.COD_CONFIRMATION_WHATSAPP_ENABLED || env.COD_CONFIRMATION_WHATSAPP_ENABLED || 'true';
   const codEnabled = String(codEnabledRaw).toLowerCase() === 'true';
   const phone = orderCustomerPhone(order);
@@ -3174,15 +3218,38 @@ async function sendCodConfirmationToCustomer(order = {}) {
   const template = String(process.env.COD_ORDER_CONFIRMATION_TEMPLATE_NAME || env.COD_ORDER_CONFIRMATION_TEMPLATE_NAME || 'cod_order_confirmation').trim();
   const lang = String(process.env.COD_ORDER_CONFIRMATION_TEMPLATE_LANG || env.COD_ORDER_CONFIRMATION_TEMPLATE_LANG || 'en').trim();
   if (!template) return { ok:false, skipped:true, reason:'COD confirmation template name missing.' };
-  
+
   const productImage = await getOrderProductImage(order).catch(() => '');
-  let result = await sendTemplateWithOrderFallback(phone, template, lang, order, productImage);
-  // Last fallback: try no-image template attempt when image header/template mismatch blocks COD message.
-  if(!result.ok && productImage){
-    result = await sendTemplateWithOrderFallback(phone, template, lang, order, '');
+
+  // Exact Meta format from screenshot: Header Image + 4 body variables + no button parameters.
+  let result = await sendCodTemplateExact(phone, template, lang, order, productImage);
+
+  // If exact format fails for non-parameter reasons, try older generic fallback.
+  if (!result.ok && !isWhatsAppParamMismatch(result)) {
+    const generic = await sendTemplateWithOrderFallback(phone, template, lang, order, productImage);
+    result = generic.ok ? generic : { ...result, genericFallback: generic };
   }
-  return { ...result, productImage, productTitle: orderFirstProductTitle(order), imageHeaderSent: Boolean(productImage && (result.request?.components || []).some(c => c.type === 'header')), debug:{phone, template, lang, codEnabled:true, gateways:order.payment_gateway_names||[], financialStatus:order.financial_status||''} };
+
+  return {
+    ...result,
+    productImage,
+    productTitle: orderFirstProductTitle(order),
+    imageHeaderSent: Boolean(productImage && (result.request?.components || []).some(c => c.type === 'header')),
+    debug:{
+      phone,
+      template,
+      lang,
+      codEnabled:true,
+      exactMetaFormat:true,
+      bodyVariableCount:4,
+      headerType: productImage ? 'Image' : 'None',
+      buttonParametersSent:false,
+      gateways:order.payment_gateway_names||[],
+      financialStatus:order.financial_status||''
+    }
+  };
 }
+
 function findLatestCodPendingLead(phone) {
   const p = normalizeWhatsAppPhone(phone);
   const leads = readJson(leadsPath, []);
@@ -3282,7 +3349,7 @@ app.get('/api/cod/debug-logs', requireAdmin, (req,res)=>{
   res.json({ok:true, count:leads.length, logs:leads.map(l=>{
     const err = l.whatsappResult?.json?.error?.message || l.whatsappResult?.error || l.whatsappResult?.reason || l.message || '';
     const hindiReason = String(err).includes('132012')
-      ? 'Template variables mismatch. Please check Meta approved template body variables count, header type, and URL button variables.'
+      ? 'Template variables mismatch. For COD template use Header Image + 4 body variables + no button parameters.'
       : (err || '');
     return {
       createdAt:l.createdAt, orderName:l.orderName, phone:l.phone, isCodOrder:l.isCodOrder,

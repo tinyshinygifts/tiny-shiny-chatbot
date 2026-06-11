@@ -1,17 +1,23 @@
 CHANGES_DONE
 
-v23 update:
-1. Shopify order WhatsApp template mismatch fix.
-   - Meta error #132012 now detected as template parameter mismatch.
-   - Order confirmation/COD template sending now retries with:
-     image header + variable counts,
-     no-image/no-header + variable counts,
-     template with no components when needed.
-   - Dynamic URL button variables are now supported in order templates.
-   - Normal order confirmation also retries without image if image/header format mismatch occurs.
+v24 update:
+1. COD order confirmation WhatsApp fixed according to Meta screenshot.
+   Exact API format now sent for cod_order_confirmation:
+   - Header: Image
+   - Body: exactly 4 text variables
+     {{1}} Customer Name
+     {{2}} Product Name
+     {{3}} Order Number
+     {{4}} Order Amount
+   - Buttons: Confirm / Cancel / Visit website
+   - No button parameters are sent because these buttons are not dynamic URL placeholders.
 
-2. CRM/debug error now shows clear reason:
-   "Template variables mismatch. Please check Meta approved template body variables count, header type, and URL button variables."
+2. This prevents Meta error #132012 caused by extra/mismatched button/header/body parameters.
+
+3. Debug now stores:
+   - exactMetaFormat: true
+   - bodyVariableCount: 4
+   - buttonParametersSent: false
 
 Base:
-- v22 ZIP used as base.
+- v23 ZIP used as base.
