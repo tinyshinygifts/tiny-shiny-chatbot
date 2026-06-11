@@ -62,7 +62,7 @@ function requireAdmin(req, res, next) {
 
 // Protect admin pages and admin JavaScript files. Public chatbot widget remains open.
 app.use((req, res, next) => {
-  const protectedFiles = ['/admin.html', '/api-settings.html', '/admin.js', '/api-settings.js'];
+  const protectedFiles = ['/admin.html', '/api-settings.html', '/templates-library.html', '/admin.js', '/api-settings.js'];
   if (protectedFiles.includes(req.path)) return requireAdmin(req, res, next);
   return next();
 });
@@ -131,7 +131,8 @@ const apiKeys = [
   'SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD',
   'ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG',
   'COD_CONFIRMATION_WHATSAPP_ENABLED','COD_ORDER_CONFIRMATION_TEMPLATE_NAME','COD_ORDER_CONFIRMATION_TEMPLATE_LANG','COD_AUTO_CANCEL_ENABLED',
-  'META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST'
+  'META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST',
+  'NDR_TEMPLATE_NAME','NDR_TEMPLATE_LANG','BROADCAST_TEMPLATE_NAME','BROADCAST_TEMPLATE_LANG'
 ];
 const secretKeys = new Set(['META_ACCESS_TOKEN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
 function readEnvFileWithoutMongo() {
@@ -234,7 +235,13 @@ function writeEnvFile(next) {
     'COD_CONFIRMATION_WHATSAPP_ENABLED=' + (merged.COD_CONFIRMATION_WHATSAPP_ENABLED || 'true'),
     'COD_ORDER_CONFIRMATION_TEMPLATE_NAME=' + (merged.COD_ORDER_CONFIRMATION_TEMPLATE_NAME || 'cod_order_confirmation'),
     'COD_ORDER_CONFIRMATION_TEMPLATE_LANG=' + (merged.COD_ORDER_CONFIRMATION_TEMPLATE_LANG || 'en'),
-    'COD_AUTO_CANCEL_ENABLED=' + (merged.COD_AUTO_CANCEL_ENABLED || 'true')
+    'COD_AUTO_CANCEL_ENABLED=' + (merged.COD_AUTO_CANCEL_ENABLED || 'true'),
+    '',
+    '# NDR and bulk broadcast template mappings',
+    'NDR_TEMPLATE_NAME=' + (merged.NDR_TEMPLATE_NAME || ''),
+    'NDR_TEMPLATE_LANG=' + (merged.NDR_TEMPLATE_LANG || 'en'),
+    'BROADCAST_TEMPLATE_NAME=' + (merged.BROADCAST_TEMPLATE_NAME || ''),
+    'BROADCAST_TEMPLATE_LANG=' + (merged.BROADCAST_TEMPLATE_LANG || 'en')
   ];
   fs.writeFileSync(envPath, lines.join('\n') + '\n', 'utf8');
   for (const key of apiKeys) process.env[key] = merged[key] || '';
@@ -266,7 +273,8 @@ function configBackupText(env) {
     ['WhatsApp Cloud API', ['WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG']],
     ['Customer WhatsApp Follow-up', ['CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG',
   'COD_CONFIRMATION_WHATSAPP_ENABLED','COD_ORDER_CONFIRMATION_TEMPLATE_NAME','COD_ORDER_CONFIRMATION_TEMPLATE_LANG','COD_AUTO_CANCEL_ENABLED',
-  'META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST']],
+  'META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST',
+  'NDR_TEMPLATE_NAME','NDR_TEMPLATE_LANG','BROADCAST_TEMPLATE_NAME','BROADCAST_TEMPLATE_LANG']],
     ['Google Sheets', ['GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET']],
     ['Shiprocket API', ['SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD']],
     ['Shiprocket', ['SHIPROCKET_TOKEN','SHIPROCKET_EMAIL']]
@@ -563,8 +571,8 @@ const defaultWhatsAppTemplates = [
   { id:'payment_pending', name:'payment_pending', category:'Utility', language:'en', useCase:'Payment pending reminder', enabled:true, headerType:'None', body:'Hi {{1}}, your order {{2}} at Tiny Shiny Gifts is pending because payment is not completed.\n\nPlease complete your payment to confirm the order.\n\nPayment link: {{3}}', variables:['Customer Name','Order Number','Payment Link'], buttons:[{type:'URL', text:'Complete Payment', url:'{{3}}'}] },
   { id:'customer_support_reply', name:'customer_support_reply', category:'Utility', language:'en', useCase:'Support query acknowledgement', enabled:true, headerType:'None', body:'Hi {{1}}, thank you for contacting Tiny Shiny Gifts.\n\nOur support team has received your query regarding {{2}}.\n\nWe will get back to you shortly.\n\nTeam Tiny Shiny Gifts', variables:['Customer Name','Query / Order Number'], buttons:[] },
   { id:'new_product_broadcast', name:'new_product_broadcast', category:'Marketing', language:'en', useCase:'New product broadcast', enabled:true, headerType:'None', body:'Hi {{1}}, new arrivals are now live at Tiny Shiny Gifts.\n\nExplore beautiful gifts, home decor, pooja items and festive collections for your loved ones.\n\nShop now: {{2}}', variables:['Customer Name','Collection / Product Link'], buttons:[{type:'URL', text:'Shop Now', url:'{{2}}'}] },
-  { id:'festival_offer', name:'festival_offer', category:'Marketing', language:'en', useCase:'Festival/offer promotion', enabled:true, headerType:'None', body:'Hi {{1}}, festival gifting is now more special with Tiny Shiny Gifts.\n\nGet beautiful home decor, candles, idols and gift collections for your loved ones.\n\nOffer: {{2}}\n\nShop here: {{3}}', variables:['Customer Name','Offer Text','Website / Collection Link'], buttons:[{type:'URL', text:'Shop Offer', url:'{{3}}'}] },
-  { id:'thank_you_image', name:'thank_you_image', category:'Utility', language:'en', useCase:'Image header thank you template', enabled:true, headerType:'Image', body:'Hi {{1}}, thank you for connecting with Tiny Shiny Gifts.\n\nWe are happy to help you with gifting, home decor, pooja items and festive products.\n\nVisit us: {{2}}', variables:['Customer Name','Website Link'], buttons:[] },
+  { id:'festival_offer', name:'festival_offer', category:'Marketing', language:'en', useCase:'Festival/offer promotion - text + image, single or bulk send', enabled:true, headerType:'Image', body:'Hi {{1}}, festival gifting is now more special with Tiny Shiny Gifts.\n\nGet beautiful home decor, candles, idols and gift collections for your loved ones.\n\nOffer: {{2}}\n\nShop here: {{3}}', variables:['Customer Name','Offer Text','Website / Collection Link'], buttons:[{type:'URL', text:'Shop Offer', url:'{{3}}'}] },
+  { id:'thank_you_image', name:'thank_you_image', category:'Utility', language:'en', useCase:'Thank you image + text template, single or bulk send', enabled:true, headerType:'Image', body:'Hi {{1}}, thank you for connecting with Tiny Shiny Gifts.\n\nWe are happy to help you with gifting, home decor, pooja items and festive products.\n\nVisit us: {{2}}', variables:['Customer Name','Website Link'], buttons:[] },
   { id:'admin_new_order_alert', name:'admin_new_order_alert', category:'Utility', language:'en', useCase:'Admin/team ko new order alert', enabled:true, headerType:'None', body:'New order received on Tiny Shiny Gifts.\n\nOrder: {{1}}\nCustomer: {{2}}\nPhone: {{3}}\nAmount: ₹{{4}}\nPayment: {{5}}\n\nPlease process the order.', variables:['Order Number','Customer Name','Customer Phone','Order Amount','Payment Method'], buttons:[] }
 ];
 function normalizeTemplate(t = {}) {
@@ -580,6 +588,10 @@ function normalizeTemplate(t = {}) {
     body: String(t.body || '').trim(),
     variables: Array.isArray(t.variables) ? t.variables.map(x => String(x).trim()).filter(Boolean) : String(t.variables || '').split(/\r?\n|,/).map(x => x.trim()).filter(Boolean),
     buttons: Array.isArray(t.buttons) ? t.buttons.map(b => ({ type: String(b.type || 'Quick Reply').trim(), text: String(b.text || '').trim(), url: String(b.url || '').trim() })).filter(b => b.text) : [],
+    selectedForUse: t.selectedForUse === true,
+    imageUrl: String(t.imageUrl || '').trim(),
+    allowSingleSend: t.allowSingleSend !== false,
+    allowBulkSend: t.allowBulkSend !== false,
     updatedAt: t.updatedAt || nowIso()
   };
 }
@@ -592,7 +604,19 @@ function readWhatsAppTemplates() {
   }
   return saved.map(normalizeTemplate);
 }
-function writeWhatsAppTemplates(list) { writeJson(whatsappTemplatesPath, list.map(normalizeTemplate)); return readWhatsAppTemplates(); }
+function writeWhatsAppTemplates(list) {
+  const seen = new Set();
+  const cleaned = [];
+  for (const raw of (Array.isArray(list) ? list : [])) {
+    const tpl = normalizeTemplate(raw);
+    const key = tpl.name || tpl.id;
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    cleaned.push(tpl);
+  }
+  writeJson(whatsappTemplatesPath, cleaned);
+  return readWhatsAppTemplates();
+}
 function getWhatsAppTemplateMappings(env = readEnvFile()) {
   return {
     customer_followup: {
@@ -641,9 +665,11 @@ function getWhatsAppTemplateMappings(env = readEnvFile()) {
 }
 function mappedTargetsForTemplate(tpl, env = readEnvFile()) {
   const maps = getWhatsAppTemplateMappings(env);
-  return Object.entries(maps)
+  const targets = Object.entries(maps)
     .filter(([,m]) => m.name && tpl && tpl.name === m.name)
     .map(([key]) => key);
+  if (tpl && tpl.selectedForUse === true && !targets.includes('selected')) targets.unshift('selected');
+  return targets;
 }
 
 function whatsappEndpoint() {
@@ -1072,8 +1098,8 @@ app.use((req,res,next)=>{
 });
 app.get('/api/app-version', (req,res)=>res.json({ok:true, version: APP_BUILD_VERSION, ts: new Date().toISOString()}));
 app.use(express.static(path.join(__dirname, 'public')));
-app.get('/whatsapp', requireAdmin, (req,res)=>res.sendFile(path.join(__dirname,'public','whatsapp.html')));
-app.get('/whatsapp.html', requireAdmin, (req,res)=>res.sendFile(path.join(__dirname,'public','whatsapp.html')));
+app.get('/whatsapp', requireAdmin, (req,res)=>res.redirect('/admin.html?tab=whatsappInboxPanel&app=1'));
+app.get('/whatsapp.html', requireAdmin, (req,res)=>res.redirect('/admin.html?tab=whatsappInboxPanel&app=1'));
 
 app.get('/health', (req, res) => res.json({ ok: true, service: 'Tiny Shiny Chatbot', time: nowIso() }));
 app.get('/api/settings', (req, res) => { res.set('Cache-Control','no-store'); res.json({ ok: true, settings: readJson(settingsPath, {}), business: { name: process.env.BUSINESS_NAME || 'Tiny Shiny Gifts', website: process.env.WEBSITE_URL || 'https://tinyshinygifts.com', whatsapp: process.env.WHATSAPP_NUMBER || '' } }); });
@@ -1190,8 +1216,16 @@ app.post('/api/whatsapp-templates/reset-defaults', (req, res) => {
 });
 app.post('/api/whatsapp-templates/use', (req, res) => {
   const { id, target } = req.body || {};
-  const tpl = readWhatsAppTemplates().find(t => String(t.id) === String(id) || t.name === id);
+  const list = readWhatsAppTemplates();
+  const idx = list.findIndex(t => String(t.id) === String(id) || t.name === id);
+  const tpl = list[idx];
   if (!tpl) return res.status(404).json({ ok:false, error:'Template not found' });
+  if (!target || target === 'selected') {
+    list[idx] = { ...tpl, selectedForUse: true, updatedAt: nowIso() };
+    const envNow = readEnvFile();
+    const templates = writeWhatsAppTemplates(list).map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, envNow) }));
+    return res.json({ ok:true, template:list[idx], target:'selected', templates, mappings:getWhatsAppTemplateMappings(envNow), message:`${tpl.name} selected. Unlimited templates can be selected.` });
+  }
   const env = readEnvFile();
   const update = {};
   if (target === 'customer_followup') {
@@ -1229,8 +1263,16 @@ app.post('/api/whatsapp-templates/use', (req, res) => {
 
 app.post('/api/whatsapp-templates/unuse', (req, res) => {
   const { id, target } = req.body || {};
-  const tpl = readWhatsAppTemplates().find(t => String(t.id) === String(id) || t.name === id);
+  const list = readWhatsAppTemplates();
+  const idx = list.findIndex(t => String(t.id) === String(id) || t.name === id);
+  const tpl = list[idx];
   if (!tpl) return res.status(404).json({ ok:false, error:'Template not found' });
+  if (!target || target === 'selected') {
+    list[idx] = { ...tpl, selectedForUse: false, updatedAt: nowIso() };
+    const envNow = readEnvFile();
+    const templates = writeWhatsAppTemplates(list).map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, envNow) }));
+    return res.json({ ok:true, template:list[idx], target:'selected', templates, mappings:getWhatsAppTemplateMappings(envNow), message:`${tpl.name} unselected.` });
+  }
   const env = readEnvFile();
   const update = {};
   if (target === 'customer_followup') {
@@ -1244,6 +1286,16 @@ app.post('/api/whatsapp-templates/unuse', (req, res) => {
       update.ORDER_CONFIRMATION_WHATSAPP_ENABLED = 'false';
       update.ORDER_CONFIRMATION_TEMPLATE_NAME = '';
       update.ORDER_CONFIRMATION_TEMPLATE_LANG = env.ORDER_CONFIRMATION_TEMPLATE_LANG || 'en';
+    }
+  } else if (target === 'ndr') {
+    if ((env.NDR_TEMPLATE_NAME || '') === tpl.name) {
+      update.NDR_TEMPLATE_NAME = '';
+      update.NDR_TEMPLATE_LANG = env.NDR_TEMPLATE_LANG || 'en';
+    }
+  } else if (target === 'broadcast') {
+    if ((env.BROADCAST_TEMPLATE_NAME || '') === tpl.name) {
+      update.BROADCAST_TEMPLATE_NAME = '';
+      update.BROADCAST_TEMPLATE_LANG = env.BROADCAST_TEMPLATE_LANG || 'en';
     }
   } else if (target === 'test_whatsapp') {
     if ((env.WHATSAPP_TEST_TEMPLATE_NAME || '') === tpl.name) {
@@ -1875,6 +1927,32 @@ app.post('/api/send-image-message', async (req, res) => {
   const ok = results.some(r => r.result && r.result.ok);
   appendJson(leadMessagesPath, { id: crypto.randomUUID(), type: selectedImages.length ? 'image_message' : 'text_message', createdAt: nowIso(), to: body.to || 'custom', phone: cleanPhone(to), imageIds: selectedImages.map(x=>x.id), caption: message, results });
   res.json({ ok, count: results.length, results, imageIds: selectedImages.map(x=>x.id), caption: message });
+});
+
+
+app.use('/api/whatsapp-bulk', requireAdmin);
+app.post('/api/whatsapp-bulk/send', async (req, res) => {
+  try {
+    const body = req.body || {};
+    const rawPhones = Array.isArray(body.phones) ? body.phones : String(body.phones || '').split(/\s+|,|;/);
+    const phones = [...new Set(rawPhones.map(normalizeWhatsAppPhone).filter(Boolean))].slice(0, 500);
+    const message = String(body.message || body.caption || '').trim();
+    const imageUrlRaw = String(body.imageUrl || '').trim();
+    const imageUrl = imageUrlRaw && imageUrlRaw.startsWith('/uploads/') ? absoluteUrl(req, imageUrlRaw) : imageUrlRaw;
+    const templateName = String(body.templateName || '').trim();
+    if (!phones.length) return res.status(400).json({ ok:false, error:'Single number ya bulk phone list required.' });
+    if (!message && !imageUrl) return res.status(400).json({ ok:false, error:'Text message ya image URL required.' });
+    const results = [];
+    for (const phone of phones) {
+      let result;
+      if (imageUrl) result = await sendWhatsAppImage({ to: phone, imageUrl, caption: message }).catch(e => ({ ok:false, error:e.message }));
+      else result = await sendWhatsAppTextManual({ to: phone, message }).catch(e => ({ ok:false, error:e.message }));
+      results.push({ phone, result, status: result && result.ok ? 'sent' : 'failed' });
+      appendJson(whatsappInboxPath, { id:crypto.randomUUID(), direction:'outbound', to:phone, customerName:'Business', type:imageUrl?'image':'text', text:message || (imageUrl?'Image sent':''), imageUrl, createdAt:nowIso(), status:result&&result.ok?'sent':'failed', raw:{result, templateName} });
+    }
+    appendJson(leadMessagesPath, { id:crypto.randomUUID(), type:imageUrl?'bulk_image_text_message':'bulk_text_message', createdAt:nowIso(), templateName, count:phones.length, phones, message, imageUrl, results });
+    res.json({ ok: results.some(r=>r.result&&r.result.ok), count:results.length, sent:results.filter(r=>r.status==='sent').length, failed:results.filter(r=>r.status==='failed').length, results });
+  } catch(e) { res.status(500).json({ ok:false, error:e.message }); }
 });
 
 

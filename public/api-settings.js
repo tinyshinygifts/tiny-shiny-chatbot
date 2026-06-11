@@ -7,15 +7,19 @@ let lastApiConnectionRows = [];
 let lastApiErrorLogKey = '';
 function $(id){ return document.getElementById(id); }
 function show(el, data){ el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2); }
-const templateTargetLabels = {customer_followup:'Customer Follow-up', order_confirmation:'Order Confirmation', cod_order:'COD Order', ndr:'NDR', broadcast:'Broadcast', abandoned_cart:'Abandoned Cart', review_request:'Review Request', test_whatsapp:'Test WhatsApp / Owner', custom:'Custom'};
+const templateTargetLabels = {selected:'Selected / Use', customer_followup:'Customer Follow-up', order_confirmation:'Order Confirmation', cod_order:'COD Order', ndr:'NDR', broadcast:'Broadcast', abandoned_cart:'Abandoned Cart', review_request:'Review Request', test_whatsapp:'Test WhatsApp / Owner', custom:'Custom'};
 function esc(s){return String(s||'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#039;'}[m]));}
-function templateUsedTargets(t){ const serverTargets = Array.isArray(t.usedTargets) ? t.usedTargets : []; if(serverTargets.length) return serverTargets; return Object.entries(whatsappTemplateMappings||{}).filter(([,m])=>m && m.name && m.name===t.name).map(([k])=>k); }
+function templateUsedTargets(t){ const serverTargets = Array.isArray(t.usedTargets) ? t.usedTargets.slice() : []; if(t && t.selectedForUse && !serverTargets.includes('selected')) serverTargets.unshift('selected'); if(serverTargets.length) return serverTargets; return Object.entries(whatsappTemplateMappings||{}).filter(([,m])=>m && m.name && m.name===t.name).map(([k])=>k); }
 function templateValue(t){ return [t.name,t.category,t.language,t.useCase,t.body,(t.variables||[]).join(' ')].join(' ').toLowerCase(); }
 function parseTemplateButtons(text){ return String(text||'').split(/\r?\n/).map(line=>line.trim()).filter(Boolean).map(line=>{ const parts=line.split('|').map(x=>x.trim()); return { type: parts[0] || 'Quick Reply', text: parts[1] || '', url: parts[2] || '' }; }).filter(b=>b.text); }
 function buttonsToText(buttons){ return (buttons||[]).map(b=>[b.type||'Quick Reply', b.text||'', b.url||''].filter(Boolean).join(' | ')).join('\n'); }
 function templateUsedLabel(t){ const targets = templateUsedTargets(t); return targets.length ? targets.map(x=>templateTargetLabels[x]||x).join(', ') : ''; }
+function uniqueTemplates(){
+  const seen=new Set();
+  return (whatsappTemplates||[]).filter(t=>{ const key=t.name||t.id; if(!key||seen.has(key)) return false; seen.add(key); return true; });
+}
 function templateOptionsHtml(currentName=''){
-  const opts = whatsappTemplates.filter(t=>t.enabled!==false).map(t=>`<option value="${esc(t.id)}" ${t.name===currentName?'selected':''}>${esc(t.name)} (${esc(t.language||'en')})</option>`).join('');
+  const opts = uniqueTemplates().filter(t=>t.enabled!==false).map(t=>`<option value="${esc(t.id)}" ${t.name===currentName?'selected':''}>${esc(t.name)} (${esc(t.language||'en')})</option>`).join('');
   return '<option value="">Manual / Select template</option>' + opts;
 }
 function setSelectOptions(id, currentName){ if($(id)) $(id).innerHTML = templateOptionsHtml(currentName||''); }
@@ -95,27 +99,27 @@ function renderTemplates(){
   const list=$('templateList'); if(!list) return;
   const q=($('templateSearch')?.value||'').toLowerCase().trim();
   const cat=$('templateCategoryFilter')?.value||'';
-  const activeTarget=selectedMapTarget();
-  const filtered=whatsappTemplates.filter(t=>(!q||templateValue(t).includes(q))&&(!cat||t.category===cat));
+  const filtered=uniqueTemplates().filter(t=>(!q||templateValue(t).includes(q))&&(!cat||t.category===cat));
   list.innerHTML=filtered.map(t=>{
     const usedTargets=templateUsedTargets(t); const usedLabel=templateUsedLabel(t); const isUsed=usedTargets.length>0;
-    const targetUsed=usedTargets.includes(activeTarget);
-    const actionText = targetUsed ? 'Selected' : 'Use';
-    const actionClass = targetUsed ? 'used-btn' : '';
+    const selected=!!t.selectedForUse || usedTargets.includes('selected');
+    const actionText = selected ? 'Selected' : 'Use';
+    const actionClass = selected ? 'used-btn' : '';
     const bodyPreview = String(t.body||'').split(/\r?\n/).filter(Boolean).slice(0,4).join('\n');
     return `<div class="template-card compact-template-card ${String(selectedTemplateId)===String(t.id)?'selected':''} ${isUsed?'template-used':''}">
       <div class="template-card-head"><b>${esc(t.name)}</b><span>${esc(t.category||'')} • ${esc(t.language||'en')}</span></div>
-      ${isUsed?`<div class="used-badge">USED: ${esc(usedLabel)}</div>`:`<div class="available-badge">Available</div>`}
+      ${isUsed?`<div class="used-badge">${selected?'SELECTED':'USED'}${usedLabel && usedLabel!=='Selected / Use'?': '+esc(usedLabel):''}</div>`:`<div class="available-badge">Available</div>`}
       <p>${esc(t.useCase||'')}</p>
       <small>Header: ${esc(t.headerType||'None')} • Variables: ${esc((t.variables||[]).length)}</small>
       <pre>${esc(bodyPreview || (t.body||'').slice(0,180))}</pre>
       <div class="template-actions compact-template-actions">
         <button class="ghost-btn" data-edit-template="${esc(t.id)}">Modify</button>
-        <button class="ghost-btn ${actionClass}" data-toggle-template="${esc(t.id)}" data-map-target="${esc(activeTarget)}">${actionText}</button>
+        <button class="ghost-btn ${actionClass}" data-toggle-template="${esc(t.id)}">${actionText}</button>
         <button class="ghost-btn danger-outline" data-delete-template="${esc(t.id)}">Remove</button>
       </div>
     </div>`;
   }).join('') || '<p>No templates found. Click Add Template or Restore Default 12.</p>';
+  renderBulkTemplateSelect();
 }
 function applyMappingsToFields(mappings){
   if(!mappings) return;
@@ -135,7 +139,8 @@ async function saveTemplate(){
     body:$('templateBody')?.value.trim()||'',
     variables:($('templateVariables')?.value||'').split(/\r?\n|,/).map(x=>x.trim()).filter(Boolean),
     buttons:parseTemplateButtons($('templateButtons')?.value||''),
-    enabled:$('templateEnabled') ? templateEnabled.checked : true
+    enabled:$('templateEnabled') ? templateEnabled.checked : true,
+    selectedForUse: !!(whatsappTemplates.find(x=>String(x.id)===String($('templateId')?.value||''))?.selectedForUse)
   };
   if(!body.name) return alert('Template Name required.');
   if(!body.body) return alert('Body Text required.');
@@ -185,15 +190,17 @@ function renderApiTemplates(){
     broadcast: $('BROADCAST_TEMPLATE_NAME')?.value?.trim?.()||'',
     test_whatsapp: $('WHATSAPP_TEST_TEMPLATE_NAME')?.value.trim()||''
   };
-  box.innerHTML = whatsappTemplates.map(t=>{
+  box.innerHTML = uniqueTemplates().filter(t=>t.selectedForUse || templateUsedTargets(t).length).map(t=>{
     const targets = Object.entries(current).filter(([,name])=>name && name===t.name).map(([k])=>templateTargetLabels[k]||k);
-    const used = targets.length>0;
-    return `<div class="template-status-row ${used?'template-used':''}"><div><b>${esc(t.name)}</b><small>${esc(t.category||'')} • ${esc(t.language||'en')} • Header: ${esc(t.headerType||'None')} • Params: ${esc((t.variables||[]).length)}</small></div><span class="${used?'used-badge':'available-badge'}">${used?'USED: '+esc(targets.join(', ')):'Available'}</span></div>`;
-  }).join('') || '<p>No templates found. Admin → WhatsApp Templates me Add Template karo.</p>';
+    const selected = !!t.selectedForUse || templateUsedTargets(t).includes('selected');
+    const used = targets.length>0 || selected;
+    const label = targets.length ? 'USED: '+targets.join(', ') : 'SELECTED';
+    return `<div class="template-status-row ${used?'template-used':''}"><div><b>${esc(t.name)}</b><small>${esc(t.category||'')} • ${esc(t.language||'en')} • Header: ${esc(t.headerType||'None')} • Params: ${esc((t.variables||[]).length)}</small></div><span class="${used?'used-badge':'available-badge'}">${used?esc(label):'Available'}</span></div>`;
+  }).join('') || '<p>No selected templates yet. Saved Templates me Use click karo.</p>';
 }
 async function loadApiTemplates(){
   const d=await fetch('/api/whatsapp-templates',{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,templates:[],mappings:{}}));
-  whatsappTemplates=d.templates||[];
+  whatsappTemplates=Array.isArray(d.templates)?d.templates:[]; whatsappTemplates=uniqueTemplates();
   whatsappTemplateMappings=d.mappings||{};
   if(!selectedTemplateId && whatsappTemplates[0]) selectedTemplateId=whatsappTemplates[0].id;
   const currentCustomer=$('CUSTOMER_WHATSAPP_TEMPLATE_NAME')?.value.trim()||'';
@@ -204,6 +211,8 @@ async function loadApiTemplates(){
   ['API_TEST_TEMPLATE_SELECT','API_TEST_TEMPLATE_SELECT_2'].forEach(id=>setSelectOptions(id,currentTest));
   renderApiTemplates();
   renderTemplates();
+  renderBulkTemplateSelect();
+  updateBulkModeUi();
 }
 const colorOptions = ['#d63384','#9b35ff','#0ea5e9','#16a34a','#f97316','#111827'];
 const colorNames = {'#d63384':'Tiny Shiny Pink','#9b35ff':'Premium Purple','#0ea5e9':'Sky Blue','#16a34a':'Fresh Green','#f97316':'Festive Orange','#111827':'Luxury Black'};
@@ -356,6 +365,48 @@ async function uploadConfigBackup(fileInput){
   else alert(res.error || 'Backup upload failed.');
 }
 
+
+
+// ---------- Templates Library: Single/Bulk Image + Text Sender ----------
+function renderBulkTemplateSelect(){
+  const sel=$('bulkLibraryTemplate'); if(!sel) return;
+  const current=sel.value;
+  sel.innerHTML='<option value="">Manual / Select template</option>'+uniqueTemplates().map(t=>`<option value="${esc(t.id)}">${esc(t.name)} (${esc.headerType||'None'})</option>`).join('');
+  if(current && [...sel.options].some(o=>o.value===current)) sel.value=current;
+}
+function selectedBulkTemplate(){ return templateBySelectValue($('bulkLibraryTemplate')?.value||''); }
+function applyBulkTemplate(){
+  const tpl=selectedBulkTemplate(); if(!tpl) return;
+  if($('bulkLibraryMessage')) bulkLibraryMessage.value=tpl.body||'';
+  if($('bulkLibraryImageUrl') && (tpl.headerType||'').toLowerCase()==='image' && tpl.imageUrl) bulkLibraryImageUrl.value=tpl.imageUrl;
+}
+function parseBulkPhones(text=''){
+  return String(text||'').split(/[\n,;\t ]+/).map(x=>x.replace(/\D/g,'')).filter(x=>x.length>=10).map(x=>x.length>10?x.slice(-10):x).map(x=>'91'+x).filter((x,i,a)=>a.indexOf(x)===i);
+}
+async function sendLibraryBulkMessage(){
+  const mode=$('bulkLibraryMode')?.value||'single';
+  const single=$('bulkLibrarySinglePhone')?.value||'';
+  const bulk=$('bulkLibraryPhones')?.value||'';
+  const phones=mode==='single'?parseBulkPhones(single):parseBulkPhones(bulk);
+  const tpl=selectedBulkTemplate();
+  const body={
+    phones,
+    templateName:tpl?.name||'',
+    templateLang:tpl?.language||'en',
+    message:$('bulkLibraryMessage')?.value||'',
+    imageUrl:$('bulkLibraryImageUrl')?.value||''
+  };
+  if(!phones.length) return alert(mode==='single'?'Single WhatsApp number required.':'Bulk phone numbers required.');
+  if(!body.message.trim() && !body.imageUrl.trim()) return alert('Text message ya image URL required.');
+  const res=await fetch('/api/whatsapp-bulk/send',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('bulkLibraryResult')) bulkLibraryResult.textContent=JSON.stringify(res,null,2);
+}
+function updateBulkModeUi(){
+  const mode=$('bulkLibraryMode')?.value||'single';
+  if($('bulkSingleBox')) bulkSingleBox.style.display=mode==='single'?'block':'none';
+  if($('bulkPhonesBox')) bulkPhonesBox.style.display=mode==='bulk'?'block':'none';
+}
+
 async function saveConfig(){
   const body = {};
   keys.forEach(k => { if($(k)) body[k] = $(k).value.trim(); });
@@ -381,6 +432,8 @@ document.addEventListener('input', e=>{
 document.addEventListener('change', e=>{
   if(e.target.id === 'themeColorPreset' && e.target.value !== 'custom') setThemeColor(e.target.value);
   if(e.target.id==='templateCategoryFilter' || e.target.id==='templateMapTarget') renderTemplates();
+  if(e.target.id==='bulkLibraryTemplate') applyBulkTemplate();
+  if(e.target.id==='bulkLibraryMode') updateBulkModeUi();
   if(e.target.id==='apiFontSize') saveApiFontSize(e.target.value);
   if(e.target.id==='uploadConfigFile' || e.target.id==='uploadConfigFile2') uploadConfigBackup(e.target);
   const selectMap={API_CUSTOMER_TEMPLATE_SELECT:'customer_followup',API_CUSTOMER_TEMPLATE_SELECT_2:'customer_followup',API_ORDER_TEMPLATE_SELECT:'order_confirmation',API_ORDER_TEMPLATE_SELECT_2:'order_confirmation',API_TEST_TEMPLATE_SELECT:'test_whatsapp',API_TEST_TEMPLATE_SELECT_2:'test_whatsapp'};
@@ -399,12 +452,13 @@ document.addEventListener('click', async (e)=>{
   if(e.target.id === 'clearTemplateForm') clearTemplateForm();
   if(e.target.id === 'saveTemplate') saveTemplate();
   if(e.target.id === 'restoreDefaultTemplates') restoreDefaultTemplates();
-  if(e.target.id === 'mapTemplateToAutomation') { const id=$('templateId')?.value || selectedTemplateId; if(!id) return alert('Please select or save a template first.'); mapTemplate(id); }
+  if(e.target.id === 'mapTemplateToAutomation') { const id=$('templateId')?.value || selectedTemplateId; if(!id) return alert('Please select or save a template first.'); mapTemplate(id, 'selected'); }
   if(e.target.dataset.editTemplate) editTemplate(e.target.dataset.editTemplate);
   if(e.target.dataset.deleteTemplate) deleteTemplate(e.target.dataset.deleteTemplate);
   if(e.target.dataset.mapTemplate) mapTemplate(e.target.dataset.mapTemplate, e.target.dataset.mapTarget || undefined);
-  if(e.target.dataset.toggleTemplate) toggleTemplateUse(e.target.dataset.toggleTemplate, e.target.dataset.mapTarget || undefined);
+  if(e.target.dataset.toggleTemplate) toggleTemplateUse(e.target.dataset.toggleTemplate, 'selected');
   if(e.target.id === 'downloadConfig' || e.target.id === 'downloadConfig2') downloadConfigBackup();
+  if(e.target.id === 'sendBulkLibraryMessage') sendLibraryBulkMessage();
   if(e.target.id === 'connectShopify') {
     const saved = await saveConfig();
     if(!saved.ok) return show($('shopifyResult'), saved);

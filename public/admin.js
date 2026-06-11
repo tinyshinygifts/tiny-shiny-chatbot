@@ -237,7 +237,8 @@ async function load(){
   updateGoogleSheetTab();
   faqs=f.faqs||[]; renderFaqs();
   await Promise.all([loadCrm(), loadMedia(), loadLeads(), loadEvents(), loadMessages(), loadShopifyCustomers().catch(()=>{}), loadShopifySalesAnalysis().catch(()=>{}), loadWhatsappInbox(), loadBroadcasts().catch(()=>{}), loadWhatsappChatbotSettings().catch(()=>{}), loadChatbotFlows().catch(()=>{}), loadShippingSettings().catch(()=>{}), loadTeamInboxMeta().catch(()=>{}), loadPhase2Analytics().catch(()=>{}), loadDrips().catch(()=>{}), loadInstagram().catch(()=>{})]);
-  const active = localStorage.getItem('tsgAdminActiveTab') || 'whatsappInboxPanel';
+  const urlTab = new URLSearchParams(location.search).get('tab');
+  const active = urlTab || localStorage.getItem('tsgAdminActiveTab') || 'whatsappInboxPanel';
   showTab($(active) ? active : 'whatsappInboxPanel');
 }
 function updateGoogleSheetTab(){
@@ -1177,12 +1178,14 @@ function renderWhatsappInbox(){
     return [g.customerName,g.phone,g.shopifyCustomer?.name,g.shopifyCustomer?.email,...(g.messages||[]).map(m=>messageText(m)||socialMessageText(m))].join(' ').toLowerCase().includes(q);
   });
   groups=groups.sort((a,b)=>new Date(b.lastAt||0)-new Date(a.lastAt||0));
-  if(!selectedWhatsappInboxId && groups[0]) selectedWhatsappInboxId=groups[0].phone;
-  if(selectedWhatsappInboxId && !groups.some(g=>String(g.phone)===String(selectedWhatsappInboxId)) && groups[0]) selectedWhatsappInboxId=groups[0].phone;
+  const isMobile = window.matchMedia && window.matchMedia('(max-width: 900px)').matches;
+  if(!isMobile && !selectedWhatsappInboxId && groups[0]) selectedWhatsappInboxId=groups[0].phone;
+  if(!isMobile && selectedWhatsappInboxId && !groups.some(g=>String(g.phone)===String(selectedWhatsappInboxId)) && groups[0]) selectedWhatsappInboxId=groups[0].phone;
+  if(isMobile && selectedWhatsappInboxId && !groups.some(g=>String(g.phone)===String(selectedWhatsappInboxId))) selectedWhatsappInboxId='';
   if($('whatsappInboxCount')) whatsappInboxCount.textContent=groups.length;
   if($('whatsappInboxThreadCount')) whatsappInboxThreadCount.textContent=groups.length;
   renderChatList(groups);
-  const group=groups.find(g=>String(g.phone)===String(selectedWhatsappInboxId));
+  const group=selectedWhatsappInboxId ? groups.find(g=>String(g.phone)===String(selectedWhatsappInboxId)) : null;
   renderActiveChat(group);
 }
 async function loadWhatsappInbox(silent=false){

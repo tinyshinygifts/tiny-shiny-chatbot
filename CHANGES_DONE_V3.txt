@@ -1,0 +1,45 @@
+Tiny Shiny Chatbot - Final Updated v3
+
+Changes done:
+1. Saved Templates Use limit fixed:
+   - Use now works as unlimited selected templates.
+   - No 2-template limit.
+   - Duplicate templates are filtered by template name.
+   - Use/Selected state is saved in whatsapp-templates.json as selectedForUse.
+
+2. Templates Library cleaned:
+   - All templates remain in Saved Templates as the single management place.
+   - Cards show Modify / Use / Remove only.
+   - Selected Templates Summary shows only templates selected/used.
+
+3. Bulk / Single WhatsApp message sender added on WhatsApp Templates Library page:
+   - Single number send.
+   - Bulk pasted numbers send.
+   - Text only.
+   - Image only.
+   - Image + text/caption.
+   - Works with festival_offer, thank_you_image, or any saved template.
+
+4. festival_offer and thank_you_image templates updated:
+   - Both support image + text use cases.
+   - Header Type changed/kept as Image.
+
+5. Mobile app/admin fixed:
+   - PWA start URL changed from /whatsapp to /admin.html?app=1 so full Chatbot Admin opens.
+   - /whatsapp route redirects to full Admin panel.
+   - All admin tabs show on mobile with horizontal scroll.
+   - Chat Inbox mobile no longer auto-opens only the last chat.
+   - Default mobile view shows full conversation list; chat opens only after customer click.
+
+6. New backend endpoint added:
+   - POST /api/whatsapp-bulk/send
+   - Sends text/image/image+text to single or bulk numbers.
+
+Test checklist:
+- Open /templates-library.html
+- Click Use on 5+ templates; all should stay Selected.
+- Use festival_offer or thank_you_image in Bulk / Single WhatsApp Message.
+- Send single number test with text only.
+- Send single number test with image URL + text.
+- Open mobile/PWA; all admin tabs should show, not only Chat Inbox.
+- Open Chat Inbox on mobile; all conversations should show before opening any chat.

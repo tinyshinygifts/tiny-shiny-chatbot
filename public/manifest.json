@@ -1,8 +1,8 @@
 {
-  "name": "Tiny Shiny WhatsApp Inbox",
-  "short_name": "TSG WhatsApp",
+  "name": "Tiny Shiny Chatbot Admin",
+  "short_name": "TSG Admin",
   "description": "Tiny Shiny Gifts chatbot admin panel, WhatsApp inbox, Shopify customers and CRM.",
-  "start_url": "/whatsapp?app=1",
+  "start_url": "/admin.html?app=1",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait",
@@ -38,6 +38,17 @@
     }
   ],
   "shortcuts": [
+    {
+      "name": "Chatbot Admin",
+      "short_name": "Admin",
+      "url": "/admin.html?app=1",
+      "icons": [
+        {
+          "src": "/icons/icon-192.png",
+          "sizes": "192x192"
+        }
+      ]
+    },
     {
       "name": "WhatsApp Inbox",
       "short_name": "Inbox",

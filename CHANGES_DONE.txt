@@ -32,3 +32,8 @@ Changes done in this ZIP:
 5. Existing API data safe:
    - No reset logic added
    - Existing /api/config and /api/ndr/settings save endpoints used
+
+Extra fix:
+- WhatsApp Templates Library header overlap fixed.
+- Logo, title and action buttons now wrap properly without covering text.
+- Mobile/tablet top header made responsive.

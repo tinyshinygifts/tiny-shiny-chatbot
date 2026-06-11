@@ -30,7 +30,7 @@
 
     <section class="panel templates-control-panel">
       <div class="section-head">
-        <div><h2>Automation Template Selection</h2><p>Yaha template ko automation ke liye select karo. Map button hata diya gaya hai; sirf Use button use hoga.</p></div>
+        <div><h2>Automation Template Selection</h2><p>Automation template select karo. Saved Templates me Use unlimited hai, duplicate templates nahi banenge.</p></div>
         <button id="saveConfig" class="primary-btn" type="button">Save Automation Settings</button>
       </div>
       <div class="form-grid three template-quick-map compact-automation-selects">
@@ -93,9 +93,33 @@
       <pre id="apiNdrResult"></pre>
     </section>
 
+
+    <section class="panel bulk-library-send-panel">
+      <div class="section-head">
+        <div><h2>Bulk / Single WhatsApp Message</h2><p>festival_offer, thank_you_image ya koi bhi saved template se text, image, ya image + text single number ya bulk customers ko bhejo.</p></div>
+        <button id="sendBulkLibraryMessage" class="primary-btn" type="button">Send WhatsApp Message</button>
+      </div>
+      <div class="form-grid three">
+        <label>Send Mode
+          <select id="bulkLibraryMode"><option value="single">Single Number</option><option value="bulk">Bulk Selected / Pasted Numbers</option></select>
+        </label>
+        <label>Use Template
+          <select id="bulkLibraryTemplate"><option value="">Manual / Select template</option></select>
+        </label>
+        <label>Image URL Optional <input id="bulkLibraryImageUrl" placeholder="https://... image.jpg"/></label>
+      </div>
+      <div class="form-grid two">
+        <label id="bulkSingleBox">Single WhatsApp Number <input id="bulkLibrarySinglePhone" placeholder="919001727446"/></label>
+        <label id="bulkPhonesBox" style="display:none">Bulk Phone Numbers <textarea id="bulkLibraryPhones" placeholder="Paste numbers one per line or comma separated"></textarea></label>
+        <label>Text Message / Caption <textarea id="bulkLibraryMessage" placeholder="Write message. If image URL is added, this text will go as image caption."></textarea></label>
+      </div>
+      <p class="hint">Image URL blank hai to text only jayega. Image URL + text dono filled hain to image ke saath caption/message jayega.</p>
+      <pre id="bulkLibraryResult"></pre>
+    </section>
+
     <section class="panel api-template-library-panel templates-only-panel">
       <div class="section-head">
-        <div><h2>Saved Templates</h2><p>Cards compact kar diye gaye hain. Inner scroll remove hai aur preview short dikhega.</p></div>
+        <div><h2>Saved Templates</h2><p>Saare templates yahi ek jagah maintain honge. Use unlimited hai aur duplicate template repeat nahi hoga.</p></div>
         <div class="inline-actions"><button id="newTemplateBtn" type="button" class="ghost-btn">+ Add Template</button></div>
       </div>
       <div class="template-workspace api-template-workspace compact-template-workspace">
@@ -127,9 +151,9 @@
     </section>
 
     <section class="panel template-status-clean-panel">
-      <h2>Selected / Used Templates</h2>
+      <h2>Selected Templates Summary</h2>
       <div id="apiTemplateList" class="template-status-list compact-status-list"></div>
-      <p class="hint">Jis automation me template selected hai uspar USED dikhega.</p>
+      <p class="hint">Saved Templates me jo Use kiya hai ya automation me selected hai, uska short summary.</p>
     </section>
   </main>
   <script src="/api-settings.js?v=20260611121000"></script>
