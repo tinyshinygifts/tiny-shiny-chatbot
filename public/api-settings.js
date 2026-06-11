@@ -187,7 +187,7 @@ function renderApiTemplates(){
   box.innerHTML = whatsappTemplates.map(t=>{
     const targets = Object.entries(current).filter(([,name])=>name && name===t.name).map(([k])=>templateTargetLabels[k]||k);
     const used = targets.length>0;
-    return `<div class="template-status-row ${used?'template-used':''}"><div><b>${esc(t.name)}</b><small>${esc(t.category||'')} • ${esc(t.language||'en')} • Header: ${esc(t.headerType||'None')}</small></div><span class="${used?'used-badge':'available-badge'}">${used?'USED: '+esc(targets.join(', ')):'Available'}</span></div>`;
+    return `<div class="template-status-row ${used?'template-used':''}"><div><b>${esc(t.name)}</b><small>${esc(t.category||'')} • ${esc(t.language||'en')} • Header: ${esc(t.headerType||'None')} • Params: ${esc((t.variables||[]).length)}</small></div><span class="${used?'used-badge':'available-badge'}">${used?'USED: '+esc(targets.join(', ')):'Available'}</span></div>`;
   }).join('') || '<p>No templates found. Admin → WhatsApp Templates me Add Template karo.</p>';
 }
 async function loadApiTemplates(){
@@ -494,3 +494,12 @@ async function loadCodDebugLogs(){
   box.textContent=JSON.stringify(d,null,2);
 }
 setInterval(renderUnlimitedWhatsappFormats, 2500);
+
+document.addEventListener('click', e=>{
+  if(e.target && e.target.id==='openTemplatesLibraryTop'){
+    const sec=document.getElementById('whatsappTemplatesLibrarySection') || document.getElementById('unlimitedWhatsappFormats') || document.getElementById('templateEditorTitle');
+    if(sec) sec.scrollIntoView({behavior:'smooth',block:'start'});
+    document.body.classList.add('show-templates-library');
+    setTimeout(()=>{ try{ renderUnlimitedWhatsappFormats(); renderTemplates(); }catch(err){} },100);
+  }
+});

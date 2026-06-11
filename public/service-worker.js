@@ -1,4 +1,4 @@
-const CACHE_NAME = 'tiny-shiny-cache-20260611053315';
+const CACHE_NAME = 'tiny-shiny-cache-20260611060041';
 self.addEventListener('install', event => self.skipWaiting());
 self.addEventListener('activate', event => {
   event.waitUntil(caches.keys().then(keys => Promise.all(keys.map(k => caches.delete(k)))).then(() => self.clients.claim()));

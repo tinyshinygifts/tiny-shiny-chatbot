@@ -872,3 +872,26 @@ body:has(.api-top-actions) .brand-logo.small{width:76px!important;height:76px!im
 .unlimited-formats-list{display:grid;gap:10px;margin-top:12px;}
 .unlimited-format-row{display:grid;grid-template-columns:1.2fr 1fr 1.2fr auto;gap:10px;align-items:center;background:#fff;border:1px solid #f3cfe1;border-radius:14px;padding:10px;}
 @media(max-width:760px){.unlimited-format-row{grid-template-columns:1fr;}}
+
+/* API Templates tab + compact COD debug scroll 20260611060041 */
+.templates-library-top-btn{font-weight:900!important;background:#fff7fb!important;border-color:#f3b5d2!important;color:#d63384!important;}
+.templates-library-section{scroll-margin-top:24px;}
+#codDebugLogs{
+  max-height:280px!important;
+  min-height:180px!important;
+  overflow:auto!important;
+  width:100%!important;
+  max-width:1180px!important;
+  font-size:12px!important;
+  line-height:1.35!important;
+  border-radius:16px!important;
+  padding:14px!important;
+  white-space:pre!important;
+}
+#whatsappTemplatesLibrarySection .settings-card{max-width:1180px!important;}
+.unlimited-template-card h2::before{content:'💬 ';}
+.api-top-actions{gap:10px!important;flex-wrap:wrap!important;}
+@media(max-width:760px){
+  #codDebugLogs{max-height:240px!important;font-size:11px!important;}
+  .api-top-actions .ghost-btn,.api-top-actions .pill-link{padding:10px 12px!important;font-size:12px!important;}
+}

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>API Settings - Tiny Shiny Chatbot</title>
   <link rel="icon" href="/tiny-shiny-logo.jpg"/>
-  <link rel="stylesheet" href="/style.css?v=20260611053315"/>
+  <link rel="stylesheet" href="/style.css?v=20260611060041"/>
 </head>
 <body>
   <main class="admin-wrap">
@@ -20,6 +20,7 @@
         <button id="downloadConfig" type="button" class="ghost-btn">Download API Backup</button>
         <label class="ghost-btn file-upload-btn" for="uploadConfigFile">Upload API Backup</label>
         <input id="uploadConfigFile" type="file" accept=".txt,.json,text/plain,application/json" hidden/>
+        <button id="openTemplatesLibraryTop" type="button" class="ghost-btn templates-library-top-btn">WhatsApp Templates Library</button>
         <a class="pill-link" href="/admin.html">← Back to Admin</a>
         <button id="logoutBtn" type="button" class="ghost-btn danger-outline">Logout</button>
       </div>
@@ -262,7 +263,8 @@
         </div>
         <div class="template-editor template-editor-fixed">
           <h3 
-        <section class="settings-card unlimited-template-card">
+        <div id="whatsappTemplatesLibrarySection" class="templates-library-section">
+<section class="settings-card unlimited-template-card">
           <h2>Unlimited WhatsApp API Formats</h2>
           <p class="hint">Yaha jitne chaho utne WhatsApp formats/templates add kar sakte ho. Sirf 2 format ki limit remove kar di gayi hai.</p>
           <div class="inline-actions">
@@ -302,6 +304,8 @@ URL | Shop Now | https://www.tinyshinygifts.com"></textarea></label>
             <button id="clearTemplateForm" class="ghost-btn" type="button">Clear</button>
           </div>
           <pre id="templateResult"></pre>
+</div>
+
           <p class="hint">Quick Use For dropdown me automation select karo. Template card ke Use/USED button se selected automation me add/remove kar sakte ho.</p>
         </div>
       </div>
@@ -367,7 +371,7 @@ URL | Shop Now | https://www.tinyshinygifts.com"></textarea></label>
       <p>On Render hosting, add the same values in Render → Service → Environment.</p>
     </section>
   </main>
-  <script src="/api-settings.js?v=20260611053315"></script>
+  <script src="/api-settings.js?v=20260611060041"></script>
 
   <div id="apiErrorLogModal" class="modal hidden api-error-log-modal">
     <div class="modal-card wide">

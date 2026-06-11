@@ -2593,7 +2593,7 @@ async function sendTemplateWithOrderFallback(phone, templateName, lang, order = 
   // Fallbacks: useful when Meta template variable count is not yet updated exactly like the local library.
   const counts = [];
   const localCount = Array.isArray(template?.variables) && template.variables.length ? template.variables.length : templateParameterCountFromBody(template?.body || '');
-  for (const c of [localCount, 4, 3]) if (c && !counts.includes(c)) counts.push(c);
+  for (const c of [localCount, 4, 3, 5, 2, 1, 0]) if ((c || c===0) && !counts.includes(c)) counts.push(c);
 
   for (const c of counts) {
     if (productImage) {
@@ -2744,11 +2744,17 @@ async function sendOrderConfirmationToCustomer(order = {}) {
 
 app.get('/api/cod/debug-logs', requireAdmin, (req,res)=>{
   const leads=readJson(leadsPath,[]).filter(l=>l && l.type==='shopify_order_webhook').slice(0,50);
-  res.json({ok:true, count:leads.length, logs:leads.map(l=>({
-    createdAt:l.createdAt, orderName:l.orderName, phone:l.phone, isCodOrder:l.isCodOrder,
-    paymentGateways:l.paymentGateways, financialStatus:l.financialStatus, status:l.status,
-    message:l.message, whatsappResult:l.whatsappResult
-  }))});
+  res.json({ok:true, count:leads.length, logs:leads.map(l=>{
+    const err = l.whatsappResult?.json?.error?.message || l.whatsappResult?.error || l.whatsappResult?.reason || l.message || '';
+    const hindiReason = String(err).includes('132012')
+      ? 'Meta template ka header/body parameter format tool ke sent parameters se match nahi kar raha. Template body params count/header type check karo.'
+      : (err || '');
+    return {
+      createdAt:l.createdAt, orderName:l.orderName, phone:l.phone, isCodOrder:l.isCodOrder,
+      paymentGateways:l.paymentGateways, financialStatus:l.financialStatus, status:l.status,
+      message:l.message, readableReason:hindiReason, whatsappResult:l.whatsappResult
+    };
+  })});
 });
 
 app.post('/webhooks/shopify/orders/create', async (req, res) => {
