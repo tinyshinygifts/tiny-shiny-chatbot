@@ -1,19 +1,19 @@
 CHANGES_DONE
 
-Added in this update:
-1. Select Uploaded Image dropdown fix.
-   - Dropdown me image select karte hi Image URL Optional field me selected image ka public URL auto-fill hoga.
-   - Upload ke baad bhi selected image ka URL auto-fill hoga.
-   - Use button se select karne par bhi Image URL field sync hoga.
+Latest fix:
+1. Campaign Report me Delivered / Read status fix.
+   - WhatsApp webhook delivery statuses now update broadcast campaign results.
+   - Delivered, Read, Failed status and timing are stored in campaign rows.
+   - Report export reloads latest campaign data before CSV download.
+   - Report CSV now includes WhatsApp Message ID, Status, Failed Reason, Sent Time, Delivered Time, Read Time, Failed Time.
 
-2. Template Variables mapping update.
-   - New option added: Visit us
-   - Visit us maps to {{website}}
-   - Website value resolves to: https://www.tinyshinygifts.com
-   - Template body/direct send me {{website}} and {{visit_us}} dono support added.
+2. Existing statuses are refreshed from WhatsApp Inbox status rows when campaigns are loaded.
+   - /api/broadcast/campaigns refreshes delivered/read status from saved webhook records.
+   - Campaign Analytics counts now use refreshed delivery status.
 
 Previous included:
-- Multi-customer selection/send fix
-- Campaign report CSV export
-- Bulk direct Image + Text send mode
-- Uploaded image library management
+- Select Uploaded Image auto-fills Image URL.
+- Visit us variable added.
+- Multi-customer selection/send fix.
+- Bulk direct Image + Text send mode.
+- Uploaded image library management.

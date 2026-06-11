@@ -754,7 +754,8 @@ async function postWhatsApp(body) {
   }
   const response = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` }, body: JSON.stringify(body) });
   const json = await response.json().catch(() => ({}));
-  return { ok: response.ok, status: response.status, json, request: { to: body.to, type: body.type, template: body.template?.name || '', components: body.template?.components?.map(c => ({ type:c.type, parameters:(c.parameters||[]).map(p => p.type) })) || [] } };
+  const whatsappMessageId = json?.messages?.[0]?.id || json?.messages?.[0]?.message_status || '';
+  return { ok: response.ok, status: response.status, json, whatsappMessageId, request: { to: body.to, type: body.type, template: body.template?.name || '', components: body.template?.components?.map(c => ({ type:c.type, parameters:(c.parameters||[]).map(p => p.type) })) || [] } };
 }
 async function sendOwnerWhatsApp(message, options = {}) {
   const env = readEnvFile();
@@ -1133,6 +1134,7 @@ app.post('/webhooks/whatsapp', async (req, res) => {
         }
         for (const st of (value.statuses || [])) {
           appendJson(whatsappInboxPath, { id: st.id || crypto.randomUUID(), direction: 'status', statusType: st.status || '', to: cleanPhone(st.recipient_id || ''), createdAt: st.timestamp ? new Date(Number(st.timestamp)*1000).toISOString() : nowIso(), raw: st });
+          updateBroadcastCampaignStatusFromWebhook(st);
         }
       }
     }
@@ -1668,6 +1670,103 @@ function broadcastRenderedText(campaign={}, contact={}) {
   if (!text && vars.length) text = vars.join(' | ');
   return text.trim();
 }
+
+function broadcastResultMessageId(r = {}) {
+  return r.whatsappMessageId || r.result?.whatsappMessageId || r.result?.json?.messages?.[0]?.id || r.result?.json?.messages?.[0]?.message_status || r.messageId || '';
+}
+function broadcastStatusPriority(status='') {
+  const s = String(status||'').toLowerCase();
+  if (s === 'read') return 5;
+  if (s === 'delivered') return 4;
+  if (s === 'sent') return 3;
+  if (s === 'failed') return 2;
+  if (s === 'skipped') return 1;
+  return 0;
+}
+function applyBroadcastStatusToRow(row = {}, status = '', at = '', rawStatus = {}) {
+  const st = String(status || '').toLowerCase();
+  if (!st) return false;
+  const current = String(row.status || '').toLowerCase();
+  if (broadcastStatusPriority(st) < broadcastStatusPriority(current)) return false;
+  row.status = st;
+  row.whatsappMessageId = row.whatsappMessageId || broadcastResultMessageId(row) || rawStatus.id || '';
+  row.statusRaw = rawStatus;
+  if (st === 'sent') row.sentAt = row.sentAt || at;
+  if (st === 'delivered') row.deliveredAt = row.deliveredAt || at;
+  if (st === 'read') {
+    row.readAt = row.readAt || at;
+    row.deliveredAt = row.deliveredAt || at;
+  }
+  if (st === 'failed') {
+    row.failedAt = row.failedAt || at;
+    row.failedReason = rawStatus?.errors?.[0]?.title || rawStatus?.errors?.[0]?.message || rawStatus?.error?.message || row.result?.friendlyError || row.result?.reason || row.result?.error || '';
+  }
+  return true;
+}
+function recalcBroadcastCampaignCounts(campaign = {}) {
+  const rows = Array.isArray(campaign.results) ? campaign.results : [];
+  campaign.sentCount = rows.filter(r => ['sent','delivered','read'].includes(String(r.status||'').toLowerCase())).length;
+  campaign.deliveredCount = rows.filter(r => ['delivered','read'].includes(String(r.status||'').toLowerCase())).length;
+  campaign.readCount = rows.filter(r => String(r.status||'').toLowerCase()==='read').length;
+  campaign.failedCount = rows.filter(r => String(r.status||'').toLowerCase()==='failed').length;
+  campaign.skippedCount = rows.filter(r => String(r.status||'').toLowerCase()==='skipped').length;
+  return campaign;
+}
+function updateBroadcastCampaignStatusFromWebhook(st = {}) {
+  const msgId = String(st.id || st.message_id || st.messageId || '').trim();
+  const phone = normalizeWhatsAppPhone(st.recipient_id || st.to || st.phone || '');
+  const status = String(st.status || st.statusType || '').toLowerCase();
+  const at = st.timestamp ? new Date(Number(st.timestamp)*1000).toISOString() : nowIso();
+  if (!status || (!msgId && !phone)) return { ok:false, updated:false };
+  const campaigns = readJson(broadcastCampaignsPath, []);
+  let changed = false;
+  for (const c of campaigns) {
+    const rows = Array.isArray(c.results) ? c.results : [];
+    let row = msgId ? rows.find(r => String(broadcastResultMessageId(r)) === msgId) : null;
+    if (!row && phone) {
+      // Fallback for old campaigns that did not store message id: match latest sent row by phone.
+      const matches = rows.filter(r => normalizeWhatsAppPhone(r.phone || r.result?.contact?.phone || '') === phone && ['sent','delivered','read'].includes(String(r.status||'').toLowerCase()));
+      row = matches[matches.length - 1] || null;
+    }
+    if (row && applyBroadcastStatusToRow(row, status, at, st)) {
+      recalcBroadcastCampaignCounts(c);
+      c.updatedAt = nowIso();
+      changed = true;
+    }
+  }
+  if (changed) writeJson(broadcastCampaignsPath, campaigns);
+  return { ok:true, updated:changed };
+}
+function refreshBroadcastDeliveryStatusesFromInbox() {
+  const statuses = readJson(whatsappInboxPath, []).filter(x => x.direction === 'status');
+  if (!statuses.length) return readJson(broadcastCampaignsPath, []);
+  let campaigns = readJson(broadcastCampaignsPath, []);
+  let changed = false;
+  for (const stRow of statuses) {
+    const st = stRow.raw || stRow;
+    const msgId = String(st.id || st.message_id || st.messageId || '').trim();
+    const phone = normalizeWhatsAppPhone(st.recipient_id || stRow.to || st.to || st.phone || '');
+    const status = String(st.status || stRow.statusType || '').toLowerCase();
+    const at = st.timestamp ? new Date(Number(st.timestamp)*1000).toISOString() : (stRow.createdAt || nowIso());
+    if (!status || (!msgId && !phone)) continue;
+    for (const c of campaigns) {
+      const rows = Array.isArray(c.results) ? c.results : [];
+      let row = msgId ? rows.find(r => String(broadcastResultMessageId(r)) === msgId) : null;
+      if (!row && phone) {
+        const matches = rows.filter(r => normalizeWhatsAppPhone(r.phone || r.result?.contact?.phone || '') === phone && ['sent','delivered','read'].includes(String(r.status||'').toLowerCase()));
+        row = matches[matches.length - 1] || null;
+      }
+      if (row && applyBroadcastStatusToRow(row, status, at, st)) {
+        recalcBroadcastCampaignCounts(c);
+        c.updatedAt = c.updatedAt || nowIso();
+        changed = true;
+      }
+    }
+  }
+  if (changed) writeJson(broadcastCampaignsPath, campaigns);
+  return campaigns;
+}
+
 async function sendBroadcastDirectMessage(contact={}, campaign={}) {
   const c=normalizeBroadcastContact(contact);
   if(!c.phone) return { ok:false, skipped:true, reason:'Invalid phone number', friendlyError:'Invalid phone number', contact:c };
@@ -1682,7 +1781,7 @@ async function sendBroadcastDirectMessage(contact={}, campaign={}) {
   if (messageType==='image' || messageType==='image_text') result = await sendWhatsAppImage({ to:c.phone, imageUrl:absoluteImageUrl(imageUrl), caption:text || '' });
   else result = await sendWhatsAppTextManual({ to:c.phone, message:text || 'Hello from Tiny Shiny Gifts' });
   const friendlyError = result.ok ? '' : readableWhatsappError(result, campaign);
-  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:c.phone, customerName:c.name, type:(messageType==='image' || messageType==='image_text')?'image':'text', text:text || '', imageUrl:imageUrl || '', createdAt:nowIso(), status:result.ok?'sent':'failed', raw:{ campaignId:campaign.id, mode:'direct', result, friendlyError } });
+  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:c.phone, customerName:c.name, type:(messageType==='image' || messageType==='image_text')?'image':'text', text:text || '', imageUrl:imageUrl || '', createdAt:nowIso(), status:result.ok?'sent':'failed', raw:{ campaignId:campaign.id, mode:'direct', messageId: result.whatsappMessageId || result.json?.messages?.[0]?.id || '', result, friendlyError } });
   return { ...result, friendlyError, contact:c };
 }
 async function sendBroadcastTemplate(contact={}, campaign={}) {
@@ -1697,7 +1796,7 @@ async function sendBroadcastTemplate(contact={}, campaign={}) {
   const components=broadcastTemplateComponents(campaign,c);
   const result=await postWhatsApp(whatsappTemplateBody(c.phone, template, lang, components));
   const friendlyError = result.ok ? '' : readableWhatsappError(result, campaign);
-  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:c.phone, customerName:c.name, type:'template', text:`Broadcast: ${template}${friendlyError?' | Failed: '+friendlyError:''}`, createdAt:nowIso(), status:result.ok?'sent':'failed', raw:{ campaignId:campaign.id, result, friendlyError } });
+  appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:c.phone, customerName:c.name, type:'template', text:`Broadcast: ${template}${friendlyError?' | Failed: '+friendlyError:''}`, createdAt:nowIso(), status:result.ok?'sent':'failed', raw:{ campaignId:campaign.id, messageId: result.whatsappMessageId || result.json?.messages?.[0]?.id || '', result, friendlyError } });
   return { ...result, friendlyError, contact:c };
 }
 async function processBroadcastCampaign(campaignId) {
@@ -1715,12 +1814,11 @@ async function processBroadcastCampaign(campaignId) {
   for(const c of batch){
     const sendFn = String(campaign.messageType||'template').toLowerCase()==='template' ? sendBroadcastTemplate : sendBroadcastDirectMessage;
     const result=await sendFn(c, campaign).catch(e=>({ ok:false, error:e.message, contact:c }));
-    results.push({ phone:c.phone, name:c.name, status:result.ok?'sent':(result.skipped?'skipped':'failed'), result, at:nowIso() });
+    const st = result.ok?'sent':(result.skipped?'skipped':'failed');
+    results.push({ phone:c.phone, name:c.name, status:st, whatsappMessageId: result.whatsappMessageId || result.json?.messages?.[0]?.id || '', result, at:nowIso(), sentAt: result.ok ? nowIso() : '' });
   }
   campaign.results=results;
-  campaign.sentCount=results.filter(r=>r.status==='sent').length;
-  campaign.failedCount=results.filter(r=>r.status==='failed').length;
-  campaign.skippedCount=results.filter(r=>r.status==='skipped').length;
+  recalcBroadcastCampaignCounts(campaign);
   campaign.status=pending.length<=batch.length ? 'completed' : 'partially_sent';
   campaign.updatedAt=nowIso();
   campaigns[idx]=campaign; writeJson(broadcastCampaignsPath,campaigns);
@@ -1735,7 +1833,8 @@ function processDueBroadcasts(){
 setInterval(processDueBroadcasts, 30000);
 
 app.get('/api/broadcast/campaigns', (req,res)=>{
-  res.json({ ok:true, campaigns:readJson(broadcastCampaignsPath, []), optouts:readOptouts(), templates:readWhatsAppTemplates() });
+  const campaigns = refreshBroadcastDeliveryStatusesFromInbox();
+  res.json({ ok:true, campaigns, optouts:readOptouts(), templates:readWhatsAppTemplates() });
 });
 app.post('/api/broadcast/campaigns', async (req,res)=>{
   try{
@@ -2179,7 +2278,7 @@ function readInstagramSettings(){
 }
 function writeInstagramSettings(v){ writeJson(instagramSettingsPath, Object.assign(readInstagramSettings(), v||{}, {updatedAt:nowIso()})); return readInstagramSettings(); }
 function broadcastStats(){
-  const campaigns = readJson(broadcastCampaignsPath, []);
+  const campaigns = refreshBroadcastDeliveryStatusesFromInbox();
   const clicks = readJson(linkClicksPath, []);
   return campaigns.map(c=>({
     id:c.id, name:c.name, status:c.status||'created', templateName:c.templateName, audienceCount:(c.contacts||[]).length,

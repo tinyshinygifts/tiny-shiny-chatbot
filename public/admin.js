@@ -1040,7 +1040,8 @@ async function campaignAction(id,action){
   if($('phase2Result')) phase2Result.textContent=JSON.stringify(d,null,2); await loadPhase2Analytics();
 }
 async function exportCampaignReport(id){
-  if(!broadcastCampaigns.length) await loadBroadcasts().catch(()=>{});
+  // Always reload before export so delivered/read status from webhook is included.
+  await loadBroadcasts().catch(()=>{});
   const campaign=(broadcastCampaigns||[]).find(c=>String(c.id)===String(id));
   if(!campaign) return alert('Campaign report data not found.');
   const rows=[];
@@ -1055,22 +1056,25 @@ async function exportCampaignReport(id){
   rows.push(['Failed', String(campaign.failedCount||0)]);
   rows.push(['Skipped', String(campaign.skippedCount||0)]);
   rows.push([]);
-  rows.push(['Campaign','Customer Name','Phone','Status','Failed Reason','Sent Time','Delivered Time','Read Time']);
+  rows.push(['Campaign','Customer Name','Phone','WhatsApp Message ID','Status','Failed Reason','Sent Time','Delivered Time','Read Time','Failed Time']);
   (campaign.results||[]).forEach(r=>{
     const detail=r.result||{};
-    const err=detail.friendlyError || detail.reason || detail.error || detail.json?.error?.message || '';
+    const err=r.failedReason || detail.friendlyError || detail.reason || detail.error || detail.json?.error?.message || '';
+    const msgId=r.whatsappMessageId || detail.whatsappMessageId || detail.json?.messages?.[0]?.id || '';
     rows.push([
       campaign.name||'',
       r.name || detail.contact?.name || '',
       r.phone || detail.contact?.phone || '',
+      msgId,
       r.status || '',
       err,
-      r.at || '',
+      r.sentAt || r.at || '',
       r.deliveredAt || '',
-      r.readAt || ''
+      r.readAt || '',
+      r.failedAt || ''
     ]);
   });
-  const csv=rows.map(row=>row.map(v=>`\"${String(v??'').replace(/\"/g,'\"\"')}\"`).join(',')).join('\n');
+  const csv=rows.map(row=>row.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\\n');
   const blob=new Blob([csv],{type:'text/csv;charset=utf-8;'});
   const a=document.createElement('a');
   a.href=URL.createObjectURL(blob);
@@ -1078,7 +1082,8 @@ async function exportCampaignReport(id){
   a.download=`broadcast-report-${safe||'campaign'}-${new Date().toISOString().slice(0,10)}.csv`;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-}function renderDrips(){
+}
+function renderDrips(){
   if(!$('dripList')) return;
   dripList.innerHTML=(dripCampaigns||[]).map(d=>`<div class="campaign-card"><b>${esc(d.name)}</b><span>${esc(d.trigger||'')}</span><small>${esc(d.enabled?'Enabled':'Disabled')} • ${esc(d.updatedAt||d.createdAt||'')}</small><pre>${esc((d.steps||[]).map(s=>`${s.day||''} | ${s.template||''} | ${s.message||''}`).join('\n'))}</pre></div>`).join('')||'<p>No drip campaigns yet.</p>';
 }
