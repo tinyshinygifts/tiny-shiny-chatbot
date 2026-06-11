@@ -744,7 +744,7 @@ function parseContactText(text=''){
   return out;
 }
 function dedupeBroadcastContacts(list){ const seen=new Set(); const out=[]; for(const c of list){ const phone=formatWaPhone(c.phone); if(!phone||seen.has(phone)) continue; seen.add(phone); out.push({...c,phone,id:c.id||phone}); } return out; }
-function renderBroadcastTemplates(){ const sel=$('broadcastTemplate'); if(!sel) return; const current=sel.value; const seen=new Set(); const opts=(broadcastTemplates||[]).filter(t=>{const k=t.name||t.id;if(!k||seen.has(k)) return false; seen.add(k); return true;}); sel.innerHTML='<option value="">Select template</option>'+opts.map(t=>`<option value="${esc(t.name)}" data-lang="${esc(t.language||'en')}" data-header="${esc(t.headerType||'None')}">${esc(t.name)} (${esc(t.category||'')}, ${esc(t.language||'en')})</option>`).join(''); if(current && [...sel.options].some(o=>o.value===current)) sel.value=current; }
+function renderBroadcastTemplates(){ const sel=$('broadcastTemplate'); if(!sel) return; const current=sel.value; const seen=new Set(); const opts=(broadcastTemplates||[]).filter(t=>{const k=t.name||t.id;if(!k||seen.has(k)) return false; seen.add(k); return true;}); sel.innerHTML='<option value="">Select template</option>'+opts.map(t=>`<option value="${esc(t.name)}" data-lang="${esc(t.language||'en')}" data-header="${esc(t.headerType||'None')}" data-body="${esc(t.body||'')}" data-vars="${esc((t.variables||[]).join('|'))}">${esc(t.name)} (${esc(t.category||'')}, ${esc(t.language||'en')})</option>`).join(''); if(current && [...sel.options].some(o=>o.value===current)) sel.value=current; renderBroadcastVariableMap(); }
 function categoryMatch(c,cat){ if(!cat) return true; const hay=[c.category,c.tags,c.tag,c.name,c.email,c.city,c.orderStatus,c.raw?.tags].join(' ').toLowerCase(); const key=cat.toLowerCase().replace('é','e'); return hay.includes(key) || (cat==='Home Décor' && /home|decor|décor/.test(hay)); }
 function contactMatchesBroadcastFilter(c){
   const q=($('broadcastCustomerSearch')?.value||'').toLowerCase().trim();
@@ -759,14 +759,17 @@ function renderBroadcastCustomerDatalist(){
   const items=(broadcastContacts.length?broadcastContacts:shopifyCustomers.map(c=>({name:c.name,phone:c.phone,email:c.email,city:c.city,category:c.raw?.tags||''}))).slice(0,500);
   dl.innerHTML=items.map(c=>`<option value="${esc([c.name,c.phone,c.email,c.city,c.category].filter(Boolean).join(' • '))}"></option>`).join('');
 }
+function currentBroadcastCheckedPhones(){ return new Set([...document.querySelectorAll('.broadcast-check:checked')].map(x=>x.dataset.phone)); }
+let broadcastSelectedPhones = new Set();
 function renderBroadcastContacts(){
   const cat=$('broadcastCategory')?.value||'';
+  const liveChecked=currentBroadcastCheckedPhones(); if(liveChecked.size) broadcastSelectedPhones=liveChecked;
   renderBroadcastCustomerDatalist();
   const filtered=broadcastContacts.filter(c=>categoryMatch(c,cat)&&contactMatchesBroadcastFilter(c));
-  const selectedCount=document.querySelectorAll('.broadcast-check:checked').length;
+  const selectedCount=broadcastSelectedPhones.size || document.querySelectorAll('.broadcast-check:checked').length;
   if($('broadcastSummary')) broadcastSummary.textContent=`${filtered.length} contacts shown / ${selectedCount} selected / ${broadcastContacts.length} total`;
   if(!$('broadcastContactsList')) return;
-  broadcastContactsList.innerHTML=filtered.map(c=>`<label class="mini-customer-row broadcast-row"><input class="broadcast-check" type="checkbox" data-phone="${esc(c.phone)}" checked/> <span><b>${esc(c.name||'Customer')}</b><small>${esc(c.phone)}${c.email?' • '+esc(c.email):''}${c.city?' • '+esc(c.city):''}${c.category?' • '+esc(c.category):''}</small></span></label>`).join('') || '<p>No contacts found. Import Shopify Customers, paste contacts, upload CSV/Excel CSV, or change filter.</p>';
+  broadcastContactsList.innerHTML=filtered.map(c=>{ const checked=broadcastSelectedPhones.size?broadcastSelectedPhones.has(c.phone):true; if(!broadcastSelectedPhones.size) broadcastSelectedPhones.add(c.phone); return `<label class="mini-customer-row broadcast-row"><input class="broadcast-check" type="checkbox" data-phone="${esc(c.phone)}" ${checked?'checked':''}/> <span><b>${esc(c.name||'Customer')}</b><small>${esc(c.phone)}${c.email?' • '+esc(c.email):''}${c.city?' • '+esc(c.city):''}${c.category?' • '+esc(c.category):''}</small></span></label>`; }).join('') || '<p>No contacts found. Import Shopify Customers, paste contacts, upload CSV/Excel CSV, or change filter.</p>';
 }
 async function loadBroadcasts(){
   const d=await fetch('/api/broadcast/campaigns',{credentials:'include'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,campaigns:[],templates:[]}));
@@ -776,10 +779,43 @@ function renderBroadcastCampaigns(){
   if(!$('broadcastCampaignsList')) return;
   broadcastCampaignsList.innerHTML=(broadcastCampaigns||[]).slice(0,50).map(c=>`<div class="log-row broadcast-campaign"><b>${esc(c.name)}</b> <small>${esc(c.createdAt)}</small><br/>Template: ${esc(c.templateName)} | Status: ${esc(c.status)}<br/>Sent: ${esc(c.sentCount||0)} | Failed: ${esc(c.failedCount||0)} | Skipped: ${esc(c.skippedCount||0)} | Contacts: ${esc((c.contacts||[]).length)}</div>`).join('') || 'No campaigns yet.';
 }
-async function importShopifyToBroadcast(){ if(!shopifyCustomers.length) await loadShopifyCustomers(); broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(shopifyCustomers.map(c=>({id:c.id,name:c.name,phone:c.phone,email:c.email,city:c.city||c.raw?.default_address?.city||'',category:c.raw?.tags||'',source:'shopify',raw:c.raw})))); renderBroadcastContacts(); }
-async function importBroadcastPaste(){ const contacts=parseContactText($('broadcastPasteContacts')?.value||''); broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(contacts)); renderBroadcastContacts(); }
+async function importShopifyToBroadcast(){ if(!shopifyCustomers.length) await loadShopifyCustomers(); broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(shopifyCustomers.map(c=>({id:c.id,name:c.name,phone:c.phone,email:c.email,city:c.city||c.raw?.default_address?.city||'',category:c.raw?.tags||'',source:'shopify',raw:c.raw})))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }
+async function importBroadcastPaste(){ const contacts=parseContactText($('broadcastPasteContacts')?.value||''); broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(contacts)); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }
 async function readBroadcastCsvFile(file){ return new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(String(r.result||'')); r.onerror=reject; r.readAsText(file); }); }
-function selectedBroadcastContacts(){ const checked=[...document.querySelectorAll('.broadcast-check:checked')].map(x=>x.dataset.phone); const selected=broadcastContacts.filter(c=>checked.includes(c.phone)); const single=formatWaPhone($('broadcastSinglePhone')?.value||''); if(single && !selected.some(c=>c.phone===single)) selected.unshift({id:single,name:'Single Number',phone:single,source:'single'}); return dedupeBroadcastContacts(selected); }
+function selectedBroadcastContacts(){ const checked=[...document.querySelectorAll('.broadcast-check:checked')].map(x=>x.dataset.phone); if(checked.length || document.querySelectorAll('.broadcast-check').length) broadcastSelectedPhones=new Set(checked); const selected=broadcastContacts.filter(c=>broadcastSelectedPhones.has(c.phone)); const single=formatWaPhone($('broadcastSinglePhone')?.value||''); if(single && !selected.some(c=>c.phone===single)) selected.unshift({id:single,name:'Single Number',phone:single,source:'single'}); return dedupeBroadcastContacts(selected); }
+
+function selectedBroadcastTemplate(){ const name=$('broadcastTemplate')?.value||''; return (broadcastTemplates||[]).find(t=>String(t.name)===String(name) || String(t.id)===String(name)) || {}; }
+function detectTemplateVariablesFromText(text='', vars=[]){
+  const found=[]; const re=/\{\{\s*([\w.]+|\d+)\s*\}\}/g; let m;
+  while((m=re.exec(String(text||'')))){ const token='{{'+m[1]+'}}'; if(!found.includes(token)) found.push(token); }
+  if(!found.length && Array.isArray(vars) && vars.length) found.push(...vars.map((_,i)=>'{{'+(i+1)+'}}'));
+  return found;
+}
+function defaultVariableKey(index, token){
+  const i=Number(index)||1; const t=String(token||'').toLowerCase();
+  if(t.includes('name') || i===1) return '{{name}}';
+  if(t.includes('phone')) return '{{phone}}';
+  if(t.includes('email')) return '{{email}}';
+  if(t.includes('coupon') || i===3) return '{{coupon}}';
+  if(t.includes('link') || i===2 || i===4 || i===5) return '{{link}}';
+  if(t.includes('product')) return '{{product}}';
+  return 'custom';
+}
+function renderBroadcastVariableMap(){
+  const box=$('broadcastVariableMap'); if(!box) return;
+  const tpl=selectedBroadcastTemplate();
+  const vars=detectTemplateVariablesFromText(tpl.body||'', tpl.variables||[]);
+  if(!vars.length){ box.innerHTML='<p class="hint">Is template me variables detect nahi hue.</p>'; if($('broadcastVariables')) broadcastVariables.value=''; return; }
+  const options=[['{{name}}','Customer Name'],['{{phone}}','Phone'],['{{email}}','Email'],['{{link}}','Product / Collection Link'],['{{coupon}}','Coupon Code'],['{{category}}','Category / Tag'],['{{product}}','Product Name'],['custom','Custom Text']];
+  box.innerHTML=vars.map((v,i)=>{ const def=defaultVariableKey(i+1,v); return `<div class="broadcast-var-row" data-var-row="${esc(v)}"><b>${esc(v)}</b><select data-broadcast-var-select="${esc(v)}">${options.map(o=>`<option value="${esc(o[0])}" ${o[0]===def?'selected':''}>${esc(o[1])}</option>`).join('')}</select><input data-broadcast-var-custom="${esc(v)}" placeholder="Custom text" style="display:${def==='custom'?'block':'none'}"/></div>`; }).join('');
+  updateBroadcastVariablesFromMap();
+}
+function updateBroadcastVariablesFromMap(){
+  const rows=[...document.querySelectorAll('[data-var-row]')];
+  const values=rows.map(row=>{ const sel=row.querySelector('[data-broadcast-var-select]')?.value||''; const custom=row.querySelector('[data-broadcast-var-custom]')?.value||''; return sel==='custom'?custom:sel; }).filter(Boolean);
+  if($('broadcastVariables')) broadcastVariables.value=values.join('\n');
+}
+
 async function createBroadcast(){
   const contacts=selectedBroadcastContacts(); if(!contacts.length) return alert('Please import/select contacts first.');
   const templateName=$('broadcastTemplate')?.value||''; if(!templateName) return alert('Please select approved template.');
@@ -951,8 +987,8 @@ function setupPwaInstall(){
 }
 setupPwaInstall();
 
-document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); if(e.target.id==='broadcastCategory'||e.target.id==='broadcastCustomerSearch'||e.target.id==='broadcastFilterBy') renderBroadcastContacts(); if(e.target.dataset.flowEdit){ const flow=activeFlow(); const i=Number(e.target.dataset.flowIndex); if(flow.blocks&&flow.blocks[i]){ flow.blocks[i][e.target.dataset.flowEdit]=e.target.value; } } const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
-document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; } if(e.target.id==='broadcastSelectAll'){ document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=e.target.checked); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ const f=e.target.files[0]; if($('broadcastImageLibrary')) broadcastImageLibrary.innerHTML=`<div class="hint">Selected image: ${esc(f.name)}. Live send ke liye public Image URL upar paste karein.</div>`; } });
+document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id==='crmStatusFilter') renderCrm(); if(e.target.id==='shopifyCustomerSearch') renderShopifyCustomers(); if(e.target.id==='mediaCustomerSearch') renderMediaCustomers(); if(e.target.id==='newProductSearch') renderNewProducts(); if(e.target.id==='newProductCustomerSearch') renderNewProductCustomers(); if(e.target.id==='whatsappInboxSearch') renderWhatsappInbox(); if(e.target.id==='broadcastCategory'||e.target.id==='broadcastCustomerSearch'||e.target.id==='broadcastFilterBy') renderBroadcastContacts(); if(e.target.dataset && e.target.dataset.broadcastVarCustom!==undefined) updateBroadcastVariablesFromMap(); if(e.target.id==='salesOrderSearch') clearTimeout(window.__salesOrderSearchTimer), window.__salesOrderSearchTimer=setTimeout(searchSalesOrders,450); if(e.target.dataset.flowEdit){ const flow=activeFlow(); const i=Number(e.target.dataset.flowIndex); if(flow.blocks&&flow.blocks[i]){ flow.blocks[i][e.target.dataset.flowEdit]=e.target.value; } } const i=e.target.dataset.i,field=e.target.dataset.field; if(i===undefined||!field)return; if(field==='keywords') faqs[i].keywords=e.target.value.split(',').map(x=>x.trim()).filter(Boolean); if(field==='answer') faqs[i].answer=e.target.value; });
+document.addEventListener('change',e=>{ if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); if(e.target.checked) phones.forEach(p=>broadcastSelectedPhones.add(p)); else phones.forEach(p=>broadcastSelectedPhones.delete(p)); document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=e.target.checked); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ const f=e.target.files[0]; if($('broadcastImageLibrary')) broadcastImageLibrary.innerHTML=`<div class="hint">Selected image: ${esc(f.name)}. Live send ke liye public Image URL upar paste karein.</div>`; } });
 document.addEventListener('click',async e=>{
 
   if(e.target.classList && e.target.classList.contains('contact-tab')){ const target=e.target.dataset.target; const mode=e.target.dataset.contactFilter || 'with'; if(target==='crm'){ crmContactFilter=mode; renderCrm(); } if(target==='lead'){ leadContactFilter=mode; renderLeads(); } if(target==='activity'){ activityContactFilter=mode; renderEvents(); } return; }
@@ -995,7 +1031,7 @@ document.addEventListener('click',async e=>{
   if(e.target.dataset.addShopifyPhone) addWhatsappCustomerToShopify(e.target.dataset.addShopifyPhone, e.target.dataset.addShopifyName || 'WhatsApp Customer');
   if(e.target.id==='loadBroadcastContacts') importShopifyToBroadcast();
   if(e.target.id==='importBroadcastPaste') importBroadcastPaste();
-  if(e.target.id==='clearBroadcastContacts'){ broadcastContacts=[]; renderBroadcastContacts(); }
+  if(e.target.id==='clearBroadcastContacts'){ broadcastContacts=[]; broadcastSelectedPhones=new Set(); renderBroadcastContacts(); } if(e.target.id==='broadcastDeselectAll'){ broadcastSelectedPhones=new Set(); document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=false); renderBroadcastContacts(); }
   if(e.target.id==='sendBroadcastNow') createBroadcast();
   if(e.target.id==='refreshBroadcasts') loadBroadcasts();
   if(e.target.id==='saveWhatsappChatbot') saveWhatsappChatbotSettings();
@@ -1380,6 +1416,22 @@ function renderCampaignGraphs(campaigns=[]){
 }
 
 function renderPaymentDonut(d){ const cod=Number(d.codOrders||0), prepaid=Number(d.prepaidOrders||0), total=Math.max(1,cod+prepaid); const codPct=Math.round(cod/total*100); return `<div class="donut" style="--p:${codPct}"><b>${codPct}%</b><span>COD</span></div><div class="donut-legend"><span><i></i> COD: ${cod}</span><span><i></i> Prepaid: ${prepaid}</span></div>`; }
+
+function orderTrackingUrl(o={}){ const t=(o.tracking||[]).find(x=>x.url); return t?.url || o.trackingUrl || o.shiprocket?.trackingUrl || ''; }
+function renderSalesOrderTrackingResults(rows=[], info=''){
+  const box=$('salesOrderTrackingResults'); if(!box) return;
+  if(info && !rows.length){ box.innerHTML=`<p class="hint">${esc(info)}</p>`; return; }
+  box.innerHTML=rows.length ? `<div class="order-track-list">${rows.map(o=>{ const url=orderTrackingUrl(o); const tracking=(o.tracking||[])[0]||{}; return `<div class="order-track-card" data-order-track-url="${esc(url)}"><div><b>${esc(o.name||o.order_number||o.id)}</b><span>${esc(o.customer_name||o.customerName||'-')} • ${esc(o.phone||'-')}</span><small>${esc(String(o.created_at||o.date||'').slice(0,10))} • ${esc(o.financial_status||o.payment||'-')} • ${esc(o.fulfillment_status||o.status||'-')}</small></div><div><b>${esc(o.currency||'INR')} ${esc(o.total_price||o.amount||'-')}</b><span>${esc(tracking.company||o.courier||'')}</span><small>${esc(tracking.number||o.awb||'Tracking not available')}</small></div><button class="ghost-btn" type="button" data-open-order-track="${esc(url)}">${url?'Track Order':'No Tracking'}</button></div>`; }).join('')}</div>` : '<p class="hint">No matching order found.</p>';
+}
+async function searchSalesOrders(){
+  const q=($('salesOrderSearch')?.value||'').trim();
+  if(!q){ renderSalesOrderTrackingResults([], 'Name, mobile, email ya order number enter karo.'); return; }
+  const params=new URLSearchParams({q, range:$('salesOrderSearchRange')?.value||'90', payment:$('salesOrderSearchPayment')?.value||'', status:$('salesOrderSearchStatus')?.value||''});
+  const d=await fetch('/api/shopify/order-search?'+params.toString(),{credentials:'include',cache:'no-store'}).then(r=>r.json()).catch(e=>({ok:false,error:e.message,orders:[]}));
+  if($('shopifySalesResult') && !d.ok) shopifySalesResult.textContent=JSON.stringify(d,null,2);
+  renderSalesOrderTrackingResults(d.orders||[], d.ok?'No matching order found.':(d.error||'Order search failed'));
+}
+
 function renderShopifySalesAnalysis(){
   const d=shopifySalesAnalysis||{}; const s=d.summary||{};
   if($('salesSummary')) salesSummary.innerHTML=[
@@ -1407,7 +1459,7 @@ function exportShopifySalesCsv(){
 }
 document.addEventListener('change', e=>{ if(['salesRange','salesPaymentFilter','salesStatusFilter','salesFromDate','salesToDate'].includes(e.target.id)) loadShopifySalesAnalysis(); });
 document.addEventListener('input', e=>{ if(e.target.id==='salesCampaignFilter') clearTimeout(window.__salesFilterTimer), window.__salesFilterTimer=setTimeout(loadShopifySalesAnalysis,350); });
-document.addEventListener('click', e=>{ if(e.target.id==='refreshShopifySales') loadShopifySalesAnalysis(); if(e.target.id==='exportShopifySalesCsv') exportShopifySalesCsv(); });
+document.addEventListener('click', e=>{ if(e.target.id==='refreshShopifySales') loadShopifySalesAnalysis(); if(e.target.id==='exportShopifySalesCsv') exportShopifySalesCsv(); if(e.target.id==='searchSalesOrderBtn') searchSalesOrders(); if(e.target.dataset && e.target.dataset.openOrderTrack!==undefined){ const url=e.target.dataset.openOrderTrack; if(url) window.open(url,'_blank','noopener'); else alert('Tracking not available for this order.'); } if(e.target.closest && e.target.closest('[data-order-track-url]')){ const card=e.target.closest('[data-order-track-url]'); if(e.target.dataset && e.target.dataset.openOrderTrack!==undefined) return; const url=card.dataset.orderTrackUrl; if(url) window.open(url,'_blank','noopener'); } });
 
 
 

@@ -1577,11 +1577,13 @@ function replaceBroadcastVars(value, contact={}, campaign={}) {
     .replace(/\{\{?coupon\}?\}/gi, campaign.couponCode || '')
     .replace(/\{\{?coupon_code\}?\}/gi, campaign.couponCode || '')
     .replace(/\{\{?category\}?\}/gi, campaign.category || '')
-    .replace(/\{\{?product\}?\}/gi, campaign.productTitle || campaign.category || 'Product');
+    .replace(/\{\{?product\}?\}/gi, campaign.productTitle || campaign.category || 'Product')
+    .replace(/\{\{?caption\}?\}/gi, campaign.imageCaption || campaign.caption || campaign.message || '')
+    .replace(/\{\{?city\}?\}/gi, contact.city || '');
 }
 function normalizeBroadcastContact(c={}) {
   const phone=normalizeWhatsAppPhone(c.phone || c.mobile || c.whatsapp || c.number || '');
-  return { id:String(c.id || phone || crypto.randomUUID()), name:String(c.name || c.customerName || [c.first_name,c.last_name].filter(Boolean).join(' ') || 'Customer').trim(), phone, email:String(c.email||'').trim(), category:String(c.category||c.tags||c.productType||'').trim(), source:String(c.source||'manual'), raw:c };
+  return { id:String(c.id || phone || crypto.randomUUID()), name:String(c.name || c.customerName || [c.first_name,c.last_name].filter(Boolean).join(' ') || 'Customer').trim(), phone, email:String(c.email||'').trim(), category:String(c.category||c.tags||c.productType||'').trim(), city:String(c.city||c.raw?.default_address?.city||'').trim(), source:String(c.source||'manual'), raw:c };
 }
 function broadcastVariables(campaign={}, contact={}) {
   let vars=[];
@@ -1653,7 +1655,7 @@ app.post('/api/broadcast/campaigns', async (req,res)=>{
     const unique=[]; const seen=new Set();
     for(const c of contacts){ if(!seen.has(c.phone)){ seen.add(c.phone); unique.push(c); } }
     if(!unique.length) return res.status(400).json({ ok:false, error:'No valid contacts found.' });
-    const campaign={ id:crypto.randomUUID(), name:String(body.name||'WhatsApp Broadcast').trim(), category:String(body.category||'All').trim(), templateName:String(body.templateName||'').trim(), templateLang:String(body.templateLang||'en').trim(), imageUrl:String(body.imageUrl||'').trim(), productLink:String(body.productLink||'').trim(), couponCode:String(body.couponCode||'').trim(), variables:Array.isArray(body.variables)?body.variables:[], dailyLimit:Number(body.dailyLimit||500)||500, scheduleAt:body.scheduleAt||'', contacts:unique, results:[], status:body.scheduleAt && new Date(body.scheduleAt).getTime()>Date.now()?'scheduled':'queued', createdAt:nowIso(), updatedAt:nowIso() };
+    const campaign={ id:crypto.randomUUID(), name:String(body.name||'WhatsApp Broadcast').trim(), category:String(body.category||'All').trim(), templateName:String(body.templateName||'').trim(), templateLang:String(body.templateLang||'en').trim(), imageUrl:String(body.imageUrl||'').trim(), productLink:String(body.productLink||'').trim(), couponCode:String(body.couponCode||'').trim(), imageCaption:String(body.imageCaption||'').trim(), messageType:String(body.messageType||'template').trim(), variables:Array.isArray(body.variables)?body.variables:[], dailyLimit:Number(body.dailyLimit||500)||500, scheduleAt:body.scheduleAt||'', contacts:unique, results:[], status:body.scheduleAt && new Date(body.scheduleAt).getTime()>Date.now()?'scheduled':'queued', createdAt:nowIso(), updatedAt:nowIso() };
     const campaigns=readJson(broadcastCampaignsPath, []); campaigns.unshift(campaign); writeJson(broadcastCampaignsPath,campaigns.slice(0,500));
     if(campaign.status==='queued') await processBroadcastCampaign(campaign.id);
     const saved=readJson(broadcastCampaignsPath, []).find(c=>c.id===campaign.id) || campaign;
@@ -2258,7 +2260,41 @@ app.get('/api/shopify/sales-analysis', requireAdmin, async (req,res)=>{
   }catch(e){ res.status(500).json({ok:false,error:e.message}); }
 });
 
-
+app.get('/api/shopify/order-search', requireAdmin, async (req,res)=>{
+  try{
+    const qRaw=String(req.query.q||'').trim();
+    if(!qRaw) return res.json({ok:true,orders:[]});
+    const range=String(req.query.range||'90');
+    const paymentFilter=String(req.query.payment||'').toLowerCase();
+    const statusFilter=String(req.query.status||'').toLowerCase();
+    const fields='id,name,order_number,created_at,email,phone,customer,billing_address,shipping_address,financial_status,fulfillment_status,total_price,currency,fulfillments,line_items,cancelled_at,cancel_reason,tags';
+    const candidates=[];
+    const clean=cleanPhone(qRaw);
+    const qNoHash=qRaw.replace(/^#/,'');
+    candidates.push(qRaw, '#'+qNoHash, 'name:#'+qNoHash, 'email:'+qRaw);
+    if(clean){ for(const p of phoneVariants(clean)) candidates.push('phone:'+p, p); }
+    const seenQueries=new Set(); let rawOrders=[];
+    for(const q of candidates.filter(Boolean)){
+      if(seenQueries.has(q)) continue; seenQueries.add(q);
+      const r=await shopifyFetch(`orders.json?status=any&limit=50&fields=${fields}&query=${encodeURIComponent(q)}`).catch(e=>({ok:false,error:e.message,json:{orders:[]}}));
+      rawOrders=rawOrders.concat((r.json&&r.json.orders)||[]);
+      if(rawOrders.length>=50) break;
+    }
+    if(rawOrders.length<1){
+      let extra='';
+      if(range!=='all'){ const days=Math.max(1, Math.min(Number(range)||90, 365)); extra='&created_at_min='+encodeURIComponent(new Date(Date.now()-days*24*60*60*1000).toISOString()); }
+      const r=await shopifyFetch(`orders.json?status=any&limit=250&fields=${fields}${extra}`).catch(e=>({ok:false,error:e.message,json:{orders:[]}}));
+      rawOrders=(r.json&&r.json.orders)||[];
+    }
+    const seen=new Set();
+    const needle=qRaw.toLowerCase(); const needleDigits=cleanPhone(qRaw).slice(-10);
+    let orders=rawOrders.filter(o=>{ if(seen.has(String(o.id))) return false; seen.add(String(o.id)); const s=[o.name,o.order_number,o.id,o.email,o.phone,o.customer?.email,o.customer?.phone,o.customer?.first_name,o.customer?.last_name,o.billing_address?.name,o.shipping_address?.name,o.billing_address?.phone,o.shipping_address?.phone,o.tags].join(' ').toLowerCase(); const d=cleanPhone(s); return s.includes(needle) || (needleDigits && d.includes(needleDigits)); }).map(o=>simplifyOrder(o));
+    if(paymentFilter) orders=orders.filter(o=>{ const t=[o.financial_status,o.tags].join(' ').toLowerCase(); const isCod=t.includes('cod')||t.includes('pending'); return paymentFilter==='cod'?isCod:!isCod; });
+    if(statusFilter) orders=orders.filter(o=>String(o.fulfillment_status||o.financial_status||'').toLowerCase().includes(statusFilter));
+    orders=orders.slice(0,60);
+    res.json({ok:true,orders,count:orders.length});
+  }catch(e){ res.status(500).json({ok:false,error:e.message,orders:[]}); }
+});
 
 
 function cleanupNdrRows(rows){

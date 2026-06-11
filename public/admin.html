@@ -158,6 +158,20 @@
         <label>Order Status <select id="salesStatusFilter"><option value="">All</option><option value="paid">Paid</option><option value="pending">Pending</option><option value="returned">Returned</option><option value="fulfilled">Fulfilled</option></select></label>
       </div>
       <div id="salesSummary" class="sales-summary-grid"></div>
+
+      <div class="sales-order-tracking-card">
+        <div class="section-head mini">
+          <div><h3>Order Tracking / Customer Order Search</h3><p>Customer name, mobile number, email ya order number se order search karke tracking open karo.</p></div>
+          <button id="searchSalesOrderBtn" class="primary-btn" type="button">Search Order</button>
+        </div>
+        <div class="form-grid four order-tracking-filters">
+          <label>Search Order / Customer <input id="salesOrderSearch" placeholder="Name, mobile, email, #order no"/></label>
+          <label>Date Range <select id="salesOrderSearchRange"><option value="30">Last 30 days</option><option value="90" selected>Last 90 days</option><option value="180">Last 180 days</option><option value="365">Last 365 days</option><option value="all">All available</option></select></label>
+          <label>Payment <select id="salesOrderSearchPayment"><option value="">All</option><option value="cod">COD</option><option value="prepaid">Prepaid</option></select></label>
+          <label>Status <select id="salesOrderSearchStatus"><option value="">All</option><option value="fulfilled">Fulfilled</option><option value="unfulfilled">Unfulfilled</option><option value="paid">Paid</option><option value="pending">Pending</option></select></label>
+        </div>
+        <div id="salesOrderTrackingResults" class="order-tracking-results"><p class="hint">Search karke order tracking result yaha dikhega.</p></div>
+      </div>
       <div class="sales-grid">
         <div class="sales-card"><h3>Daily Sales Graph</h3><div id="salesDailyChart" class="mini-chart"></div></div>
         <div class="sales-card"><h3>COD vs Prepaid</h3><div id="salesPaymentChart" class="donut-wrap"></div></div>
@@ -213,7 +227,7 @@
     <section class="panel tab-panel" id="bulkBroadcastPanel">
       <div class="section-head">
         <div><h2>Bulk WhatsApp Broadcast</h2><p>Approved template se Shopify / Google Sheet contacts ko campaign bhejein.</p></div>
-        <div class="inline-actions"><button id="loadBroadcastContacts" class="ghost-btn">Import Shopify Customers</button><button id="refreshBroadcasts" class="ghost-btn">Refresh Campaigns</button></div>
+        <div class="inline-actions"><button id="refreshBroadcasts" class="ghost-btn">Refresh Campaigns</button></div>
       </div>
       <div class="form-grid four">
         <label>Campaign Name <input id="broadcastName" placeholder="Rakhi offer broadcast"/></label>
@@ -223,17 +237,6 @@
         <label>Approved Template <select id="broadcastTemplate"><option value="">Select template</option></select></label>
         <label>Template Language <input id="broadcastTemplateLang" value="en"/></label>
       </div>
-      <div class="form-grid four broadcast-filter-grid">
-        <label>Customer Search / Type <input id="broadcastCustomerSearch" list="broadcastCustomerDatalist" placeholder="Type name, phone, email, city or tag"/></label>
-        <datalist id="broadcastCustomerDatalist"></datalist>
-        <label>Filter By
-          <select id="broadcastFilterBy"><option value="all">Name + Phone + Email + City + Tag</option><option value="name">Name</option><option value="phone">Phone Number</option><option value="email">Email</option><option value="city">City</option><option value="tag">Tag / Category</option></select>
-        </label>
-        <label>Single Number Optional <input id="broadcastSinglePhone" placeholder="919001727446"/></label>
-        <label>Message Type
-          <select id="broadcastMessageType"><option value="template">Template</option><option value="text">Text Only</option><option value="image">Image Only</option><option value="image_text">Image + Text</option></select>
-        </label>
-      </div>
       <div class="form-grid four">
         <label>Image URL Optional <input id="broadcastImageUrl" placeholder="https://cdn.shopify.com/...jpg"/></label>
         <label>Product / Collection Link <input id="broadcastProductLink" placeholder="https://tinyshinygifts.com/collections/..."/></label>
@@ -241,10 +244,12 @@
         <label>Daily Sending Limit <select id="broadcastDailyLimit"><option>500</option><option>1000</option><option>5000</option></select></label>
       </div>
       <div class="form-grid two">
-        <label>Template Variables <textarea id="broadcastVariables" placeholder="One variable per line. Example:
-{{name}}
-{{link}}
-{{coupon}}"></textarea></label>
+        <div class="template-variable-card">
+          <label>Template Variables Auto Mapping</label>
+          <p class="hint">Template select karte hi {{1}}, {{2}} jaise variables automatic detect honge. Dropdown se value select karo.</p>
+          <div id="broadcastVariableMap" class="broadcast-variable-map"><p class="hint">Template select karo, variables yaha aa jayenge.</p></div>
+          <textarea id="broadcastVariables" class="hidden" aria-hidden="true"></textarea>
+        </div>
         <label>Schedule Message <input id="broadcastScheduleAt" type="datetime-local"/><span class="hint">Blank rakhenge to abhi send/queue hoga.</span></label>
       </div>
       <div class="form-grid two">
@@ -252,16 +257,7 @@
 Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
         <label>Import CSV / Excel File <input id="broadcastCsvFile" type="file" accept=".csv,.txt,.tsv,.xls,.xlsx,text/csv,text/plain"/><span class="hint">Columns: name, phone, email, category, city, tag. Excel ko CSV export karke bhi upload kar sakte hain.</span></label>
       </div>
-      <div class="inline-actions">
-        <label class="select-all-line"><input id="broadcastSelectAll" type="checkbox"/> Select All</label>
-        <button id="importBroadcastPaste" class="ghost-btn">Import Pasted Contacts</button>
-        <button id="clearBroadcastContacts" class="ghost-btn danger-outline">Clear Contacts</button>
-        <button id="sendBroadcastNow" class="primary-btn">Create / Send Broadcast</button>
-      </div>
-      <div class="broadcast-summary" id="broadcastSummary">0 contacts selected</div>
-      <div id="broadcastContactsList" class="broadcast-contacts-list"></div>
-      <h3>Campaign History / Delivery Status</h3>
-      
+
       <div class="broadcast-image-library" id="broadcastImageLibraryBox">
         <h3>Image + Text Message</h3>
         <p class="hint">Image URL upar dal sakte hain. File upload karne par image preview/filename yaha dikhega; live sending ke liye public Image URL best rahega.</p>
@@ -271,7 +267,26 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
         </div>
         <div id="broadcastImageLibrary" class="image-library-inline"></div>
       </div>
-<pre id="broadcastResult"></pre>
+      <div class="broadcast-contact-tools">
+        <label>Search Customer <input id="broadcastCustomerSearch" list="broadcastCustomerDatalist" placeholder="Name, phone, email, city, tag"/></label>
+        <datalist id="broadcastCustomerDatalist"></datalist>
+        <label>Filter Source <select id="broadcastFilterBy"><option value="all">All Fields</option><option value="name">Name</option><option value="phone">Phone</option><option value="email">Email</option><option value="city">City</option><option value="tag">Tag / Category</option></select></label>
+        <label>Single Number Optional <input id="broadcastSinglePhone" placeholder="919001727446"/></label>
+        <label>Message Type <select id="broadcastMessageType"><option value="template">Template</option><option value="text">Text Only</option><option value="image">Image Only</option><option value="image_text">Image + Text</option></select></label>
+      </div>
+      <div class="inline-actions broadcast-action-row">
+        <button id="loadBroadcastContacts" class="ghost-btn" type="button">Import Shopify Customers</button>
+        <label class="select-all-line"><input id="broadcastSelectAll" type="checkbox"/> Select All</label>
+        <button id="broadcastDeselectAll" class="ghost-btn" type="button">Deselect All</button>
+        <button id="importBroadcastPaste" class="ghost-btn" type="button">Import Pasted Contacts</button>
+        <button id="clearBroadcastContacts" class="ghost-btn danger-outline" type="button">Clear Contacts</button>
+        <button id="sendBroadcastNow" class="primary-btn" type="button">Create / Send Broadcast</button>
+      </div>
+      <div class="broadcast-summary" id="broadcastSummary">0 contacts selected</div>
+      <div id="broadcastContactsList" class="broadcast-contacts-list"></div>
+      <h3>Campaign History / Delivery Status</h3>
+      
+      <pre id="broadcastResult"></pre>
       <div id="broadcastCampaignsList" class="broadcast-campaigns-list"></div>
     </section>
 
