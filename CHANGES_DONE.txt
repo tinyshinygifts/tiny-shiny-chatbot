@@ -1,36 +1,32 @@
 CHANGES_DONE
 
-v32 update (base v31):
+v33 update (base v32):
 
-1. CRM Dashboard loading speed improved.
-   - CRM opening no longer rescans all old leads/orders every time.
-   - New leads/orders still update CRM automatically.
-   - CRM product images now lazy-load so dashboard opens faster.
+1. CRM Dashboard ke andar new tab added:
+   - Pending Approval
 
-2. CRM Dashboard order tabs added inside the same CRM Dashboard section.
+2. These orders will now show in Pending Approval tab:
+   - "Waiting for customer Confirm/Cancel"
+   - "COD confirmation pending"
+   - "WhatsApp sent" waiting for customer reply
+   - Confirm/Cancel approval pending orders
+
+3. Existing CRM Dashboard tabs preserved:
    - All Orders
+   - Pending Approval
    - Pending Orders
    - Confirmed Orders
    - Cancelled Orders
 
-3. Pending/Confirmed/Cancelled filters work with:
-   - Order Status
-   - WhatsApp Status
-   - Last Message
-   - COD/Shopify order flags
+4. CRM summary now shows Pending Approval count.
 
-4. CRM summary now shows:
-   - Pending Orders count
-   - Confirmed Orders count
-   - Cancelled Orders count
-
-5. Preserved previous fixes from v31/v30/v28:
-   - Proper date/time/order number sorting.
-   - Readable date/time format.
-   - Duplicate order merge by order number.
-   - Status appends with "|".
-   - WhatsApp Cancel -> Shopify Cancel improved.
-   - Mobile chat button smaller and shifted upward.
+5. Previous fixes preserved:
+   - Fast CRM loading
+   - Proper date/time/order number sorting
+   - Duplicate order merge by order number
+   - Status appends with "|"
+   - WhatsApp Cancel -> Shopify Cancel improved
+   - Mobile chat button smaller and moved upward
 
 Base:
-- v31 ZIP used as base.
+- v32 ZIP used as base.

@@ -258,8 +258,9 @@ function crmOrderStatusText(c){ return [c.status,c.orderStatus,c.whatsappStatus,
 function crmOrderBucket(c){
   const t=crmOrderStatusText(c);
   if(/cancel|cancelled|canceled|shopify cancel|customer replied cancel|nahi|no\b|failed/.test(t)) return 'cancelled';
-  if(/confirm|confirmed|cod confirmed|customer confirmed/.test(t)) return 'confirmed';
-  if(c.isShopifyOrder || c.orderName || c.isCodOrder || /pending|waiting|whatsapp sent|cod confirmation/.test(t)) return 'pending';
+  if(/confirmed|cod confirmed|customer confirmed/.test(t)) return 'confirmed';
+  if(/waiting for customer confirm\/cancel|waiting for customer|confirm\/cancel|cod confirmation pending|whatsapp sent/.test(t)) return 'pendingApproval';
+  if(c.isShopifyOrder || c.orderName || c.isCodOrder || /pending|cod confirmation/.test(t)) return 'pending';
   return 'other';
 }
 function crmOrderAllowed(c){
@@ -640,7 +641,7 @@ function renderCrm(){
     const withCount=contactFiltered(crmCustomers,'with').length;
     const withoutCount=contactFiltered(crmCustomers,'without').length;
     const orderCounts=crmCustomers.reduce((acc,c)=>{ const b=crmOrderBucket(c); acc[b]=(acc[b]||0)+1; return acc; },{});
-    crmSummary.innerHTML=[`<span><b>${withCount}</b>With Contact</span>`,`<span><b>${withoutCount}</b>Without Contact</span>`,`<span><b>${orderCounts.pending||0}</b>Pending Orders</span>`,`<span><b>${orderCounts.confirmed||0}</b>Confirmed Orders</span>`,`<span><b>${orderCounts.cancelled||0}</b>Cancelled Orders</span>`].join('') + ['New','Hot Lead','Follow Up','Converted','Not Interested'].map(k=>`<span><b>${counts[k]||0}</b>${esc(k)}</span>`).join('');
+    crmSummary.innerHTML=[`<span><b>${withCount}</b>With Contact</span>`,`<span><b>${withoutCount}</b>Without Contact</span>`,`<span><b>${orderCounts.pendingApproval||0}</b>Pending Approval</span>`,`<span><b>${orderCounts.pending||0}</b>Pending Orders</span>`,`<span><b>${orderCounts.confirmed||0}</b>Confirmed Orders</span>`,`<span><b>${orderCounts.cancelled||0}</b>Cancelled Orders</span>`].join('') + ['New','Hot Lead','Follow Up','Converted','Not Interested'].map(k=>`<span><b>${counts[k]||0}</b>${esc(k)}</span>`).join('');
   }
   if(!$('crmList')) return;
   crmList.innerHTML=filtered.map(c=>{
