@@ -6,6 +6,7 @@ let crmCustomers = [];
 let leadItems = [];
 let eventItems = [];
 let crmContactFilter = 'with';
+let crmOrderFilter = 'all';
 let leadContactFilter = 'with';
 let activityContactFilter = 'with';
 let deferredInstallPrompt = null;
@@ -252,7 +253,19 @@ function hasContactNumber(obj){ return !!last10(obj?.phone || obj?.customerPhone
 function contactFiltered(list, mode){ return (list||[]).filter(item => mode === 'without' ? !hasContactNumber(item) : hasContactNumber(item)); }
 function renderLeadTabs(){ document.querySelectorAll('[data-target="lead"]').forEach(b=>b.classList.toggle('active', b.dataset.contactFilter === leadContactFilter)); }
 function renderActivityTabs(){ document.querySelectorAll('[data-target="activity"]').forEach(b=>b.classList.toggle('active', b.dataset.contactFilter === activityContactFilter)); }
-function renderCrmTabs(){ document.querySelectorAll('[data-target="crm"]').forEach(b=>b.classList.toggle('active', b.dataset.contactFilter === crmContactFilter)); }
+function renderCrmTabs(){ document.querySelectorAll('[data-target="crm"]').forEach(b=>b.classList.toggle('active', b.dataset.contactFilter === crmContactFilter)); document.querySelectorAll('[data-crm-order-filter]').forEach(b=>b.classList.toggle('active', b.dataset.crmOrderFilter === crmOrderFilter)); }
+function crmOrderStatusText(c){ return [c.status,c.orderStatus,c.whatsappStatus,c.lastMessage,c.sourceType].join(' ').toLowerCase(); }
+function crmOrderBucket(c){
+  const t=crmOrderStatusText(c);
+  if(/cancel|cancelled|canceled|shopify cancel|customer replied cancel|nahi|no\b|failed/.test(t)) return 'cancelled';
+  if(/confirm|confirmed|cod confirmed|customer confirmed/.test(t)) return 'confirmed';
+  if(c.isShopifyOrder || c.orderName || c.isCodOrder || /pending|waiting|whatsapp sent|cod confirmation/.test(t)) return 'pending';
+  return 'other';
+}
+function crmOrderAllowed(c){
+  if(crmOrderFilter==='all') return true;
+  return crmOrderBucket(c)===crmOrderFilter;
+}
 function renderLeads(){ renderLeadTabs(); const rows=contactFiltered(leadItems, leadContactFilter); if($('leadCount')) leadCount.textContent=(leadItems||[]).length; if($('leadList')) leadList.innerHTML=rows.slice(0,120).map(l=>`<div class="log-row contact-${hasContactNumber(l)?'with':'without'}"><b>${esc(l.type)}</b> <small>${esc(l.createdAt)}</small><br/>Phone: ${esc(l.phone||'No phone')} | Order: ${esc(l.orderId||l.orderName)}<br/>Product: ${esc(l.productTitle||l.product||l?.product?.title)}<br/>Image: ${esc(l.productImage||l.image||l?.product?.image)}<br/>Page: ${esc(l.pageUrl||l?.product?.url)}<br/>Message: ${esc(l.message||l.note)}</div>`).join('') || `<p>No ${leadContactFilter==='with'?'contact-number':'without-contact'} leads yet.</p>`; }
 async function loadLeads(){ const d=await fetch('/api/leads',{credentials:'include'}).then(r=>r.json()).catch(()=>({leads:[]})); leadItems=d.leads||[]; renderLeads(); }
 function renderEvents(){ renderActivityTabs(); const rows=contactFiltered(eventItems, activityContactFilter); if($('eventCount')) eventCount.textContent=(eventItems||[]).length; if($('eventList')) eventList.innerHTML=rows.slice(0,140).map(e=>`<div class="log-row contact-${hasContactNumber(e)?'with':'without'}"><b>${esc(e.eventType)}</b> <small>${esc(e.createdAt)}</small><br/>Phone: ${esc(e.phone||e.customerPhone||'No phone')}<br/>Product: ${esc(e.productTitle)}<br/>Price: ${esc(e.productPrice)} | Discount: ${esc(e.discountText)}<br/>Image: ${esc(e.productImage)}<br/>Page: ${esc(e.pageUrl)}</div>`).join('') || `<p>No ${activityContactFilter==='with'?'contact-number':'without-contact'} activity yet.</p>`; }
@@ -620,13 +633,14 @@ function renderCrm(){
   const st=$('crmStatusFilter')?.value||'';
   renderCrmTabs();
   const base=contactFiltered(crmCustomers, crmContactFilter);
-  const filtered=base.filter(c=>(!q||crmValue(c).includes(q))&&(!st||(c.status||'New')===st)).sort((x,y)=>{ const dt=crmSortValue(y)-crmSortValue(x); if(dt) return dt; return orderNoValue(y.orderName||y.orderId)-orderNoValue(x.orderName||x.orderId); });
+  const filtered=base.filter(c=>crmOrderAllowed(c)&&(!q||crmValue(c).includes(q))&&(!st||(c.status||'New')===st)).sort((x,y)=>{ const dt=crmSortValue(y)-crmSortValue(x); if(dt) return dt; return orderNoValue(y.orderName||y.orderId)-orderNoValue(x.orderName||x.orderId); });
   if($('crmCount')) crmCount.textContent=crmCustomers.length;
   if($('crmSummary')){
     const counts=crmCustomers.reduce((a,c)=>{const k=c.status||'New';a[k]=(a[k]||0)+1;return a;},{});
     const withCount=contactFiltered(crmCustomers,'with').length;
     const withoutCount=contactFiltered(crmCustomers,'without').length;
-    crmSummary.innerHTML=[`<span><b>${withCount}</b>With Contact</span>`,`<span><b>${withoutCount}</b>Without Contact</span>`].join('') + ['New','Hot Lead','Follow Up','Converted','Not Interested'].map(k=>`<span><b>${counts[k]||0}</b>${esc(k)}</span>`).join('');
+    const orderCounts=crmCustomers.reduce((acc,c)=>{ const b=crmOrderBucket(c); acc[b]=(acc[b]||0)+1; return acc; },{});
+    crmSummary.innerHTML=[`<span><b>${withCount}</b>With Contact</span>`,`<span><b>${withoutCount}</b>Without Contact</span>`,`<span><b>${orderCounts.pending||0}</b>Pending Orders</span>`,`<span><b>${orderCounts.confirmed||0}</b>Confirmed Orders</span>`,`<span><b>${orderCounts.cancelled||0}</b>Cancelled Orders</span>`].join('') + ['New','Hot Lead','Follow Up','Converted','Not Interested'].map(k=>`<span><b>${counts[k]||0}</b>${esc(k)}</span>`).join('');
   }
   if(!$('crmList')) return;
   crmList.innerHTML=filtered.map(c=>{
@@ -637,13 +651,13 @@ function renderCrm(){
       <div class="crm-meta"><span class="status-chip">${esc(c.status||'New')}</span><span class="${hasContactNumber(c)?'contact-ok':'contact-missing'}">${hasContactNumber(c)?'With Contact Number':'Without Contact Number'}</span><span>${esc(formatCrmDate(c.orderCreatedAt||c.createdAt||c.updatedAt))}</span><span>Leads: ${esc(c.leadCount||0)} • Activity: ${esc(c.activityCount||0)}</span></div>
       ${orderLine?`<div class="crm-message"><b>${esc(orderLine)}</b></div>`:''}
       ${statusLine?`<div class="crm-message">${esc(statusLine)}</div>`:''}
-      <div class="crm-product-row">${c.productImage?`<img src="${esc(c.productImage)}" alt=""/>`:''}<div><b>${esc(c.productTitle||'No product yet')}</b><br/><a href="${esc(c.pageUrl||'#')}" target="_blank" title="${esc(c.pageUrl||'')}">${esc(shortUrl(c.pageUrl||''))}</a><div class="crm-message">${esc(c.lastMessage||'')}</div></div></div>
+      <div class="crm-product-row">${c.productImage?`<img loading="lazy" src="${esc(c.productImage)}" alt=""/>`:''}<div><b>${esc(c.productTitle||'No product yet')}</b><br/><a href="${esc(c.pageUrl||'#')}" target="_blank" title="${esc(c.pageUrl||'')}">${esc(shortUrl(c.pageUrl||''))}</a><div class="crm-message">${esc(c.lastMessage||'')}</div></div></div>
       <div class="form-grid two"><label>Status <select data-crm-status="${esc(c.id)}"><option ${c.status==='New'?'selected':''}>New</option><option ${c.status==='Hot Lead'?'selected':''}>Hot Lead</option><option ${c.status==='Follow Up'?'selected':''}>Follow Up</option><option ${c.status==='Converted'?'selected':''}>Converted</option><option ${c.status==='Not Interested'?'selected':''}>Not Interested</option></select></label><label>Notes <input data-crm-notes="${esc(c.id)}" value="${esc(c.notes||'')}" placeholder="Follow-up note"/></label></div>
       <button class="ghost-btn" data-crm-save="${esc(c.id)}">Save CRM</button>
     </div>`;
   }).join('')||`<p>No ${crmContactFilter==='with'?'contact-number':'without-contact'} CRM data yet.</p>`;
 }
-async function loadCrm(){ const d=await fetch('/api/crm',{credentials:'include'}).then(r=>r.json()).catch(()=>({customers:[]})); crmCustomers=d.customers||[]; renderCrm(); }
+async function loadCrm(rebuild=false){ const d=await fetch('/api/crm'+(rebuild?'?rebuild=1':''),{credentials:'include'}).then(r=>r.json()).catch(()=>({customers:[]})); crmCustomers=d.customers||[]; renderCrm(); }
 function exportCrmCsv(){ const headers=['Status','Name','Phone','Email','Product','Product Link','Order','Total','Last Message','Notes','Updated At']; const rows=crmCustomers.map(c=>[c.status,c.name,c.phone,c.email,c.productTitle,c.pageUrl,c.orderName,c.total,c.lastMessage,c.notes,c.updatedAt]); const csv=[headers,...rows].map(row=>row.map(v=>'"'+String(v||'').replace(/"/g,'""')+'"').join(',')).join('\n'); const blob=new Blob([csv],{type:'text/csv;charset=utf-8'}); const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='tiny-shiny-crm.csv'; a.click(); URL.revokeObjectURL(a.href); }
 async function saveCrm(id){ const status=document.querySelector(`[data-crm-status="${CSS.escape(id)}"]`)?.value||'New'; const notes=document.querySelector(`[data-crm-notes="${CSS.escape(id)}"]`)?.value||''; const data=await fetch('/api/crm/'+encodeURIComponent(id),{method:'PATCH',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify({status,notes})}).then(r=>r.json()).catch(e=>({ok:false,error:e.message})); if(!data.ok) return alert(data.error||'CRM save failed'); await loadCrm(); }
 function customerValue(c){return [c.name,c.phone,c.email,c.city,c.orderStatus].join(' ').toLowerCase();}
@@ -1213,6 +1227,7 @@ document.addEventListener('input',e=>{ if(e.target.id==='crmSearch'||e.target.id
 document.addEventListener('change',e=>{ if(e.target.classList && e.target.classList.contains('broadcast-check')){ const phone=e.target.dataset.phone; if(phone){ if(e.target.checked) broadcastSelectedPhones.add(phone); else broadcastSelectedPhones.delete(phone); } renderBroadcastContacts(); return; } if(e.target.id==='selectAllShopifyCustomers'||e.target.id==='selectAllCustomersTop'){ document.querySelectorAll('.cust-check').forEach(cb=>cb.checked=e.target.checked); if($('selectAllShopifyCustomers')) selectAllShopifyCustomers.checked=e.target.checked; } if(e.target.id==='selectAllMediaCustomers'){ document.querySelectorAll('.media-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.id==='selectAllProductPromoCustomers'){ document.querySelectorAll('.promo-cust-check').forEach(cb=>cb.checked=e.target.checked); } if(e.target.dataset.promoProduct){ selectedPromoProductId=e.target.dataset.promoProduct; renderNewProducts(); } if(e.target.dataset.inboxSelect){ selectedWhatsappInboxId=e.target.dataset.inboxSelect; const m=whatsappInboxMessages.find(x=>String(x.id)===String(selectedWhatsappInboxId)); if(m && $('whatsappReplyPhone')) whatsappReplyPhone.value=inboxPhone(m); renderWhatsappInbox(); } if(e.target.dataset.inboxPhone){ selectedWhatsappInboxId=e.target.dataset.inboxPhone; if($('whatsappReplyPhone')) whatsappReplyPhone.value=e.target.dataset.inboxPhone; renderWhatsappInbox(); } if(e.target.id==='whatsappInboxSearch'){ selectWhatsappSearchCustomer(); renderWhatsappInbox(); } if(e.target.id==='whatsappInboxDays'){ localStorage.setItem('tsgWhatsappInboxDays', e.target.value); loadWhatsappInbox(); } if(e.target.id==='autoRefreshInterval'){ localStorage.setItem('tsgAdminAutoRefreshSec', e.target.value); scheduleAdminAutoRefresh(); } if(e.target.id==='broadcastFilterBy'){ renderBroadcastContacts(); } if(e.target.dataset && e.target.dataset.broadcastVarSelect!==undefined){ const row=e.target.closest('[data-var-row]'); const inp=row&&row.querySelector('[data-broadcast-var-custom]'); if(inp) inp.style.display=e.target.value==='custom'?'block':'none'; updateBroadcastVariablesFromMap(); } if(e.target.id==='broadcastTemplate'){ const opt=e.target.selectedOptions[0]; if(opt && opt.dataset.lang && $('broadcastTemplateLang')) broadcastTemplateLang.value=opt.dataset.lang; if(opt && opt.dataset.header && $('broadcastMessageType')) broadcastMessageType.value=String(opt.dataset.header).toLowerCase()==='image'?'image_text':'template'; renderBroadcastVariableMap(); } if(e.target.id==='broadcastSelectAll'){ const phones=[...document.querySelectorAll('.broadcast-check')].map(cb=>cb.dataset.phone); const allSelected=phones.length>0 && phones.every(p=>broadcastSelectedPhones.has(p)); if(allSelected){ phones.forEach(p=>broadcastSelectedPhones.delete(p)); } else { phones.forEach(p=>broadcastSelectedPhones.add(p)); } document.querySelectorAll('.broadcast-check').forEach(cb=>cb.checked=!allSelected); renderBroadcastContacts(); } if(e.target.id==='broadcastCsvFile' && e.target.files && e.target.files[0]){ readBroadcastCsvFile(e.target.files[0]).then(txt=>{ broadcastContacts=dedupeBroadcastContacts(broadcastContacts.concat(parseContactText(txt))); broadcastSelectedPhones=new Set(broadcastContacts.map(c=>c.phone)); renderBroadcastContacts(); }); } if(e.target.id==='broadcastImageFile' && e.target.files && e.target.files[0]){ uploadBroadcastImageFile(e.target.files[0]); } if(e.target.id==='broadcastUploadedImageSelect'){ syncBroadcastSelectedImageUrl(); } });
 document.addEventListener('click',async e=>{
 
+  if(e.target.dataset && e.target.dataset.crmOrderFilter){ crmOrderFilter=e.target.dataset.crmOrderFilter || 'all'; renderCrm(); return; }
   if(e.target.classList && e.target.classList.contains('contact-tab')){ const target=e.target.dataset.target; const mode=e.target.dataset.contactFilter || 'with'; if(target==='crm'){ crmContactFilter=mode; renderCrm(); } if(target==='lead'){ leadContactFilter=mode; renderLeads(); } if(target==='activity'){ activityContactFilter=mode; renderEvents(); } return; }
   if(e.target.dataset.toastClose){ const t=$('adminNotificationToast'); if(t) t.classList.add('hidden'); }
   if(e.target.dataset.toastOpen){ selectedWhatsappInboxId=e.target.dataset.toastOpen; showTab('whatsappInboxPanel'); renderWhatsappInbox(); const t=$('adminNotificationToast'); if(t) t.classList.add('hidden'); }

@@ -2405,11 +2405,14 @@ app.post('/api/whatsapp-bulk/send', async (req, res) => {
 
 
 app.get('/api/crm', (req, res) => {
-  // Backfill/merge Shopify order webhook leads into CRM each time dashboard loads.
-  const leads = readJson(leadsPath, []);
-  leads.filter(l => ['shopify_order_webhook','cod_order_confirmed','cod_order_cancelled','order_confirmation','cod_confirmation'].includes(String(l.type || ''))).forEach(l => {
-    try { upsertCrm(l, 'lead'); } catch(e) {}
-  });
+  // Fast load: do not rescan all old leads on every dashboard open.
+  // Rebuild only when specifically requested: /api/crm?rebuild=1
+  if (String(req.query.rebuild || '') === '1') {
+    const leads = readJson(leadsPath, []);
+    leads.filter(l => ['shopify_order_webhook','cod_order_confirmed','cod_order_cancelled','order_confirmation','cod_confirmation'].includes(String(l.type || ''))).forEach(l => {
+      try { upsertCrm(l, 'lead'); } catch(e) {}
+    });
+  }
   let customersRaw = readJson(crmPath, []);
   const byOrder = new Map();
   const cleaned = [];

@@ -1,17 +1,31 @@
 CHANGES_DONE
 
-v31 update (base v30):
+v32 update (base v31):
 
-1. CRM proper 3-level sorting fixed.
-   - First sort: actual order date latest first.
-   - Second sort: actual order time latest first.
-   - Third sort: order number highest/latest first.
-   - Example: #1036 dated 11-06-2026 will come above #1035 dated 10-06-2026.
+1. CRM Dashboard loading speed improved.
+   - CRM opening no longer rescans all old leads/orders every time.
+   - New leads/orders still update CRM automatically.
+   - CRM product images now lazy-load so dashboard opens faster.
 
-2. Sorting now uses the same date/time shown on the CRM card.
-   - Old orders will not move to the top just because their WhatsApp status/CRM record updated later.
+2. CRM Dashboard order tabs added inside the same CRM Dashboard section.
+   - All Orders
+   - Pending Orders
+   - Confirmed Orders
+   - Cancelled Orders
 
-3. Preserved previous fixes from v30/v28:
+3. Pending/Confirmed/Cancelled filters work with:
+   - Order Status
+   - WhatsApp Status
+   - Last Message
+   - COD/Shopify order flags
+
+4. CRM summary now shows:
+   - Pending Orders count
+   - Confirmed Orders count
+   - Cancelled Orders count
+
+5. Preserved previous fixes from v31/v30/v28:
+   - Proper date/time/order number sorting.
    - Readable date/time format.
    - Duplicate order merge by order number.
    - Status appends with "|".
@@ -19,4 +33,4 @@ v31 update (base v30):
    - Mobile chat button smaller and shifted upward.
 
 Base:
-- v30 ZIP used as base.
+- v31 ZIP used as base.
