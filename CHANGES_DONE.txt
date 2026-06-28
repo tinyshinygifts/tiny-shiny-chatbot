@@ -1,32 +1,40 @@
 CHANGES_DONE
 
-v33 update (base v32):
+v34 update (base v33):
 
-1. CRM Dashboard ke andar new tab added:
-   - Pending Approval
+1. Cloudinary upload support added.
+   - New uploaded media/images will go to Cloudinary when Cloudinary env variables are set.
+   - Render local /uploads folder will not be used for new uploads when Cloudinary is enabled.
+   - Cloudinary HTTPS URL is saved and used for WhatsApp image/media sending.
 
-2. These orders will now show in Pending Approval tab:
-   - "Waiting for customer Confirm/Cancel"
-   - "COD confirmation pending"
-   - "WhatsApp sent" waiting for customer reply
-   - Confirm/Cancel approval pending orders
+2. Supported environment variables:
+   - USE_CLOUDINARY=true
+   - CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME
+   OR:
+   - CLOUDINARY_CLOUD_NAME=...
+   - CLOUDINARY_API_KEY=...
+   - CLOUDINARY_API_SECRET=...
 
-3. Existing CRM Dashboard tabs preserved:
-   - All Orders
-   - Pending Approval
-   - Pending Orders
-   - Confirmed Orders
-   - Cancelled Orders
+3. Upload areas updated:
+   - Media Library image upload
+   - Broadcast image upload
+   - WhatsApp Inbox media upload
 
-4. CRM summary now shows Pending Approval count.
+4. Delete support:
+   - If media was uploaded to Cloudinary, delete action also requests Cloudinary delete.
+   - Old local /uploads delete fallback remains for older files.
 
-5. Previous fixes preserved:
+5. Fallback safe mode:
+   - If Cloudinary env variables are missing, old local upload mode still works.
+
+6. Previous fixes preserved from v33:
+   - CRM Dashboard Pending Approval tab
    - Fast CRM loading
-   - Proper date/time/order number sorting
+   - Proper CRM date/time/order sorting
    - Duplicate order merge by order number
    - Status appends with "|"
    - WhatsApp Cancel -> Shopify Cancel improved
    - Mobile chat button smaller and moved upward
 
 Base:
-- v32 ZIP used as base.
+- v33 ZIP used as base.

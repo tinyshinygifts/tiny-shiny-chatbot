@@ -3,9 +3,83 @@ const cors = require('cors');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
+const https = require('https');
 require('dotenv').config();
 let MongoClient = null;
 try { ({ MongoClient } = require('mongodb')); } catch (err) { console.warn('MongoDB package not installed; JSON file storage fallback active.'); }
+
+function cloudinaryEnabled() {
+  return String(process.env.USE_CLOUDINARY || '').toLowerCase() === 'true' || Boolean(process.env.CLOUDINARY_URL || (process.env.CLOUDINARY_CLOUD_NAME && process.env.CLOUDINARY_API_KEY && process.env.CLOUDINARY_API_SECRET));
+}
+function cloudinaryConfig() {
+  if (process.env.CLOUDINARY_URL) {
+    const m = String(process.env.CLOUDINARY_URL).match(/^cloudinary:\/\/([^:]+):([^@]+)@(.+)$/);
+    if (m) return { apiKey: decodeURIComponent(m[1]), apiSecret: decodeURIComponent(m[2]), cloudName: decodeURIComponent(m[3]) };
+  }
+  return { cloudName: process.env.CLOUDINARY_CLOUD_NAME || '', apiKey: process.env.CLOUDINARY_API_KEY || '', apiSecret: process.env.CLOUDINARY_API_SECRET || '' };
+}
+function cloudinaryUploadBuffer(buffer, { filename='', mime='application/octet-stream', folder='tiny-shiny-chatbot' } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!cloudinaryEnabled()) return reject(new Error('Cloudinary disabled.'));
+    const cfg = cloudinaryConfig();
+    if (!cfg.cloudName || !cfg.apiKey || !cfg.apiSecret) return reject(new Error('Cloudinary credentials missing.'));
+    const ts = Math.floor(Date.now() / 1000);
+    const baseName = String(filename || 'file').replace(/\.[a-z0-9]+$/i,'').replace(/[^a-z0-9._-]/gi, '-').replace(/-+/g, '-').slice(0, 80) || 'file';
+    const publicId = `${folder}/${Date.now()}-${crypto.randomUUID()}-${baseName}`;
+    const params = { folder, public_id: publicId, timestamp: ts, resource_type: 'auto' };
+    const toSign = Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&') + cfg.apiSecret;
+    const signature = crypto.createHash('sha1').update(toSign).digest('hex');
+    const boundary = '----tsgcloudinary' + crypto.randomBytes(8).toString('hex');
+    const fields = { ...params, api_key: cfg.apiKey, signature };
+    const chunks = [];
+    for (const [k, v] of Object.entries(fields)) {
+      chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${k}"\r\n\r\n${v}\r\n`));
+    }
+    chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="file"; filename="${String(filename || 'upload.bin').replace(/"/g,'')}"\r\nContent-Type: ${mime}\r\n\r\n`));
+    chunks.push(buffer);
+    chunks.push(Buffer.from(`\r\n--${boundary}--\r\n`));
+    const body = Buffer.concat(chunks);
+    const req = https.request({
+      method: 'POST',
+      hostname: 'api.cloudinary.com',
+      path: `/v1_1/${encodeURIComponent(cfg.cloudName)}/auto/upload`,
+      headers: { 'Content-Type': `multipart/form-data; boundary=${boundary}`, 'Content-Length': body.length }
+    }, (res) => {
+      let out = '';
+      res.on('data', d => out += d);
+      res.on('end', () => {
+        let json = {};
+        try { json = JSON.parse(out || '{}'); } catch {}
+        if (res.statusCode >= 200 && res.statusCode < 300 && json.secure_url) {
+          resolve({ id: json.public_id || publicId, url: json.secure_url, secureUrl: json.secure_url, publicId: json.public_id || publicId, mime: json.resource_type || mime, filename: filename || json.original_filename || 'cloudinary-file', cloudinary: true, raw: json });
+        } else {
+          reject(new Error(json.error?.message || `Cloudinary upload failed (${res.statusCode})`));
+        }
+      });
+    });
+    req.on('error', reject);
+    req.write(body);
+    req.end();
+  });
+}
+function cloudinaryDelete(publicId, resourceType='image') {
+  return new Promise((resolve) => {
+    const cfg = cloudinaryConfig();
+    if (!publicId || !cfg.cloudName || !cfg.apiKey || !cfg.apiSecret) return resolve({ ok:false, skipped:true });
+    const ts = Math.floor(Date.now() / 1000);
+    const params = { public_id: publicId, timestamp: ts };
+    const signature = crypto.createHash('sha1').update(Object.keys(params).sort().map(k => `${k}=${params[k]}`).join('&') + cfg.apiSecret).digest('hex');
+    const body = new URLSearchParams({ ...params, api_key: cfg.apiKey, signature }).toString();
+    const req = https.request({
+      method:'POST',
+      hostname:'api.cloudinary.com',
+      path:`/v1_1/${encodeURIComponent(cfg.cloudName)}/${encodeURIComponent(resourceType || 'image')}/destroy`,
+      headers:{ 'Content-Type':'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) }
+    }, res => { let out=''; res.on('data',d=>out+=d); res.on('end',()=>resolve({ ok:res.statusCode>=200&&res.statusCode<300, status:res.statusCode, raw:out })); });
+    req.on('error', e=>resolve({ ok:false, error:e.message }));
+    req.write(body); req.end();
+  });
+}
 
 const APP_BUILD_VERSION = '20260610124214';
 const app = express();
@@ -937,7 +1011,7 @@ function absoluteUrl(req, urlPath) {
   if (site && !site.includes('localhost')) return site + urlPath;
   return `${proto}://${req.get('host')}${urlPath}`;
 }
-function saveMediaFromDataUrl({ dataUrl, filename }) {
+async function saveMediaFromDataUrl({ dataUrl, filename }) {
   const match = String(dataUrl || '').match(/^data:([^;]+);base64,(.+)$/i);
   if (!match) throw new Error('Invalid file data.');
   const mime = match[1].toLowerCase();
@@ -947,33 +1021,43 @@ function saveMediaFromDataUrl({ dataUrl, filename }) {
   const ext = extMap[mime] || 'bin';
   const safeName = String(filename || 'file').replace(/[^a-z0-9._-]/gi, '-').replace(/-+/g, '-').slice(0, 80);
   const id = crypto.randomUUID();
+  const buffer = Buffer.from(match[2], 'base64');
+  if (cloudinaryEnabled()) {
+    const uploaded = await cloudinaryUploadBuffer(buffer, { filename: safeName, mime, folder: 'tiny-shiny-chatbot/uploads' });
+    return { id, url: uploaded.secureUrl || uploaded.url, absoluteUrl: uploaded.secureUrl || uploaded.url, mime, filename: safeName, originalName: filename || safeName, cloudinary: true, publicId: uploaded.publicId, resourceType: uploaded.raw?.resource_type || 'image' };
+  }
   const outDir = path.join(__dirname, 'public', 'uploads');
   fs.mkdirSync(outDir, { recursive: true });
   const base = safeName.replace(/\.[a-z0-9]+$/i,'') || 'file';
   const outName = `${Date.now()}-${id}-${base}.${ext}`;
   const outPath = path.join(outDir, outName);
-  fs.writeFileSync(outPath, Buffer.from(match[2], 'base64'));
-  return { id, url: `/uploads/${outName}`, mime, filename: outName, originalName: filename || outName };
+  fs.writeFileSync(outPath, buffer);
+  return { id, url: `/uploads/${outName}`, mime, filename: outName, originalName: filename || outName, cloudinary: false };
 }
 
-function saveImageFromDataUrl({ dataUrl, filename }) {
+async function saveImageFromDataUrl({ dataUrl, filename }) {
   const match = String(dataUrl || '').match(/^data:(image\/(png|jpe?g|webp|gif));base64,(.+)$/i);
   if (!match) throw new Error('Only PNG, JPG, WEBP or GIF image data is supported.');
   const ext = match[2].toLowerCase().replace('jpeg','jpg');
   const safeName = String(filename || 'image').replace(/[^a-z0-9._-]/gi, '-').replace(/-+/g, '-').slice(0, 60);
   const id = crypto.randomUUID();
+  const buffer = Buffer.from(match[3], 'base64');
+  if (cloudinaryEnabled()) {
+    const uploaded = await cloudinaryUploadBuffer(buffer, { filename: safeName, mime: match[1], folder: 'tiny-shiny-chatbot/media-images' });
+    return { id, url: uploaded.secureUrl || uploaded.url, absoluteUrl: uploaded.secureUrl || uploaded.url, mime: match[1], filename: safeName, cloudinary: true, publicId: uploaded.publicId, resourceType: uploaded.raw?.resource_type || 'image' };
+  }
   const outDir = path.join(__dirname, 'public', 'uploads');
   fs.mkdirSync(outDir, { recursive: true });
   const outName = `${Date.now()}-${id}-${safeName.replace(/\.(png|jpg|jpeg|webp|gif)$/i,'')}.${ext}`;
   const outPath = path.join(outDir, outName);
-  fs.writeFileSync(outPath, Buffer.from(match[3], 'base64'));
-  return { id, url: `/uploads/${outName}`, mime: match[1], filename: outName };
+  fs.writeFileSync(outPath, buffer);
+  return { id, url: `/uploads/${outName}`, mime: match[1], filename: outName, cloudinary: false };
 }
 
-app.post('/api/whatsapp-inbox/upload-media', requireAdmin, (req, res) => {
+app.post('/api/whatsapp-inbox/upload-media', requireAdmin, async (req, res) => {
   try {
-    const file = saveMediaFromDataUrl({ dataUrl: req.body?.dataUrl, filename: req.body?.filename || 'file' });
-    res.json({ ok:true, file, url:absoluteUrl(req, file.url) });
+    const file = await saveMediaFromDataUrl({ dataUrl: req.body?.dataUrl, filename: req.body?.filename || 'file' });
+    res.json({ ok:true, file, url:file.absoluteUrl || absoluteUrl(req, file.url) });
   } catch(e) { res.status(400).json({ ok:false, error:e.message }); }
 });
 
@@ -2289,10 +2373,10 @@ app.post('/api/visitor-event', (req, res) => {
 });
 
 
-app.post('/api/broadcast-images/upload', requireAdmin, (req, res) => {
+app.post('/api/broadcast-images/upload', requireAdmin, async (req, res) => {
   try {
     const body = req.body || {};
-    const savedFile = saveImageFromDataUrl({ dataUrl: body.dataUrl, filename: body.filename || 'broadcast-image.jpg' });
+    const savedFile = await saveImageFromDataUrl({ dataUrl: body.dataUrl, filename: body.filename || 'broadcast-image.jpg' });
     const item = {
       id: savedFile.id,
       createdAt: nowIso(),
@@ -2300,9 +2384,12 @@ app.post('/api/broadcast-images/upload', requireAdmin, (req, res) => {
       category: String(body.category || 'broadcast').trim(),
       caption: String(body.caption || '').trim(),
       url: savedFile.url,
-      absoluteUrl: absoluteUrl(req, savedFile.url),
+      absoluteUrl: savedFile.absoluteUrl || absoluteUrl(req, savedFile.url),
       mime: savedFile.mime,
       filename: savedFile.filename,
+      cloudinary: !!savedFile.cloudinary,
+      publicId: savedFile.publicId || '',
+      resourceType: savedFile.resourceType || 'image',
       originalName: body.filename || savedFile.filename
     };
     const images = readJson(mediaImagesPath, []);
@@ -2317,10 +2404,10 @@ app.post('/api/broadcast-images/upload', requireAdmin, (req, res) => {
 app.get('/api/media-images', (req, res) => {
   res.json({ ok: true, images: readJson(mediaImagesPath, []) });
 });
-app.post('/api/media-images', (req, res) => {
+app.post('/api/media-images', async (req, res) => {
   try {
     const body = req.body || {};
-    const savedFile = saveImageFromDataUrl({ dataUrl: body.dataUrl, filename: body.filename });
+    const savedFile = await saveImageFromDataUrl({ dataUrl: body.dataUrl, filename: body.filename });
     const item = {
       id: savedFile.id,
       createdAt: nowIso(),
@@ -2328,9 +2415,12 @@ app.post('/api/media-images', (req, res) => {
       category: String(body.category || 'offer').trim(),
       caption: String(body.caption || '').trim(),
       url: savedFile.url,
-      absoluteUrl: absoluteUrl(req, savedFile.url),
+      absoluteUrl: savedFile.absoluteUrl || absoluteUrl(req, savedFile.url),
       mime: savedFile.mime,
-      filename: savedFile.filename
+      filename: savedFile.filename,
+      cloudinary: !!savedFile.cloudinary,
+      publicId: savedFile.publicId || '',
+      resourceType: savedFile.resourceType || 'image'
     };
     const images = readJson(mediaImagesPath, []);
     images.unshift(item);
@@ -2345,7 +2435,9 @@ app.delete('/api/media-images/:id', (req, res) => {
   const found = images.find(x => x.id === req.params.id);
   const next = images.filter(x => x.id !== req.params.id);
   writeJson(mediaImagesPath, next);
-  if (found && found.url && found.url.startsWith('/uploads/')) {
+  if (found && found.publicId) {
+    cloudinaryDelete(found.publicId, found.resourceType || 'image').catch(()=>{});
+  } else if (found && found.url && found.url.startsWith('/uploads/')) {
     try { fs.unlinkSync(path.join(__dirname, 'public', found.url)); } catch {}
   }
   res.json({ ok: true });
