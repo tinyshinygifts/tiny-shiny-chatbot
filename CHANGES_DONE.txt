@@ -1,65 +1,45 @@
 CHANGES_DONE
 
-v40 update (base v39):
+v42 update (base v41):
 
-1. WhatsApp inbound media support added.
-   - Customer image/document/audio/video replies are no longer shown only as unsupported.
-   - Inbound WhatsApp media is fetched from Meta media API.
-   - Media is saved to Cloudinary when Cloudinary is enabled.
-   - Chat Inbox shows image preview or file link.
+1. Render Environment APIs added into Chatbot API Settings page.
+   - Same API values that are normally added in Render can now also be saved from chatbot API Settings.
+   - Secret fields keep old value if left blank/masked.
 
-2. CRM order status logic improved.
-   - Confirm reply -> Confirmed Orders.
-   - Cancel reply -> Cancelled Orders.
-   - No valid reply / media / unsupported reply stays pending.
-   - Failed/unsupported is not treated as cancelled.
+2. OpenAI fields added in API Settings.
+   - OPENAI_API_KEY
+   - OPENAI_MODEL
 
-3. Meta Ads AI improved.
-   - Shopify Product dropdown now shows product list.
-   - Product selection auto-fills title, price, link, SKU/handle and added date.
-   - Added Ad For: Product / Category.
-   - Added Shopify Category / Collection dropdown.
-   - Category selection auto-fills collection title/link.
+3. Cloudinary fields added in API Settings.
+   - USE_CLOUDINARY
+   - CLOUDINARY_URL
+   - CLOUDINARY_CLOUD_NAME
+   - CLOUDINARY_API_KEY
+   - CLOUDINARY_API_SECRET
+   - CLOUDINARY_FOLDER
 
-4. Bulk WhatsApp Broadcast improved.
-   - Product / Collection Link field now has dropdown.
-   - Dropdown includes collections and Shopify products.
-   - Product options show SKU | Product Title | Added Date.
-   - Selecting product/collection auto-fills the link.
+4. WhatsApp Business / WABA fields added in API Settings.
+   - WHATSAPP_BUSINESS_ACCOUNT_ID
+   - META_WHATSAPP_BUSINESS_ACCOUNT_ID
 
-5. WhatsApp Chatbot catalog category save fixed.
-   - Added Save Catalog Categories button.
-   - Catalog categories are saved in chatbot settings.
-   - Existing Save Chatbot also saves catalog categories.
+5. Meta Ads extra fields added in API Settings.
+   - META_PAGE_ID alias
+   - META_IG_ACCOUNT_ID alias
+   - META_PIXEL_ID
+   - META_API_VERSION
 
-6. New Products tab removed from Admin Panel.
-   - New Products tab/button and section removed.
+6. API backup/download also includes the new fields.
+   - Download API Settings text file will include OpenAI, Cloudinary, WABA and Meta extra fields.
 
-7. Generated Buy Messages fixed.
-   - Only actual sent messages with a valid phone number are shown.
-   - Generated/skipped/missing-phone previews are hidden from main list.
-
-8. Template Library improved.
-   - Header Type = Image now shows:
-     - Header Image URL field
-     - Select Uploaded Image dropdown
-     - Upload New Header Image
-   - Header image upload uses existing Media Library / Cloudinary upload.
-   - Template stores headerImageUrl/imageUrl.
-
-9. Meta Templates moved out of main Admin tabs.
-   - Meta Templates tab/panel removed from main Admin Panel.
-   - Template Library now has Submit to Meta button.
-   - Current template form can be submitted to Meta directly from Template Library.
-
-10. Previous fixes preserved from v39:
+7. Previous fixes preserved from v41:
+   - Submit to Meta button on every saved template card
+   - WhatsApp inbound media/image support
+   - CRM confirm/cancel/pending logic
+   - Meta Ads AI product/category dropdown
+   - Bulk Broadcast SKU/date product dropdown
+   - Catalog categories save
+   - New Products tab removed
    - Bandwidth Saver Mode
-   - Shopify and Meta Ads API caching
-   - Real OpenAI API for Meta Ads AI
-   - Real Meta campaign/adset/ad creation in PAUSED status
-   - Safe bulk broadcast with opt-in and random delay
-   - Cloudinary uploads
-   - CRM Pending Approval tab
 
 Base:
-- v39 ZIP used as base.
+- v41 ZIP used as base.

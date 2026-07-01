@@ -135,13 +135,37 @@
         <label>Meta Access Token <input id="META_ACCESS_TOKEN" type="password" placeholder="EAAG..."/></label>
         <label>Meta Ad Account ID <input id="META_AD_ACCOUNT_ID" placeholder="act_1234567890"/></label>
         <label>Facebook Page ID <input id="META_FACEBOOK_PAGE_ID" placeholder="Facebook Page ID"/></label>
+        <label>Facebook Page ID Alias <input id="META_PAGE_ID" placeholder="Same Page ID optional"/></label>
         <label>Instagram Account ID <input id="META_INSTAGRAM_ACCOUNT_ID" placeholder="Instagram Business Account ID"/></label>
+        <label>Instagram Account ID Alias <input id="META_IG_ACCOUNT_ID" placeholder="Same Instagram ID optional"/></label>
+        <label>Meta Pixel ID <input id="META_PIXEL_ID" placeholder="Pixel ID optional"/></label>
+        <label>Meta API Version <input id="META_API_VERSION" placeholder="v20.0"/></label>
         <label>Default Meta Cost Per Order ₹ <input id="META_DEFAULT_COST_PER_ORDER" type="number" min="0" step="0.01" placeholder="0"/></label>
         <label>Default Shipping Cost ₹ <input id="DEFAULT_SHIPPING_COST" type="number" min="0" step="0.01" placeholder="0"/></label>
       </div>
       <p class="hint">Note: live Meta spend pull karne ke liye token + ad account ID required hoga. Agar token nahi hai to dashboard campaign/cost estimate aur saved broadcast data se report banayega.</p>
       <pre id="metaAdsResult"></pre>
     </section>
+
+    
+    <section class="panel openai-cloudinary-settings-panel">
+      <h2>OpenAI + Cloudinary API</h2>
+      <p>Meta Ads AI ke liye OpenAI key aur media/image storage ke liye Cloudinary settings.</p>
+      <div class="form-grid two">
+        <label>OpenAI API Key <input id="OPENAI_API_KEY" type="password" placeholder="sk-..."/></label>
+        <label>OpenAI Model <input id="OPENAI_MODEL" placeholder="gpt-4.1-mini"/></label>
+        <label>Use Cloudinary
+          <select id="USE_CLOUDINARY"><option value="false">false</option><option value="true">true</option></select>
+        </label>
+        <label>Cloudinary URL <input id="CLOUDINARY_URL" type="password" placeholder="cloudinary://API_KEY:API_SECRET@cloud_name"/></label>
+        <label>Cloudinary Cloud Name <input id="CLOUDINARY_CLOUD_NAME" placeholder="dnfdv7hgc"/></label>
+        <label>Cloudinary API Key <input id="CLOUDINARY_API_KEY" placeholder="396..."/></label>
+        <label>Cloudinary API Secret <input id="CLOUDINARY_API_SECRET" type="password" placeholder="API secret"/></label>
+        <label>Cloudinary Folder <input id="CLOUDINARY_FOLDER" placeholder="tiny-shiny-chatbot"/></label>
+      </div>
+      <p class="hint">Render me jo values add ki hain, wahi yaha bhi paste karke Save API Settings kar sakte ho. Secret fields blank chhodne par old value safe rahegi.</p>
+    </section>
+
 
     <section class="panel">
       <h2>Shopify API</h2>
@@ -176,6 +200,8 @@
       <p>Use this to send new lead/order notifications to your WhatsApp.</p>
       <label>WhatsApp Cloud Token <input id="WHATSAPP_CLOUD_TOKEN" type="password" placeholder="EAAG..."/></label>
       <label>Phone Number ID <input id="WHATSAPP_PHONE_NUMBER_ID" placeholder="1234567890"/></label>
+      <label>WhatsApp Business Account ID / WABA ID <input id="WHATSAPP_BUSINESS_ACCOUNT_ID" placeholder="WABA ID"/></label>
+      <label>Meta WABA ID Alias <input id="META_WHATSAPP_BUSINESS_ACCOUNT_ID" placeholder="Same WABA ID optional"/></label>
       <label>Use Template From Library for Test WhatsApp
         <select id="API_TEST_TEMPLATE_SELECT"><option value="">Manual / Select template</option></select>
       </label>

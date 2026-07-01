@@ -1,4 +1,4 @@
-const keys = ['WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER','ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS','SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER','SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI','WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG','CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG','GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG','META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST'];
+const keys = ['WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER','ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS','SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER','SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI','WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG','CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG','GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG','META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST','WHATSAPP_BUSINESS_ACCOUNT_ID','META_WHATSAPP_BUSINESS_ACCOUNT_ID','META_PAGE_ID','META_IG_ACCOUNT_ID','META_PIXEL_ID','META_API_VERSION','OPENAI_API_KEY','OPENAI_MODEL','USE_CLOUDINARY','CLOUDINARY_URL','CLOUDINARY_CLOUD_NAME','CLOUDINARY_API_KEY','CLOUDINARY_API_SECRET','CLOUDINARY_FOLDER','BANDWIDTH_SAVER_ENABLED','SHOPIFY_CACHE_TTL_SEC','META_ADS_CACHE_TTL_SEC','GOOGLE_SHEETS_AUTOSAVE_WHEN_SAVER'];
 let whatsappTemplates = [];
 let templateHeaderImages = [];
 let whatsappTemplateMappings = {};
@@ -148,6 +148,7 @@ function renderTemplates(){
       <pre>${esc(bodyPreview || (t.body||'').slice(0,180))}</pre>
       <div class="template-actions compact-template-actions">
         <button class="ghost-btn" data-edit-template="${esc(t.id)}">Modify</button>
+        <button class="ghost-btn" data-submit-template="${esc(t.id)}">Submit to Meta</button>
         <button class="ghost-btn ${actionClass}" data-toggle-template="${esc(t.id)}">${actionText}</button>
         <button class="ghost-btn danger-outline" data-delete-template="${esc(t.id)}">Remove</button>
       </div>
@@ -181,6 +182,39 @@ function currentTemplateFormPayload(){
     enabled:$('templateEnabled') ? templateEnabled.checked : true
   };
 }
+
+function savedTemplateToMetaPayload(t={}){
+  return {
+    id:t.id,
+    name:t.name||'',
+    language:t.language||'en',
+    category:t.category||'Utility',
+    headerType:t.headerType||'None',
+    headerText:t.headerText||'',
+    headerImageUrl:t.headerImageUrl||t.imageUrl||'',
+    imageUrl:t.imageUrl||t.headerImageUrl||'',
+    useCase:t.useCase||'',
+    body:t.body||'',
+    footerText:t.footerText||'',
+    variables:Array.isArray(t.variables)?t.variables:[],
+    buttons:Array.isArray(t.buttons)?t.buttons:[],
+    enabled:t.enabled!==false
+  };
+}
+async function submitSavedTemplateToMeta(id){
+  const t=whatsappTemplates.find(x=>String(x.id)===String(id) || String(x.name)===String(id));
+  if(!t) return alert('Template not found.');
+  if(!confirm(`"${t.name}" template Meta par submit karna hai?`)) return;
+  const res=await fetch('/api/whatsapp-templates/meta-submit',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(savedTemplateToMetaPayload(t))}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
+  if(res.ok){
+    alert('Template Meta par submit ho gaya. Approval status Meta WhatsApp Manager me check hoga.');
+    await loadApiTemplates().catch(()=>{});
+  } else {
+    alert(res.error || res.meta?.error?.message || 'Meta submit failed.');
+  }
+}
+
 async function submitTemplateToMeta(){
   const body=currentTemplateFormPayload();
   if(!body.name) return alert('Template Name required.');
@@ -530,6 +564,7 @@ document.addEventListener('click', async (e)=>{
   if(e.target.id === 'restoreDefaultTemplates') restoreDefaultTemplates();
   if(e.target.id === 'mapTemplateToAutomation') { const id=$('templateId')?.value || selectedTemplateId; if(!id) return alert('Please select or save a template first.'); mapTemplate(id, 'selected'); }
   if(e.target.dataset.editTemplate) editTemplate(e.target.dataset.editTemplate);
+  if(e.target.dataset.submitTemplate) submitSavedTemplateToMeta(e.target.dataset.submitTemplate);
   if(e.target.dataset.deleteTemplate) deleteTemplate(e.target.dataset.deleteTemplate);
   if(e.target.dataset.mapTemplate) mapTemplate(e.target.dataset.mapTemplate, e.target.dataset.mapTarget || undefined);
   if(e.target.dataset.toggleTemplate) toggleTemplateUse(e.target.dataset.toggleTemplate, 'selected');
