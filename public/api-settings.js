@@ -359,6 +359,8 @@ function apiStatusHindi(row){
   if(status==='connected') return 'API working hai. Live test successful.';
   if(status==='error') {
     if(String(row?.key)==='meta') return 'Token saved hai, lekin Ad Account ka ads_read / ads_management access nahi mila ya token valid user/ad account se linked nahi hai.';
+    if(String(row?.key)==='openai') return 'OpenAI key saved hai, lekin key/model valid nahi hai ya billing/project access issue hai.';
+    if(String(row?.key)==='cloudinary') return 'Cloudinary details saved hain, lekin credentials incomplete/invalid lag rahe hain.';
     return 'API details saved hain, lekin live test fail ho raha hai.';
   }
   return 'Required API settings missing hain.';

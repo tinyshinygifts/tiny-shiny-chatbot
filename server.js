@@ -3451,6 +3451,8 @@ app.get('/api/connection-status', requireAdmin, async (req, res) => {
     { key:'messenger', name:'Facebook Messenger', connected: has('META_ACCESS_TOKEN') && has('META_FACEBOOK_PAGE_ID'), details: has('META_FACEBOOK_PAGE_ID') ? 'Facebook Page ID saved' : 'Page ID/token missing', logs:[] },
     { key:'shiprocket', name:'Shiprocket', connected: has('SHIPROCKET_TOKEN') || (has('SHIPROCKET_EMAIL') && has('SHIPROCKET_PASSWORD')), details: has('SHIPROCKET_TOKEN') ? 'Token saved' : (has('SHIPROCKET_EMAIL') ? 'Login saved' : 'Credentials missing'), logs:[] },
     { key:'google', name:'Google Sheet', connected: has('GOOGLE_SHEETS_WEBHOOK_URL') || has('GOOGLE_SHEET_URL'), details: has('GOOGLE_SHEET_URL') ? 'Sheet link saved' : 'Sheet not configured', logs:[] },
+    { key:'openai', name:'OpenAI / ChatGPT', connected: has('OPENAI_API_KEY'), details: has('OPENAI_API_KEY') ? `Model: ${cfg.OPENAI_MODEL || process.env.OPENAI_MODEL || 'gpt-4.1-mini'}` : 'OPENAI_API_KEY missing', logs:[] },
+    { key:'cloudinary', name:'Cloudinary Media', connected: has('CLOUDINARY_URL') || (has('CLOUDINARY_CLOUD_NAME') && has('CLOUDINARY_API_KEY') && has('CLOUDINARY_API_SECRET')), details: has('CLOUDINARY_URL') ? 'Cloudinary URL saved' : (has('CLOUDINARY_CLOUD_NAME') ? 'Cloud name/API keys saved' : 'Cloudinary not configured'), logs:[] },
     { key:'mongodb', name:'MongoDB Storage', connected: !!mongoReady, details: mongoReady ? `${mongoDbName}/${mongoCollectionName}` : (mongoUri ? 'Configured but not connected' : 'Not configured'), logs:[] }
   ];
   const live = String(req.query.live || '1') !== '0';
@@ -3460,6 +3462,23 @@ app.get('/api/connection-status', requireAdmin, async (req, res) => {
     try{ const r=await shopifyFetch('shop.json'); await mark('shopify', r.ok?'connected':'error', r.ok?'Shopify shop API working.':`Shopify error ${r.status||''}: ${r.message||r.json?.errors||JSON.stringify(r.json||{}).slice(0,120)}`); }catch(e){ await mark('shopify','error','Shopify test failed: '+e.message); }
     try{ const env=readEnvFile(); const token=String(env.WHATSAPP_CLOUD_TOKEN||process.env.WHATSAPP_CLOUD_TOKEN||'').trim(); const pid=String(env.WHATSAPP_PHONE_NUMBER_ID||process.env.WHATSAPP_PHONE_NUMBER_ID||'').replace(/\D/g,''); if(token&&pid){ const r=await fetch(`https://graph.facebook.com/v20.0/${pid}?fields=display_phone_number,verified_name`,{headers:{Authorization:`Bearer ${token}`}}); const j=await r.json().catch(()=>({})); await mark('whatsapp', r.ok?'connected':'error', r.ok?'WhatsApp phone number API working.':`WhatsApp error ${r.status}: ${j.error?.message||JSON.stringify(j).slice(0,120)}`); } }catch(e){ await mark('whatsapp','error','WhatsApp test failed: '+e.message); }
     try{ const env=readEnvFile(); const token=String(env.META_ACCESS_TOKEN||process.env.META_ACCESS_TOKEN||'').trim(); const ad=String(env.META_AD_ACCOUNT_ID||process.env.META_AD_ACCOUNT_ID||'').trim(); if(token&&ad){ const acct=ad.startsWith('act_')?ad:'act_'+ad.replace(/^act_/,''); const r=await fetch(`https://graph.facebook.com/v20.0/${acct}?fields=name,account_status`,{headers:{Authorization:`Bearer ${token}`}}); const j=await r.json().catch(()=>({})); await mark('meta', r.ok?'connected':'error', r.ok?'Meta ad account API working.':`Meta Ads error ${r.status}: ${j.error?.message||JSON.stringify(j).slice(0,120)}`); } }catch(e){ await mark('meta','error','Meta Ads test failed: '+e.message); }
+    try{
+      const env=readEnvFile();
+      const key=String(env.OPENAI_API_KEY||process.env.OPENAI_API_KEY||'').trim();
+      const model=String(env.OPENAI_MODEL||process.env.OPENAI_MODEL||'gpt-4.1-mini').trim();
+      if(key){
+        const r=await fetch('https://api.openai.com/v1/models/'+encodeURIComponent(model),{headers:{Authorization:`Bearer ${key}`}});
+        const j=await r.json().catch(()=>({}));
+        await mark('openai', r.ok?'connected':'error', r.ok?`OpenAI API working. Model: ${model}`:`OpenAI error ${r.status}: ${j.error?.message||JSON.stringify(j).slice(0,160)}`);
+      }
+    }catch(e){ await mark('openai','error','OpenAI test failed: '+e.message); }
+    try{
+      if(cloudinaryEnabled()){
+        const cfgc=cloudinaryConfig();
+        if(cfgc.cloudName && cfgc.apiKey && cfgc.apiSecret) await mark('cloudinary','connected',`Cloudinary configured. Cloud: ${cfgc.cloudName}`);
+        else await mark('cloudinary','error','Cloudinary enabled but credentials missing.');
+      }
+    }catch(e){ await mark('cloudinary','error','Cloudinary test failed: '+e.message); }
     try{ const liveNdr=await fetchShiprocketLiveNdr(); await mark('shiprocket', liveNdr.ok?'connected':'error', liveNdr.ok?`Shiprocket API working. Live NDR rows: ${liveNdr.count}`:`Shiprocket error: ${liveNdr.error}`); }catch(e){ await mark('shiprocket','error','Shiprocket test failed: '+e.message); }
   }
   const summary = rows.reduce((a,r)=>{ a.total++; a[r.status==='connected'?'connected':(r.status==='error'?'error':'notConnected')]++; return a; }, {total:0,connected:0,error:0,notConnected:0});

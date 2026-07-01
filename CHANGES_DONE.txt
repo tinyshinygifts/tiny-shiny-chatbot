@@ -1,45 +1,32 @@
 CHANGES_DONE
 
-v42 update (base v41):
+v43 update (base v42):
 
-1. Render Environment APIs added into Chatbot API Settings page.
-   - Same API values that are normally added in Render can now also be saved from chatbot API Settings.
-   - Secret fields keep old value if left blank/masked.
+1. API Settings connection status now includes:
+   - OpenAI / ChatGPT
+   - Cloudinary Media
 
-2. OpenAI fields added in API Settings.
-   - OPENAI_API_KEY
-   - OPENAI_MODEL
+2. OpenAI status card:
+   - Shows connected if OPENAI_API_KEY is saved.
+   - Live test checks selected OPENAI_MODEL.
+   - Shows useful error if key/model/billing/project access is wrong.
 
-3. Cloudinary fields added in API Settings.
-   - USE_CLOUDINARY
-   - CLOUDINARY_URL
-   - CLOUDINARY_CLOUD_NAME
-   - CLOUDINARY_API_KEY
-   - CLOUDINARY_API_SECRET
-   - CLOUDINARY_FOLDER
+3. Cloudinary status card:
+   - Shows connected if CLOUDINARY_URL is saved or Cloud Name + API Key + Secret are saved.
+   - Shows Cloudinary cloud name in live log.
+   - Shows error if Cloudinary is enabled but credentials are incomplete.
 
-4. WhatsApp Business / WABA fields added in API Settings.
-   - WHATSAPP_BUSINESS_ACCOUNT_ID
-   - META_WHATSAPP_BUSINESS_ACCOUNT_ID
+4. Status summary count includes OpenAI and Cloudinary.
 
-5. Meta Ads extra fields added in API Settings.
-   - META_PAGE_ID alias
-   - META_IG_ACCOUNT_ID alias
-   - META_PIXEL_ID
-   - META_API_VERSION
-
-6. API backup/download also includes the new fields.
-   - Download API Settings text file will include OpenAI, Cloudinary, WABA and Meta extra fields.
-
-7. Previous fixes preserved from v41:
-   - Submit to Meta button on every saved template card
+5. Previous fixes preserved from v42:
+   - Render/API keys fields in Chatbot API Settings
+   - OpenAI/Cloudinary fields in API Settings
+   - Submit to Meta button on every template card
    - WhatsApp inbound media/image support
    - CRM confirm/cancel/pending logic
    - Meta Ads AI product/category dropdown
    - Bulk Broadcast SKU/date product dropdown
-   - Catalog categories save
-   - New Products tab removed
    - Bandwidth Saver Mode
 
 Base:
-- v41 ZIP used as base.
+- v42 ZIP used as base.
