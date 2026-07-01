@@ -848,7 +848,8 @@ function normalizeTemplate(t = {}) {
     variables: Array.isArray(t.variables) ? t.variables.map(x => String(x).trim()).filter(Boolean) : String(t.variables || '').split(/\r?\n|,/).map(x => x.trim()).filter(Boolean),
     buttons: Array.isArray(t.buttons) ? t.buttons.map(b => ({ type: String(b.type || 'Quick Reply').trim(), text: String(b.text || '').trim(), url: String(b.url || '').trim() })).filter(b => b.text) : [],
     selectedForUse: t.selectedForUse === true,
-    imageUrl: String(t.imageUrl || '').trim(),
+    imageUrl: String(t.imageUrl || t.headerImageUrl || '').trim(),
+    headerImageUrl: String(t.headerImageUrl || t.imageUrl || '').trim(),
     allowSingleSend: t.allowSingleSend !== false,
     allowBulkSend: t.allowBulkSend !== false,
     updatedAt: t.updatedAt || nowIso()
@@ -1033,7 +1034,7 @@ function buildMetaTemplatePayload(body = {}) {
   components.push({ type: 'BODY', text: bodyText });
   if (footerText) components.push({ type: 'FOOTER', text: footerText.slice(0, 60) });
   const buttons = buttonsRaw.map(b => {
-    const type = String(b.type || '').toUpperCase();
+    const type = String(b.type || '').toUpperCase().replace(/\s+/g, '_');
     const text = String(b.text || '').trim();
     if (!type || !text) return null;
     if (type === 'QUICK_REPLY') return { type:'QUICK_REPLY', text: text.slice(0, 25) };
@@ -1139,6 +1140,55 @@ async function saveImageFromDataUrl({ dataUrl, filename }) {
   const outPath = path.join(outDir, outName);
   fs.writeFileSync(outPath, buffer);
   return { id, url: `/uploads/${outName}`, mime: match[1], filename: outName, cloudinary: false };
+}
+
+
+async function saveBufferMedia({ buffer, filename='file', mime='application/octet-stream', folder='tiny-shiny-chatbot/whatsapp-inbound' } = {}) {
+  const id = crypto.randomUUID();
+  const safeName = String(filename || 'file').replace(/[^a-z0-9._-]/gi, '-').replace(/-+/g, '-').slice(0, 80) || 'file';
+  if (cloudinaryEnabled()) {
+    const uploaded = await cloudinaryUploadBuffer(buffer, { filename: safeName, mime, folder });
+    return { id, url: uploaded.secureUrl || uploaded.url, absoluteUrl: uploaded.secureUrl || uploaded.url, mime, filename: safeName, cloudinary: true, publicId: uploaded.publicId, resourceType: uploaded.raw?.resource_type || 'image' };
+  }
+  const extMap = {'image/png':'png','image/jpeg':'jpg','image/jpg':'jpg','image/webp':'webp','image/gif':'gif','video/mp4':'mp4','audio/ogg':'ogg','audio/mpeg':'mp3','application/pdf':'pdf'};
+  const ext = extMap[String(mime).toLowerCase()] || (safeName.includes('.') ? safeName.split('.').pop() : 'bin');
+  const outDir = path.join(__dirname, 'public', 'uploads');
+  fs.mkdirSync(outDir, { recursive: true });
+  const outName = `${Date.now()}-${id}-${safeName.replace(/\.[a-z0-9]+$/i,'')}.${ext}`;
+  fs.writeFileSync(path.join(outDir, outName), buffer);
+  return { id, url:`/uploads/${outName}`, absoluteUrl:`/uploads/${outName}`, mime, filename:outName, cloudinary:false };
+}
+async function downloadWhatsappMedia(mediaId, fallbackName='whatsapp-media') {
+  const env = readEnvFile();
+  const token = String(process.env.WHATSAPP_CLOUD_TOKEN || env.WHATSAPP_CLOUD_TOKEN || process.env.META_ACCESS_TOKEN || env.META_ACCESS_TOKEN || '').trim();
+  if (!mediaId || !token) return { ok:false, skipped:true, reason:'Media ID or WhatsApp token missing.' };
+  const metaRes = await fetch(`https://graph.facebook.com/v20.0/${encodeURIComponent(mediaId)}`, { headers:{ Authorization:`Bearer ${token}` } });
+  const meta = await metaRes.json().catch(()=>({}));
+  if (!metaRes.ok || !meta.url) return { ok:false, status:metaRes.status, error:meta.error?.message || 'Could not fetch media URL', meta };
+  const fileRes = await fetch(meta.url, { headers:{ Authorization:`Bearer ${token}` } });
+  const arrayBuffer = await fileRes.arrayBuffer();
+  if (!fileRes.ok) return { ok:false, status:fileRes.status, error:'Could not download WhatsApp media.' };
+  const mime = meta.mime_type || fileRes.headers.get('content-type') || 'application/octet-stream';
+  const saved = await saveBufferMedia({ buffer:Buffer.from(arrayBuffer), filename:fallbackName, mime });
+  return { ok:true, ...saved, sourceMime:mime, bytes:Buffer.byteLength(Buffer.from(arrayBuffer)) };
+}
+async function enrichInboundWhatsappMedia(item) {
+  try {
+    if (!item?.media?.id || item.media.url) return item;
+    const fname = item.media.filename || `${item.media.type || 'whatsapp'}-${item.media.id}`;
+    const saved = await downloadWhatsappMedia(item.media.id, fname);
+    if (saved.ok) {
+      item.media = { ...item.media, url:saved.url, absoluteUrl:saved.absoluteUrl || saved.url, mimeType:saved.mime || item.media.mimeType || '', filename:saved.filename || fname, publicId:saved.publicId || '', cloudinary:!!saved.cloudinary };
+      item.imageUrl = item.media.type === 'image' ? (saved.absoluteUrl || saved.url) : '';
+      item.fileUrl = saved.absoluteUrl || saved.url;
+      item.text = item.text && !/^\[[a-z]+\s+received\]$/i.test(item.text) ? item.text : `[${String(item.media.type||'media').toUpperCase()} received]`;
+    } else {
+      item.media.downloadError = saved.error || saved.reason || 'download failed';
+    }
+  } catch (e) {
+    item.media = { ...(item.media||{}), downloadError:e.message };
+  }
+  return item;
 }
 
 app.post('/api/whatsapp-inbox/upload-media', requireAdmin, async (req, res) => {
@@ -1434,7 +1484,8 @@ app.post('/webhooks/whatsapp', async (req, res) => {
       for (const change of (entry.changes || [])) {
         const value = change.value || {};
         for (const msg of (value.messages || [])) {
-          const item = normalizeWhatsAppWebhookMessage(change, value, msg);
+          let item = normalizeWhatsAppWebhookMessage(change, value, msg);
+          item = await enrichInboundWhatsappMedia(item);
           appendJson(whatsappInboxPath, item);
           upsertCrm({ name: item.customerName, phone: item.from, message: item.text, note: 'WhatsApp reply: ' + item.text }, 'whatsapp_reply');
           sendToGoogleSheets('WhatsApp Reply', item).catch(()=>{});
@@ -1443,7 +1494,7 @@ app.post('/webhooks/whatsapp', async (req, res) => {
             appendJson(leadsPath, { id: crypto.randomUUID(), type:'whatsapp_unsubscribe', createdAt: nowIso(), phone:item.from, message:item.text, status:'Unsubscribed/STOP' });
             await sendWhatsAppTextManual({ to:item.from, message:'You have been unsubscribed from Tiny Shiny Gifts broadcast messages. Reply HELP anytime for support.' }).catch(()=>{});
           } else {
-            await handleCodConfirmationReply(item).catch(err => console.error('COD reply handler error:', err.message));
+            if (!item.media) await handleCodConfirmationReply(item).catch(err => console.error('COD reply handler error:', err.message));
             await handleWhatsappChatbotMessage(item).catch(err => console.error('WhatsApp chatbot error:', err.message));
           }
           saved.push(item);
@@ -1602,6 +1653,8 @@ app.post('/api/whatsapp-templates/meta-submit', async (req, res) => {
       body: payload.components.find(c=>c.type==='BODY')?.text || '',
       headerType: payload.components.find(c=>c.type==='HEADER')?.format || 'NONE',
       headerText: payload.components.find(c=>c.type==='HEADER')?.text || '',
+      headerImageUrl: String(req.body?.headerImageUrl || req.body?.imageUrl || '').trim(),
+      imageUrl: String(req.body?.headerImageUrl || req.body?.imageUrl || '').trim(),
       footerText: payload.components.find(c=>c.type==='FOOTER')?.text || '',
       metaStatus: result.ok ? (result.json.status || 'PENDING') : 'ERROR',
       metaResponse: result.json,
@@ -3424,6 +3477,7 @@ function simplifyShopifyCustomer(c = {}) {
 
 function simplifyShopifyProduct(p = {}) {
   const variant = (p.variants || [])[0] || {};
+  const sku = variant.sku || (p.variants || []).map(v=>v.sku).find(Boolean) || '';
   const image = p.image?.src || (p.images || [])[0]?.src || '';
   return {
     id: p.id,
@@ -3432,6 +3486,7 @@ function simplifyShopifyProduct(p = {}) {
     status: p.status || '',
     productType: p.product_type || '',
     vendor: p.vendor || '',
+    sku,
     createdAt: p.created_at ? String(p.created_at).slice(0,10) : '',
     updatedAt: p.updated_at ? String(p.updated_at).slice(0,10) : '',
     price: variant.price ? `₹${variant.price}` : '',

@@ -53,13 +53,11 @@
       <button class="tab-btn" data-tab="shopifySalesPanel">Shopify Sales Analysis</button>
       <button class="tab-btn" data-tab="ndrPanel">NDR</button>
       <button class="tab-btn" data-tab="bulkBroadcastPanel">Bulk WhatsApp Broadcast</button>
-      <button class="tab-btn" data-tab="metaTemplatesPanel">Meta Templates</button>
       <button class="tab-btn" data-tab="phase2Panel">Campaign Analytics</button>
       <button class="tab-btn" data-tab="metaAdsPanel">Meta Ads AI</button>
       <button class="tab-btn" data-tab="dripPanel">Drip Campaigns</button>
       <button class="tab-btn" data-tab="instagramInboxPanel">Instagram Inbox</button>
       <button class="tab-btn" data-tab="whatsappChatbotPanel">WhatsApp Chatbot</button>
-      <button class="tab-btn" data-tab="newProductsPanel">New Products</button>
       <button class="tab-btn" data-tab="leadPanel">Leads</button>
       <button class="tab-btn" data-tab="activityPanel">Visitor Activity</button>
       <button class="tab-btn" data-tab="messagePanel">Buy Messages</button>
@@ -244,45 +242,7 @@
       <pre id="ndrResult"></pre>
     </section>
 
-    
-    <section class="panel tab-panel" id="metaTemplatesPanel">
-      <div class="section-head">
-        <div><h2>Meta WhatsApp Templates</h2><p>Create/submit WhatsApp templates directly to Meta and sync approval status.</p></div>
-        <div class="inline-actions"><button id="syncMetaTemplates" class="ghost-btn">Sync Meta Templates</button></div>
-      </div>
-      <div class="form-grid three">
-        <label>Template Name <input id="metaTplName" placeholder="cod_order_confirmation"/></label>
-        <label>Language
-          <select id="metaTplLang"><option value="en">en</option><option value="en_US">en_US</option><option value="hi">hi</option></select>
-        </label>
-        <label>Category
-          <select id="metaTplCategory"><option value="UTILITY">UTILITY</option><option value="MARKETING">MARKETING</option><option value="AUTHENTICATION">AUTHENTICATION</option></select>
-        </label>
-      </div>
-      <div class="form-grid three">
-        <label>Header Type
-          <select id="metaTplHeaderType"><option value="NONE">None</option><option value="TEXT">Text</option><option value="IMAGE">Image</option><option value="VIDEO">Video</option><option value="DOCUMENT">Document</option></select>
-        </label>
-        <label>Header Text <input id="metaTplHeaderText" placeholder="Tiny Shiny Gifts"/></label>
-        <label>Footer Text <input id="metaTplFooterText" placeholder="Thank you"/></label>
-      </div>
-      <label>Body Text
-        <textarea id="metaTplBody" rows="5" placeholder="Hello {{1}}, your order {{2}} amount {{3}} is pending confirmation."></textarea>
-      </label>
-      <div class="form-grid three">
-        <label>Quick Reply 1 <input id="metaTplBtn1" placeholder="Confirm"/></label>
-        <label>Quick Reply 2 <input id="metaTplBtn2" placeholder="Cancel"/></label>
-        <label>Website URL Button <input id="metaTplUrl" placeholder="https://www.tinyshinygifts.com"/></label>
-      </div>
-      <div class="inline-actions">
-        <button id="submitMetaTemplate" class="primary-btn">Submit Template to Meta</button>
-        <button id="clearMetaTemplateForm" class="ghost-btn">Clear</button>
-      </div>
-      <pre id="metaTemplateResult"></pre>
-      <div id="metaTemplatesList" class="log-list"></div>
-    </section>
-
-<section class="panel tab-panel" id="bulkBroadcastPanel">
+    <section class="panel tab-panel" id="bulkBroadcastPanel">
       <div class="section-head">
         <div><h2>Bulk WhatsApp Broadcast</h2><p>Approved template se Shopify / Google Sheet contacts ko campaign bhejein.</p></div>
         <div class="inline-actions"><button id="refreshBroadcasts" class="ghost-btn">Refresh Campaigns</button></div>
@@ -300,7 +260,10 @@
         <label>Select Uploaded Image
           <select id="broadcastUploadedImageSelect"><option value="">Select uploaded image</option></select>
         </label>
-        <label>Product / Collection Link <input id="broadcastProductLink" placeholder="https://tinyshinygifts.com/collections/..."/></label>
+        <label>Product / Collection Link
+          <select id="broadcastProductSelect"><option value="">Select product / collection</option></select>
+          <input id="broadcastProductLink" placeholder="https://tinyshinygifts.com/collections/..."/>
+        </label>
         <label>Coupon Code <input id="broadcastCouponCode" placeholder="RAKHI10"/></label>
         <label>Daily Sending Limit <select id="broadcastDailyLimit"><option>500</option><option>1000</option><option>5000</option></select></label>
       </div>
@@ -369,14 +332,24 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
         <div><h2>Meta Ads AI Assistant</h2><p>Shopify product se ad copy, audience idea, campaign draft aur Meta Ads report.</p></div>
         <div class="inline-actions"><button id="loadMetaAdsReport" class="ghost-btn">Load Meta Ads Report</button></div>
       </div>
-      <div class="form-grid three">
+      <div class="form-grid four">
+        <label>Ad For
+          <select id="metaAdsTargetType"><option value="product">Product</option><option value="category">Category / Collection</option></select>
+        </label>
         <label>Shopify Product
           <select id="metaAdsProductSelect"><option value="">Manual / Select product</option></select>
+        </label>
+        <label>Shopify Category / Collection
+          <select id="metaAdsCategorySelect"><option value="">Select collection</option></select>
         </label>
         <label>Campaign Goal
           <select id="metaAdsGoal"><option>Sales</option><option>WhatsApp Leads</option><option>Website Traffic</option><option>Retargeting</option></select>
         </label>
+      </div>
+      <div class="form-grid three">
         <label>Daily Budget ₹ <input id="metaAdsBudget" type="number" min="50" value="500"/></label>
+        <label>Ad Item SKU / Handle <input id="metaAdsSku" placeholder="Auto from product/collection"/></label>
+        <label>Added Date <input id="metaAdsAddedDate" placeholder="Auto from Shopify product"/></label>
       </div>
       <div class="form-grid three">
         <label>Product Title <input id="metaAdsProductTitle" placeholder="Product name"/></label>
@@ -491,6 +464,7 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
         <div id="catalogCategoriesTable" class="catalog-categories-table"></div>
         <div class="inline-actions">
           <button id="addCatalogCategory" type="button" class="ghost-btn compact-btn">+ Add Category</button>
+          <button id="saveCatalogCategories" type="button" class="primary-btn compact-btn">Save Catalog Categories</button>
         </div>
       </div>
 <pre id="waBotResult"></pre>
@@ -571,32 +545,6 @@ Day 3 | festival_offer | Coupon reminder"></textarea></label>
       </div>
       <div id="whatsappInboxList" class="inbox-list legacy-hidden"></div>
     </section>
-
-    <section class="panel tab-panel" id="newProductsPanel">
-      <div class="section-head">
-        <div><h2>New Products</h2><p>Fetch latest Shopify products and send WhatsApp launch, upsell and cross-sell promotions.</p></div>
-        <div class="inline-actions"><button id="refreshNewProducts" class="ghost-btn">Refresh Products</button></div>
-      </div>
-      <div class="form-grid three">
-        <label>Search Product <input id="newProductSearch" placeholder="Product title, type, vendor"/></label>
-        <label>Promotion Message <textarea id="newProductMessage" placeholder="Write new product / offer / upsell message. Product link will be included if empty."></textarea></label>
-        <label>Send Mode
-          <select id="newProductSendMode"><option value="whatsapp">WhatsApp</option><option value="crm">Save CRM Follow-up Only</option></select>
-        </label>
-      </div>
-      <div class="inline-actions">
-        <label class="select-all-line"><input id="selectAllProductPromoCustomers" type="checkbox"/> Select All Customers</label>
-        <button id="sendNewProductPromo" class="primary-btn">Send Selected Product Promo</button>
-      </div>
-      <div class="form-grid two">
-        <div><h3>Products</h3><div id="newProductsList" class="product-grid"></div></div>
-        <div><h3>Customers</h3><input id="newProductCustomerSearch" placeholder="Search customer by name, phone, email"/><div id="newProductCustomerList" class="mini-customer-list"></div></div>
-      </div>
-      <pre id="newProductsResult"></pre>
-    </section>
-
-
-
 
     <section class="panel tab-panel media-panel" id="imagePanel">
       <div class="section-head">

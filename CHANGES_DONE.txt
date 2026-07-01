@@ -1,50 +1,65 @@
 CHANGES_DONE
 
-v39 update (base v38):
+v40 update (base v39):
 
-1. Bandwidth Saver Mode added.
-   - Admin Panel → API Settings → Bandwidth Saver Mode
-   - ON/OFF switch
-   - Shopify cache TTL
-   - Meta Ads cache TTL
-   - Admin auto-refresh seconds
-   - Google Sheet auto-save control while saver is ON
-   - Clear API Cache button
+1. WhatsApp inbound media support added.
+   - Customer image/document/audio/video replies are no longer shown only as unsupported.
+   - Inbound WhatsApp media is fetched from Meta media API.
+   - Media is saved to Cloudinary when Cloudinary is enabled.
+   - Chat Inbox shows image preview or file link.
 
-2. Shopify API bandwidth reduction.
-   - Shopify Products API now uses cache when saver is ON.
-   - Shopify Customers + latest order enrichment now uses cache when saver is ON.
-   - Default saver cache: 21600 seconds (6 hours).
-   - API response shows cached/cacheAgeSec/bandwidthSaver.
+2. CRM order status logic improved.
+   - Confirm reply -> Confirmed Orders.
+   - Cancel reply -> Cancelled Orders.
+   - No valid reply / media / unsupported reply stays pending.
+   - Failed/unsupported is not treated as cancelled.
 
-3. Meta Ads report bandwidth reduction.
-   - Meta Ads insights now uses cache when saver is ON.
-   - Default saver cache: 1800 seconds (30 minutes).
+3. Meta Ads AI improved.
+   - Shopify Product dropdown now shows product list.
+   - Product selection auto-fills title, price, link, SKU/handle and added date.
+   - Added Ad For: Product / Category.
+   - Added Shopify Category / Collection dropdown.
+   - Category selection auto-fills collection title/link.
 
-4. Google Sheets bandwidth reduction.
-   - When Bandwidth Saver is ON, auto-save to Google Sheets is disabled by default.
-   - It can be re-enabled using "Saver ON me Google Sheet auto-save allow".
+4. Bulk WhatsApp Broadcast improved.
+   - Product / Collection Link field now has dropdown.
+   - Dropdown includes collections and Shopify products.
+   - Product options show SKU | Product Title | Added Date.
+   - Selecting product/collection auto-fills the link.
 
-5. Broadcast scheduler bandwidth reduction.
-   - Due broadcast scheduler interval changes from 30 seconds to 5 minutes while saver is ON.
+5. WhatsApp Chatbot catalog category save fixed.
+   - Added Save Catalog Categories button.
+   - Catalog categories are saved in chatbot settings.
+   - Existing Save Chatbot also saves catalog categories.
 
-6. Admin auto-refresh reduction.
-   - When saver is ON, auto-refresh only refreshes the active tab.
-   - It avoids broad polling of leads/events/messages on every interval.
-   - Recommended interval: 600 seconds.
+6. New Products tab removed from Admin Panel.
+   - New Products tab/button and section removed.
 
-7. External API call logging added.
-   - Recent Shopify/Meta outbound calls are logged in Bandwidth Settings status for debugging.
-   - Helps identify which module is using service-initiated bandwidth.
+7. Generated Buy Messages fixed.
+   - Only actual sent messages with a valid phone number are shown.
+   - Generated/skipped/missing-phone previews are hidden from main list.
 
-8. Previous fixes preserved from v38:
+8. Template Library improved.
+   - Header Type = Image now shows:
+     - Header Image URL field
+     - Select Uploaded Image dropdown
+     - Upload New Header Image
+   - Header image upload uses existing Media Library / Cloudinary upload.
+   - Template stores headerImageUrl/imageUrl.
+
+9. Meta Templates moved out of main Admin tabs.
+   - Meta Templates tab/panel removed from main Admin Panel.
+   - Template Library now has Submit to Meta button.
+   - Current template form can be submitted to Meta directly from Template Library.
+
+10. Previous fixes preserved from v39:
+   - Bandwidth Saver Mode
+   - Shopify and Meta Ads API caching
    - Real OpenAI API for Meta Ads AI
    - Real Meta campaign/adset/ad creation in PAUSED status
-   - Meta Ads reporting
    - Safe bulk broadcast with opt-in and random delay
-   - Meta WhatsApp Template Creator
    - Cloudinary uploads
    - CRM Pending Approval tab
 
 Base:
-- v38 ZIP used as base.
+- v39 ZIP used as base.

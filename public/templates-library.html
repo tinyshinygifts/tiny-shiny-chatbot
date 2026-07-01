@@ -64,6 +64,14 @@
             <label>Category <select id="templateCategory"><option>Utility</option><option>Marketing</option><option>Authentication</option></select></label>
             <label>Header Type <select id="templateHeaderType"><option>None</option><option>Image</option><option>Video</option><option>Document</option><option>Text</option></select></label>
           </div>
+          <div id="templateHeaderImageBox" class="template-header-image-box">
+            <label>Header Image URL <input id="templateHeaderImageUrl" placeholder="https://res.cloudinary.com/...jpg"/></label>
+            <label>Select Uploaded Image
+              <select id="templateHeaderImageSelect"><option value="">Select uploaded image</option></select>
+            </label>
+            <label>Upload New Header Image <input id="templateHeaderImageFile" type="file" accept="image/*"/></label>
+            <small class="hint">Header Type = Image ho to yaha image URL/select/upload karein. Upload Cloudinary par save hoga aur URL auto-fill hoga.</small>
+          </div>
           <label>Use Case <input id="templateUseCase" placeholder="Kis automation ke liye use hoga"/></label>
           <label>Body Text <textarea id="templateBody" rows="7" placeholder="Hi {{1}}, your order {{2}}..."></textarea></label>
           <label>Variables <textarea id="templateVariables" rows="3" placeholder="Customer Name&#10;Order Number&#10;Order Amount"></textarea></label>
@@ -71,6 +79,7 @@
           <label class="checkline"><input id="templateEnabled" type="checkbox" checked/> Enabled in library</label>
           <div class="inline-actions">
             <button id="saveTemplate" class="primary-btn" type="button">Save Template</button>
+            <button id="submitTemplateToMeta" class="ghost-btn" type="button">Submit to Meta</button>
             <button id="mapTemplateToAutomation" class="ghost-btn" type="button">Use Selected</button>
             <button id="clearTemplateForm" class="ghost-btn" type="button">Clear</button>
           </div>

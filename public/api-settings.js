@@ -1,5 +1,6 @@
 const keys = ['WEBSITE_URL','WHATSAPP_NUMBER','OWNER_WHATSAPP_NUMBER','ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS','SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER','SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI','WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG','CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG','GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD','ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG','META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST'];
 let whatsappTemplates = [];
+let templateHeaderImages = [];
 let whatsappTemplateMappings = {};
 let selectedTemplateId = '';
 let faqs = [];
@@ -64,12 +65,42 @@ async function saveApiFontSize(size){
 }
 
 
+
+function updateTemplateHeaderImageUi(){
+  const box=$('templateHeaderImageBox'); if(!box) return;
+  const ht=String($('templateHeaderType')?.value||'None').toLowerCase();
+  box.style.display = ht==='image' ? 'grid' : 'none';
+}
+function renderTemplateHeaderImageSelect(){
+  const sel=$('templateHeaderImageSelect'); if(!sel) return;
+  sel.innerHTML='<option value="">Select uploaded image</option>' + (templateHeaderImages||[]).map(img=>`<option value="${esc(img.absoluteUrl||img.url||'')}">${esc(img.title||img.filename||img.url||'Image')}</option>`).join('');
+}
+async function loadTemplateHeaderImages(){
+  const d=await fetch('/api/media-images',{credentials:'include'}).then(r=>r.json()).catch(()=>({images:[]}));
+  templateHeaderImages=d.images||[];
+  renderTemplateHeaderImageSelect();
+}
+async function uploadTemplateHeaderImage(file){
+  if(!file) return;
+  const dataUrl=await new Promise((resolve,reject)=>{ const r=new FileReader(); r.onload=()=>resolve(r.result); r.onerror=reject; r.readAsDataURL(file); });
+  const body={title:file.name||'Template Header Image',category:'template_header',filename:file.name,dataUrl};
+  const d=await fetch('/api/media-images',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('templateResult')) templateResult.textContent=JSON.stringify(d,null,2);
+  if(d.ok && d.image){
+    await loadTemplateHeaderImages().catch(()=>{});
+    if($('templateHeaderImageUrl')) templateHeaderImageUrl.value=d.image.absoluteUrl||d.image.url||'';
+    if($('templateHeaderImageSelect')) templateHeaderImageSelect.value=d.image.absoluteUrl||d.image.url||'';
+  }
+}
 function clearTemplateForm(){
   if($('templateId')) templateId.value='';
   if($('templateName')) templateName.value='';
   if($('templateLanguage')) templateLanguage.value='en';
   if($('templateCategory')) templateCategory.value='Utility';
   if($('templateHeaderType')) templateHeaderType.value='None';
+  if($('templateHeaderImageUrl')) templateHeaderImageUrl.value='';
+  if($('templateHeaderImageSelect')) templateHeaderImageSelect.value='';
+  updateTemplateHeaderImageUi();
   if($('templateUseCase')) templateUseCase.value='';
   if($('templateBody')) templateBody.value='';
   if($('templateVariables')) templateVariables.value='';
@@ -87,6 +118,9 @@ function editTemplate(id){
   if($('templateLanguage')) templateLanguage.value=t.language||'en';
   if($('templateCategory')) templateCategory.value=t.category||'Utility';
   if($('templateHeaderType')) templateHeaderType.value=t.headerType||'None';
+  if($('templateHeaderImageUrl')) templateHeaderImageUrl.value=t.headerImageUrl||t.imageUrl||'';
+  if($('templateHeaderImageSelect')) templateHeaderImageSelect.value=t.headerImageUrl||t.imageUrl||'';
+  updateTemplateHeaderImageUi();
   if($('templateUseCase')) templateUseCase.value=t.useCase||'';
   if($('templateBody')) templateBody.value=t.body||'';
   if($('templateVariables')) templateVariables.value=(t.variables||[]).join('\n');
@@ -110,7 +144,7 @@ function renderTemplates(){
       <div class="template-card-head"><b>${esc(t.name)}</b><span>${esc(t.category||'')} • ${esc(t.language||'en')}</span></div>
       ${isUsed?`<div class="used-badge">${selected?'SELECTED':'USED'}${usedLabel && usedLabel!=='Selected / Use'?': '+esc(usedLabel):''}</div>`:`<div class="available-badge">Available</div>`}
       <p>${esc(t.useCase||'')}</p>
-      <small>Header: ${esc(t.headerType||'None')} • Variables: ${esc((t.variables||[]).length)}</small>
+      <small>Header: ${esc(t.headerType||'None')}${(t.headerImageUrl||t.imageUrl)?' • Image set':''} • Variables: ${esc((t.variables||[]).length)}</small>
       <pre>${esc(bodyPreview || (t.body||'').slice(0,180))}</pre>
       <div class="template-actions compact-template-actions">
         <button class="ghost-btn" data-edit-template="${esc(t.id)}">Modify</button>
@@ -128,6 +162,42 @@ function applyMappingsToFields(mappings){
   if(mappings.cod_order){ if($('COD_ORDER_CONFIRMATION_TEMPLATE_NAME')) COD_ORDER_CONFIRMATION_TEMPLATE_NAME.value=mappings.cod_order.name||''; if($('COD_ORDER_CONFIRMATION_TEMPLATE_LANG')) COD_ORDER_CONFIRMATION_TEMPLATE_LANG.value=mappings.cod_order.language||'en'; if($('COD_CONFIRMATION_WHATSAPP_ENABLED')) COD_CONFIRMATION_WHATSAPP_ENABLED.value=String(mappings.cod_order.enabled ?? COD_CONFIRMATION_WHATSAPP_ENABLED.value ?? 'true'); }
   if(mappings.test_whatsapp){ if($('WHATSAPP_TEST_TEMPLATE_NAME')) WHATSAPP_TEST_TEMPLATE_NAME.value=mappings.test_whatsapp.name||''; if($('WHATSAPP_TEST_TEMPLATE_LANG')) WHATSAPP_TEST_TEMPLATE_LANG.value=mappings.test_whatsapp.language||'en_US'; }
 }
+
+function currentTemplateFormPayload(){
+  return {
+    id:$('templateId')?.value||undefined,
+    name:$('templateName')?.value.trim()||'',
+    language:$('templateLanguage')?.value.trim()||'en',
+    category:$('templateCategory')?.value||'Utility',
+    headerType:$('templateHeaderType')?.value||'None',
+    headerText:'',
+    headerImageUrl:$('templateHeaderImageUrl')?.value.trim()||'',
+    imageUrl:$('templateHeaderImageUrl')?.value.trim()||'',
+    useCase:$('templateUseCase')?.value.trim()||'',
+    body:$('templateBody')?.value.trim()||'',
+    footerText:'',
+    variables:($('templateVariables')?.value||'').split(/\r?\n|,/).map(x=>x.trim()).filter(Boolean),
+    buttons:parseTemplateButtons($('templateButtons')?.value||''),
+    enabled:$('templateEnabled') ? templateEnabled.checked : true
+  };
+}
+async function submitTemplateToMeta(){
+  const body=currentTemplateFormPayload();
+  if(!body.name) return alert('Template Name required.');
+  if(!body.body) return alert('Body Text required.');
+  if(String(body.headerType||'').toLowerCase()==='image' && !body.headerImageUrl){
+    if(!confirm('Header Type Image selected hai, lekin image URL blank hai. Meta template submit continue karna hai?')) return;
+  }
+  const res=await fetch('/api/whatsapp-templates/meta-submit',{method:'POST',credentials:'include',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).catch(e=>({ok:false,error:e.message}));
+  if($('templateResult')) templateResult.textContent=JSON.stringify(res,null,2);
+  if(res.ok){
+    alert('Template Meta par submit ho gaya. Approval status Meta WhatsApp Manager me check hoga.');
+    await loadApiTemplates().catch(()=>{});
+  } else {
+    alert(res.error || res.meta?.error?.message || 'Meta submit failed.');
+  }
+}
+
 async function saveTemplate(){
   const body={
     id:$('templateId')?.value||undefined,
@@ -135,6 +205,8 @@ async function saveTemplate(){
     language:$('templateLanguage')?.value.trim()||'en',
     category:$('templateCategory')?.value||'Utility',
     headerType:$('templateHeaderType')?.value||'None',
+    headerImageUrl:$('templateHeaderImageUrl')?.value.trim()||'',
+    imageUrl:$('templateHeaderImageUrl')?.value.trim()||'',
     useCase:$('templateUseCase')?.value.trim()||'',
     body:$('templateBody')?.value.trim()||'',
     variables:($('templateVariables')?.value||'').split(/\r?\n|,/).map(x=>x.trim()).filter(Boolean),
@@ -432,6 +504,9 @@ document.addEventListener('input', e=>{
 document.addEventListener('change', e=>{
   if(e.target.id === 'themeColorPreset' && e.target.value !== 'custom') setThemeColor(e.target.value);
   if(e.target.id==='templateCategoryFilter' || e.target.id==='templateMapTarget') renderTemplates();
+  if(e.target.id==='templateHeaderType') updateTemplateHeaderImageUi();
+  if(e.target.id==='templateHeaderImageSelect' && $('templateHeaderImageUrl')) templateHeaderImageUrl.value=e.target.value||'';
+  if(e.target.id==='templateHeaderImageFile') uploadTemplateHeaderImage(e.target.files&&e.target.files[0]);
   if(e.target.id==='bulkLibraryTemplate') applyBulkTemplate();
   if(e.target.id==='bulkLibraryMode') updateBulkModeUi();
   if(e.target.id==='apiFontSize') saveApiFontSize(e.target.value);
@@ -451,6 +526,7 @@ document.addEventListener('click', async (e)=>{
   if(e.target.id === 'newTemplateBtn') { clearTemplateForm(); if($('templateName')) templateName.focus(); }
   if(e.target.id === 'clearTemplateForm') clearTemplateForm();
   if(e.target.id === 'saveTemplate') saveTemplate();
+  if(e.target.id === 'submitTemplateToMeta') submitTemplateToMeta();
   if(e.target.id === 'restoreDefaultTemplates') restoreDefaultTemplates();
   if(e.target.id === 'mapTemplateToAutomation') { const id=$('templateId')?.value || selectedTemplateId; if(!id) return alert('Please select or save a template first.'); mapTemplate(id, 'selected'); }
   if(e.target.dataset.editTemplate) editTemplate(e.target.dataset.editTemplate);
