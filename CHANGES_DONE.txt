@@ -1,40 +1,50 @@
 CHANGES_DONE
 
-v34 update (base v33):
+v39 update (base v38):
 
-1. Cloudinary upload support added.
-   - New uploaded media/images will go to Cloudinary when Cloudinary env variables are set.
-   - Render local /uploads folder will not be used for new uploads when Cloudinary is enabled.
-   - Cloudinary HTTPS URL is saved and used for WhatsApp image/media sending.
+1. Bandwidth Saver Mode added.
+   - Admin Panel → API Settings → Bandwidth Saver Mode
+   - ON/OFF switch
+   - Shopify cache TTL
+   - Meta Ads cache TTL
+   - Admin auto-refresh seconds
+   - Google Sheet auto-save control while saver is ON
+   - Clear API Cache button
 
-2. Supported environment variables:
-   - USE_CLOUDINARY=true
-   - CLOUDINARY_URL=cloudinary://API_KEY:API_SECRET@CLOUD_NAME
-   OR:
-   - CLOUDINARY_CLOUD_NAME=...
-   - CLOUDINARY_API_KEY=...
-   - CLOUDINARY_API_SECRET=...
+2. Shopify API bandwidth reduction.
+   - Shopify Products API now uses cache when saver is ON.
+   - Shopify Customers + latest order enrichment now uses cache when saver is ON.
+   - Default saver cache: 21600 seconds (6 hours).
+   - API response shows cached/cacheAgeSec/bandwidthSaver.
 
-3. Upload areas updated:
-   - Media Library image upload
-   - Broadcast image upload
-   - WhatsApp Inbox media upload
+3. Meta Ads report bandwidth reduction.
+   - Meta Ads insights now uses cache when saver is ON.
+   - Default saver cache: 1800 seconds (30 minutes).
 
-4. Delete support:
-   - If media was uploaded to Cloudinary, delete action also requests Cloudinary delete.
-   - Old local /uploads delete fallback remains for older files.
+4. Google Sheets bandwidth reduction.
+   - When Bandwidth Saver is ON, auto-save to Google Sheets is disabled by default.
+   - It can be re-enabled using "Saver ON me Google Sheet auto-save allow".
 
-5. Fallback safe mode:
-   - If Cloudinary env variables are missing, old local upload mode still works.
+5. Broadcast scheduler bandwidth reduction.
+   - Due broadcast scheduler interval changes from 30 seconds to 5 minutes while saver is ON.
 
-6. Previous fixes preserved from v33:
-   - CRM Dashboard Pending Approval tab
-   - Fast CRM loading
-   - Proper CRM date/time/order sorting
-   - Duplicate order merge by order number
-   - Status appends with "|"
-   - WhatsApp Cancel -> Shopify Cancel improved
-   - Mobile chat button smaller and moved upward
+6. Admin auto-refresh reduction.
+   - When saver is ON, auto-refresh only refreshes the active tab.
+   - It avoids broad polling of leads/events/messages on every interval.
+   - Recommended interval: 600 seconds.
+
+7. External API call logging added.
+   - Recent Shopify/Meta outbound calls are logged in Bandwidth Settings status for debugging.
+   - Helps identify which module is using service-initiated bandwidth.
+
+8. Previous fixes preserved from v38:
+   - Real OpenAI API for Meta Ads AI
+   - Real Meta campaign/adset/ad creation in PAUSED status
+   - Meta Ads reporting
+   - Safe bulk broadcast with opt-in and random delay
+   - Meta WhatsApp Template Creator
+   - Cloudinary uploads
+   - CRM Pending Approval tab
 
 Base:
-- v33 ZIP used as base.
+- v38 ZIP used as base.

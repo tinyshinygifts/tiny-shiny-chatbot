@@ -53,7 +53,9 @@
       <button class="tab-btn" data-tab="shopifySalesPanel">Shopify Sales Analysis</button>
       <button class="tab-btn" data-tab="ndrPanel">NDR</button>
       <button class="tab-btn" data-tab="bulkBroadcastPanel">Bulk WhatsApp Broadcast</button>
+      <button class="tab-btn" data-tab="metaTemplatesPanel">Meta Templates</button>
       <button class="tab-btn" data-tab="phase2Panel">Campaign Analytics</button>
+      <button class="tab-btn" data-tab="metaAdsPanel">Meta Ads AI</button>
       <button class="tab-btn" data-tab="dripPanel">Drip Campaigns</button>
       <button class="tab-btn" data-tab="instagramInboxPanel">Instagram Inbox</button>
       <button class="tab-btn" data-tab="whatsappChatbotPanel">WhatsApp Chatbot</button>
@@ -76,6 +78,17 @@
       <label>Add-to-cart Message <textarea id="cartOfferMessage"></textarea></label>
       <label>Product popup delay seconds <input id="leadPopupDelaySeconds" type="number" min="5"/></label>
       <button id="saveSettings" class="primary-btn">Save Basic Settings</button>
+        </div>
+        <div class="api-card">
+          <h3>Bandwidth Saver Mode</h3>
+          <p class="hint">Render 5GB bandwidth bachane ke liye API cache, auto-refresh slow aur Google Sheet auto-save control.</p>
+          <label class="checkline"><input id="bandwidthSaverEnabled" type="checkbox"/> Bandwidth Saver ON</label>
+          <label>Shopify Cache TTL Seconds <input id="shopifyCacheTtlSec" type="number" min="60" value="21600"/></label>
+          <label>Meta Ads Cache TTL Seconds <input id="metaAdsCacheTtlSec" type="number" min="60" value="1800"/></label>
+          <label>Admin Auto Refresh Seconds <input id="bandwidthAdminRefreshSec" type="number" min="0" value="600"/></label>
+          <label class="checkline"><input id="googleSheetsAutoSaveWhenSaver" type="checkbox"/> Saver ON me Google Sheet auto-save allow</label>
+          <div class="inline-actions"><button id="saveBandwidthSettings" class="primary-btn" type="button">Save Bandwidth Settings</button><button id="clearApiCache" class="ghost-btn" type="button">Clear API Cache</button></div>
+          <pre id="bandwidthStatus"></pre>
         </div>
         <div class="api-card faq-inline-card">
           <div class="section-head mini"><div><h3>FAQ Rules</h3><p>Keyword based replies. Yahi se FAQ add/modify/save hoga.</p></div><div class="inline-actions"><button id="addFaq" class="ghost-btn">+ Add FAQ</button><button id="saveFaqs" class="primary-btn">Save FAQs</button></div></div>
@@ -231,7 +244,45 @@
       <pre id="ndrResult"></pre>
     </section>
 
-    <section class="panel tab-panel" id="bulkBroadcastPanel">
+    
+    <section class="panel tab-panel" id="metaTemplatesPanel">
+      <div class="section-head">
+        <div><h2>Meta WhatsApp Templates</h2><p>Create/submit WhatsApp templates directly to Meta and sync approval status.</p></div>
+        <div class="inline-actions"><button id="syncMetaTemplates" class="ghost-btn">Sync Meta Templates</button></div>
+      </div>
+      <div class="form-grid three">
+        <label>Template Name <input id="metaTplName" placeholder="cod_order_confirmation"/></label>
+        <label>Language
+          <select id="metaTplLang"><option value="en">en</option><option value="en_US">en_US</option><option value="hi">hi</option></select>
+        </label>
+        <label>Category
+          <select id="metaTplCategory"><option value="UTILITY">UTILITY</option><option value="MARKETING">MARKETING</option><option value="AUTHENTICATION">AUTHENTICATION</option></select>
+        </label>
+      </div>
+      <div class="form-grid three">
+        <label>Header Type
+          <select id="metaTplHeaderType"><option value="NONE">None</option><option value="TEXT">Text</option><option value="IMAGE">Image</option><option value="VIDEO">Video</option><option value="DOCUMENT">Document</option></select>
+        </label>
+        <label>Header Text <input id="metaTplHeaderText" placeholder="Tiny Shiny Gifts"/></label>
+        <label>Footer Text <input id="metaTplFooterText" placeholder="Thank you"/></label>
+      </div>
+      <label>Body Text
+        <textarea id="metaTplBody" rows="5" placeholder="Hello {{1}}, your order {{2}} amount {{3}} is pending confirmation."></textarea>
+      </label>
+      <div class="form-grid three">
+        <label>Quick Reply 1 <input id="metaTplBtn1" placeholder="Confirm"/></label>
+        <label>Quick Reply 2 <input id="metaTplBtn2" placeholder="Cancel"/></label>
+        <label>Website URL Button <input id="metaTplUrl" placeholder="https://www.tinyshinygifts.com"/></label>
+      </div>
+      <div class="inline-actions">
+        <button id="submitMetaTemplate" class="primary-btn">Submit Template to Meta</button>
+        <button id="clearMetaTemplateForm" class="ghost-btn">Clear</button>
+      </div>
+      <pre id="metaTemplateResult"></pre>
+      <div id="metaTemplatesList" class="log-list"></div>
+    </section>
+
+<section class="panel tab-panel" id="bulkBroadcastPanel">
       <div class="section-head">
         <div><h2>Bulk WhatsApp Broadcast</h2><p>Approved template se Shopify / Google Sheet contacts ko campaign bhejein.</p></div>
         <div class="inline-actions"><button id="refreshBroadcasts" class="ghost-btn">Refresh Campaigns</button></div>
@@ -275,6 +326,12 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
         <label>Single Number Optional <input id="broadcastSinglePhone" placeholder="919001727446"/></label>
         <label>Message Type <select id="broadcastMessageType"><option value="template">Template</option><option value="text">Text Only</option><option value="image">Image Only</option><option value="image_text">Image + Text</option></select></label>
       </div>
+      <div class="form-grid three">
+        <label class="checkline"><input id="broadcastOptInConfirm" type="checkbox"/> Imported/random numbers are opt-in customers</label>
+        <label>Random Delay Min Sec <input id="broadcastDelayMin" type="number" min="0" max="300" value="2"/></label>
+        <label>Random Delay Max Sec <input id="broadcastDelayMax" type="number" min="0" max="600" value="6"/></label>
+      </div>
+      <p class="hint">Safety: random/CSV numbers par sirf opt-in customers ko approved template se message bhejein. STOP unsubscribe already supported hai.</p>
       <div class="inline-actions broadcast-action-row">
         <button id="loadBroadcastContacts" class="ghost-btn" type="button">Import Shopify Customers</button>
         <label class="select-all-line toggle"><input id="broadcastSelectAll" type="checkbox"/> <span id="broadcastSelectAllLabel">Select All</span></label>
@@ -306,7 +363,45 @@ Amit,919999999999,a@gmail.com,Rakhi"></textarea></label>
 
     
 
-    <section class="panel tab-panel" id="phase2Panel">
+    
+    <section class="panel tab-panel" id="metaAdsPanel">
+      <div class="section-head">
+        <div><h2>Meta Ads AI Assistant</h2><p>Shopify product se ad copy, audience idea, campaign draft aur Meta Ads report.</p></div>
+        <div class="inline-actions"><button id="loadMetaAdsReport" class="ghost-btn">Load Meta Ads Report</button></div>
+      </div>
+      <div class="form-grid three">
+        <label>Shopify Product
+          <select id="metaAdsProductSelect"><option value="">Manual / Select product</option></select>
+        </label>
+        <label>Campaign Goal
+          <select id="metaAdsGoal"><option>Sales</option><option>WhatsApp Leads</option><option>Website Traffic</option><option>Retargeting</option></select>
+        </label>
+        <label>Daily Budget ₹ <input id="metaAdsBudget" type="number" min="50" value="500"/></label>
+      </div>
+      <div class="form-grid three">
+        <label>Product Title <input id="metaAdsProductTitle" placeholder="Product name"/></label>
+        <label>Price / Offer <input id="metaAdsOffer" placeholder="₹499 / RAKHI10"/></label>
+        <label>Product Link <input id="metaAdsProductLink" placeholder="https://www.tinyshinygifts.com/products/..."/></label>
+      </div>
+      <label>Audience / Notes
+        <textarea id="metaAdsAudience" rows="3" placeholder="Example: women 22-45, gifting, home decor, pooja, festivals"></textarea>
+      </label>
+      <div class="inline-actions">
+        <button id="generateMetaAdCopy" class="primary-btn" type="button">Generate AI Ad Copy</button>
+        <button id="createMetaCampaignDraft" class="ghost-btn" type="button">Create Campaign Draft</button>
+        <button id="createPausedMetaCampaign" class="danger-outline ghost-btn" type="button">Create PAUSED Meta Campaign</button>
+      </div>
+      <label>Real Meta Campaign Confirmation
+        <input id="metaAdsConfirm" placeholder="Type CREATE_META_AD to create real paused campaign/adset/ad"/>
+        <span class="hint">Real campaign/adset/ad PAUSED status me create hoga. Publish manually Meta Ads Manager se karna.</span>
+      </label>
+      <pre id="metaAdsResult"></pre>
+      <div id="metaAdsCopyOutput" class="log-list"></div>
+      <h3>Meta Ads Report</h3>
+      <div id="metaAdsReport" class="customer-table-wrap"></div>
+    </section>
+
+<section class="panel tab-panel" id="phase2Panel">
       <div class="section-head"><div><h2>Campaign Analytics & Segments</h2><p>QuickReply/WATI style reports, segmentation, opt-out, clicks aur revenue attribution.</p></div><div class="inline-actions"><button id="refreshPhase2Analytics" class="ghost-btn">Refresh Analytics</button><button id="saveQuickReplySettings" class="primary-btn">Save QuickReply Features</button></div></div>
       <div class="form-grid four feature-toggle-grid">
         <label class="checkline"><input id="qrPopupEnabled" type="checkbox"/> WhatsApp Pop-up Lead Capture</label>

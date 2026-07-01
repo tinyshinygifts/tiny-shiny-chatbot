@@ -172,6 +172,8 @@ const automationRulesPath = path.join(dataDir, 'automation-rules.json');
 const ndrPath = path.join(dataDir, 'ndr.json');
 const ndrSettingsPath = path.join(dataDir, 'ndr-settings.json');
 const catalogSessionPath = path.join(dataDir, 'catalog-session.json');
+const apiCachePath = path.join(dataDir, 'api-cache.json');
+const externalApiLogPath = path.join(dataDir, 'external-api-log.json');
 
 
 // MongoDB persistent storage (Render-safe). When MONGODB_URI is set, JSON data and API settings are loaded from MongoDB and kept synced.
@@ -200,17 +202,17 @@ const apiKeys = [
   'ADMIN_USERNAME','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET','ADMIN_SESSION_HOURS',
   'SHOPIFY_STORE_DOMAIN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_API_VERSION','CREATE_SHOPIFY_DRAFT_ORDER',
   'SHOPIFY_CLIENT_ID','SHOPIFY_CLIENT_SECRET','SHOPIFY_APP_URL','SHOPIFY_OAUTH_SCOPES','SHOPIFY_OAUTH_REDIRECT_URI',
-  'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG','WHATSAPP_WEBHOOK_VERIFY_TOKEN',
+  'WHATSAPP_CLOUD_TOKEN','WHATSAPP_PHONE_NUMBER_ID','WHATSAPP_BUSINESS_ACCOUNT_ID','META_WHATSAPP_BUSINESS_ACCOUNT_ID','WHATSAPP_TEST_TEMPLATE_NAME','WHATSAPP_TEST_TEMPLATE_LANG','WHATSAPP_WEBHOOK_VERIFY_TOKEN',
   'CUSTOMER_WHATSAPP_MESSAGES_ENABLED','CUSTOMER_WHATSAPP_TEMPLATE_NAME','CUSTOMER_WHATSAPP_TEMPLATE_LANG',
   'SHOPIFY_WEBHOOK_SECRET',
   'GOOGLE_SHEETS_ENABLED','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEET_URL','GOOGLE_SHEETS_SECRET',
   'SHIPROCKET_TOKEN','SHIPROCKET_EMAIL','SHIPROCKET_PASSWORD',
   'ORDER_CONFIRMATION_WHATSAPP_ENABLED','ORDER_CONFIRMATION_TEMPLATE_NAME','ORDER_CONFIRMATION_TEMPLATE_LANG',
   'COD_CONFIRMATION_WHATSAPP_ENABLED','COD_ORDER_CONFIRMATION_TEMPLATE_NAME','COD_ORDER_CONFIRMATION_TEMPLATE_LANG','COD_AUTO_CANCEL_ENABLED',
-  'META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST',
-  'NDR_TEMPLATE_NAME','NDR_TEMPLATE_LANG','BROADCAST_TEMPLATE_NAME','BROADCAST_TEMPLATE_LANG'
+  'META_ACCESS_TOKEN','META_AD_ACCOUNT_ID','META_FACEBOOK_PAGE_ID','META_INSTAGRAM_ACCOUNT_ID','META_PIXEL_ID','OPENAI_API_KEY','OPENAI_MODEL','META_DEFAULT_COST_PER_ORDER','DEFAULT_SHIPPING_COST',
+  'NDR_TEMPLATE_NAME','NDR_TEMPLATE_LANG','BROADCAST_TEMPLATE_NAME','BROADCAST_TEMPLATE_LANG','BANDWIDTH_SAVER_ENABLED','SHOPIFY_CACHE_TTL_SEC','META_ADS_CACHE_TTL_SEC','GOOGLE_SHEETS_AUTOSAVE_WHEN_SAVER'
 ];
-const secretKeys = new Set(['META_ACCESS_TOKEN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
+const secretKeys = new Set(['OPENAI_API_KEY','META_ACCESS_TOKEN','SHOPIFY_ADMIN_ACCESS_TOKEN','SHOPIFY_CLIENT_SECRET','WHATSAPP_CLOUD_TOKEN','SHOPIFY_WEBHOOK_SECRET','GOOGLE_SHEETS_WEBHOOK_URL','GOOGLE_SHEETS_SECRET','SHIPROCKET_TOKEN','SHIPROCKET_PASSWORD','ADMIN_PASSWORD','ADMIN_DOB','SECURITY_SESSION_SECRET']);
 function readEnvFileWithoutMongo() {
   const out = {};
   const text = fs.existsSync(envPath) ? fs.readFileSync(envPath, 'utf8') : '';
@@ -519,6 +521,38 @@ function phoneLast10(phone) {
 function money(v){ return v === undefined || v === null || v === '' ? '' : String(v); }
 
 function cleanText(v){ return String(v || '').trim(); }
+
+function bandwidthSaverSettings() {
+  const settings = readJson(settingsPath, {});
+  const enabled = String(process.env.BANDWIDTH_SAVER_ENABLED || settings.bandwidthSaverEnabled || '').toLowerCase() === 'true' || settings.bandwidthSaverEnabled === true;
+  return {
+    enabled,
+    shopifyCacheTtlSec: Math.max(60, Number(process.env.SHOPIFY_CACHE_TTL_SEC || settings.shopifyCacheTtlSec || (enabled ? 21600 : 900)) || 900),
+    metaAdsCacheTtlSec: Math.max(60, Number(process.env.META_ADS_CACHE_TTL_SEC || settings.metaAdsCacheTtlSec || (enabled ? 1800 : 300)) || 300),
+    googleSheetsAutoSaveWhenSaver: String(process.env.GOOGLE_SHEETS_AUTOSAVE_WHEN_SAVER || settings.googleSheetsAutoSaveWhenSaver || '').toLowerCase() === 'true' || settings.googleSheetsAutoSaveWhenSaver === true,
+    adminRefreshSec: Math.max(0, Number(settings.adminRefreshSec || (enabled ? 600 : 30)) || 0)
+  };
+}
+function bandwidthSaverEnabled(){ return !!bandwidthSaverSettings().enabled; }
+function logExternalApiCall(service, detail = {}) {
+  try {
+    const list = readJson(externalApiLogPath, []);
+    list.unshift({ id: crypto.randomUUID(), service, at: nowIso(), ...detail });
+    writeJson(externalApiLogPath, list.slice(0, 300));
+  } catch {}
+}
+async function cachedApiJson(key, ttlSec, fetcher) {
+  const cache = readJson(apiCachePath, {});
+  const now = Date.now();
+  const row = cache[key];
+  if (row && row.savedAt && (now - Number(row.savedAt)) < Number(ttlSec || 0) * 1000) {
+    return { ...deepClone(row.value), cached: true, cacheKey: key, cacheAgeSec: Math.round((now - Number(row.savedAt)) / 1000) };
+  }
+  const value = await fetcher();
+  cache[key] = { savedAt: now, value };
+  writeJson(apiCachePath, cache);
+  return { ...value, cached: false, cacheKey: key, cacheAgeSec: 0 };
+}
 function flattenForSheet(obj, prefix = '', out = {}) {
   if (obj === null || obj === undefined) return out;
   if (typeof obj !== 'object') { out[prefix || 'value'] = String(obj); return out; }
@@ -658,6 +692,8 @@ function upsertCrm(record = {}, source = 'lead') {
   return next;
 }
 function googleSheetsEnabled() {
+  const bw = bandwidthSaverSettings();
+  if (bw.enabled && !bw.googleSheetsAutoSaveWhenSaver) return false;
   return String(process.env.GOOGLE_SHEETS_ENABLED || '').toLowerCase() === 'true' && String(process.env.GOOGLE_SHEETS_WEBHOOK_URL || '').trim();
 }
 async function sendToGoogleSheets(type, record) {
@@ -961,6 +997,57 @@ async function postWhatsApp(body) {
   const json = await response.json().catch(() => ({}));
   const whatsappMessageId = json?.messages?.[0]?.id || json?.messages?.[0]?.message_status || '';
   return { ok: response.ok, status: response.status, json, whatsappMessageId, request: { to: body.to, type: body.type, template: body.template?.name || '', components: body.template?.components?.map(c => ({ type:c.type, parameters:(c.parameters||[]).map(p => p.type) })) || [] } };
+}
+
+function metaTemplateTokenAndWaba() {
+  const env = readEnvFile();
+  const token = String(process.env.META_ACCESS_TOKEN || env.META_ACCESS_TOKEN || process.env.WHATSAPP_CLOUD_TOKEN || env.WHATSAPP_CLOUD_TOKEN || '').trim();
+  const wabaId = String(process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || env.WHATSAPP_BUSINESS_ACCOUNT_ID || process.env.META_WHATSAPP_BUSINESS_ACCOUNT_ID || env.META_WHATSAPP_BUSINESS_ACCOUNT_ID || '').replace(/\D/g, '');
+  return { token, wabaId };
+}
+function normalizeMetaTemplateName(name='') {
+  return String(name || '').trim().toLowerCase().replace(/[^a-z0-9_]/g, '_').replace(/_+/g, '_').replace(/^_+|_+$/g, '').slice(0, 512);
+}
+function componentTextParams(text='') {
+  const nums = [...String(text || '').matchAll(/\{\{\s*(\d+)\s*\}\}/g)].map(m => Number(m[1])).filter(Boolean);
+  return nums.length ? Math.max(...nums) : 0;
+}
+function buildMetaTemplatePayload(body = {}) {
+  const name = normalizeMetaTemplateName(body.name || body.templateName);
+  const language = String(body.language || body.lang || 'en').trim();
+  const category = String(body.category || 'UTILITY').trim().toUpperCase();
+  const bodyText = String(body.body || body.bodyText || '').trim();
+  const headerType = String(body.headerType || 'NONE').trim().toUpperCase();
+  const headerText = String(body.headerText || '').trim();
+  const footerText = String(body.footerText || '').trim();
+  const buttonsRaw = Array.isArray(body.buttons) ? body.buttons : [];
+  const components = [];
+  if (!name) throw new Error('Template name required.');
+  if (!bodyText) throw new Error('Body text required.');
+  if (!['UTILITY','MARKETING','AUTHENTICATION'].includes(category)) throw new Error('Category must be UTILITY, MARKETING, or AUTHENTICATION.');
+  if (headerType && headerType !== 'NONE') {
+    const h = { type: 'HEADER', format: headerType };
+    if (headerType === 'TEXT') h.text = headerText || 'Tiny Shiny Gifts';
+    components.push(h);
+  }
+  components.push({ type: 'BODY', text: bodyText });
+  if (footerText) components.push({ type: 'FOOTER', text: footerText.slice(0, 60) });
+  const buttons = buttonsRaw.map(b => {
+    const type = String(b.type || '').toUpperCase();
+    const text = String(b.text || '').trim();
+    if (!type || !text) return null;
+    if (type === 'QUICK_REPLY') return { type:'QUICK_REPLY', text: text.slice(0, 25) };
+    if (type === 'URL') return { type:'URL', text: text.slice(0, 25), url: String(b.url || '').trim() };
+    if (type === 'PHONE_NUMBER') return { type:'PHONE_NUMBER', text: text.slice(0, 25), phone_number: String(b.phone_number || b.phone || '').trim() };
+    return null;
+  }).filter(Boolean);
+  if (buttons.length) components.push({ type:'BUTTONS', buttons: buttons.slice(0, 10) });
+  return { name, language, category, components };
+}
+async function graphFetchJson(url, options = {}) {
+  const response = await fetch(url, options);
+  const json = await response.json().catch(() => ({}));
+  return { ok: response.ok, status: response.status, json };
 }
 async function sendOwnerWhatsApp(message, options = {}) {
   const env = readEnvFile();
@@ -1405,6 +1492,8 @@ app.use('/api/shipping-settings', requireAdmin);
 app.use('/api/instagram', requireAdmin);
 app.use('/api/messenger', requireAdmin);
 app.use('/api/phase2', requireAdmin);
+app.use('/api/meta-ads', requireAdmin);
+app.use('/api/bandwidth-settings', requireAdmin);
 app.use('/api/quickreply', requireAdmin);
 
 app.post('/api/settings', requireAdmin);
@@ -1491,6 +1580,78 @@ app.post('/api/whatsapp-templates', (req, res) => {
     const env = readEnvFile();
     const templates = writeWhatsAppTemplates(list).map(t => ({ ...t, usedTargets: mappedTargetsForTemplate(t, env) }));
     res.json({ ok:true, templates, mappings: getWhatsAppTemplateMappings(env), template: tpl, message:'Template saved in Template Library.' });
+  }
+});
+
+app.post('/api/whatsapp-templates/meta-submit', async (req, res) => {
+  try {
+    const { token, wabaId } = metaTemplateTokenAndWaba();
+    if (!token || token.includes('...') || token.includes('*')) return res.status(400).json({ ok:false, error:'META_ACCESS_TOKEN or WHATSAPP_CLOUD_TOKEN missing/full token required.' });
+    if (!wabaId) return res.status(400).json({ ok:false, error:'WHATSAPP_BUSINESS_ACCOUNT_ID missing. Add WABA ID in Render/API Settings.' });
+    const payload = buildMetaTemplatePayload(req.body || {});
+    const result = await graphFetchJson(`https://graph.facebook.com/v20.0/${wabaId}/message_templates`, {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${token}` },
+      body: JSON.stringify(payload)
+    });
+    const local = normalizeTemplate({
+      id: payload.name,
+      name: payload.name,
+      language: payload.language,
+      category: payload.category,
+      body: payload.components.find(c=>c.type==='BODY')?.text || '',
+      headerType: payload.components.find(c=>c.type==='HEADER')?.format || 'NONE',
+      headerText: payload.components.find(c=>c.type==='HEADER')?.text || '',
+      footerText: payload.components.find(c=>c.type==='FOOTER')?.text || '',
+      metaStatus: result.ok ? (result.json.status || 'PENDING') : 'ERROR',
+      metaResponse: result.json,
+      updatedAt: nowIso()
+    });
+    const list = readWhatsAppTemplates();
+    const idx = list.findIndex(x => x.name === local.name || String(x.id) === String(local.id));
+    if (idx >= 0) list[idx] = { ...list[idx], ...local }; else list.unshift(local);
+    writeWhatsAppTemplates(list);
+    res.status(result.ok ? 200 : 400).json({ ok: result.ok, status: result.status, meta: result.json, payload, template: local, message: result.ok ? 'Template submitted to Meta for review.' : 'Meta template submit failed.' });
+  } catch (e) {
+    res.status(400).json({ ok:false, error:e.message });
+  }
+});
+app.get('/api/whatsapp-templates/meta-list', async (req, res) => {
+  try {
+    const { token, wabaId } = metaTemplateTokenAndWaba();
+    if (!token || !wabaId) return res.status(400).json({ ok:false, error:'META_ACCESS_TOKEN/WHATSAPP_CLOUD_TOKEN and WHATSAPP_BUSINESS_ACCOUNT_ID required.' });
+    const limit = Math.min(Math.max(Number(req.query.limit || 100), 1), 250);
+    const result = await graphFetchJson(`https://graph.facebook.com/v20.0/${wabaId}/message_templates?fields=name,status,category,language,components,rejected_reason&limit=${limit}`, {
+      method:'GET',
+      headers:{ Authorization:`Bearer ${token}` }
+    });
+    if (result.ok && Array.isArray(result.json.data)) {
+      const list = readWhatsAppTemplates();
+      for (const mt of result.json.data) {
+        const bodyComp = (mt.components || []).find(c => c.type === 'BODY') || {};
+        const headerComp = (mt.components || []).find(c => c.type === 'HEADER') || {};
+        const footerComp = (mt.components || []).find(c => c.type === 'FOOTER') || {};
+        const local = normalizeTemplate({
+          id: mt.name,
+          name: mt.name,
+          language: mt.language || 'en',
+          category: mt.category || '',
+          body: bodyComp.text || '',
+          headerType: headerComp.format || 'NONE',
+          headerText: headerComp.text || '',
+          footerText: footerComp.text || '',
+          metaStatus: mt.status || '',
+          rejectedReason: mt.rejected_reason || '',
+          updatedAt: nowIso()
+        });
+        const idx = list.findIndex(x => x.name === local.name && String(x.language || 'en') === String(local.language || 'en'));
+        if (idx >= 0) list[idx] = { ...list[idx], ...local }; else list.unshift(local);
+      }
+      writeWhatsAppTemplates(list);
+    }
+    res.status(result.ok ? 200 : 400).json({ ok: result.ok, status: result.status, meta: result.json, templates: readWhatsAppTemplates() });
+  } catch (e) {
+    res.status(400).json({ ok:false, error:e.message });
   }
 });
 app.delete('/api/whatsapp-templates/:id', (req, res) => {
@@ -1869,6 +2030,13 @@ function validateBroadcastBeforeSend(body={}, contacts=[]) {
     return { ok:false, error:'Image/Image + Text message selected hai. Please public Image URL add karo.' };
   }
   if (!contacts.length) return { ok:false, error:'No valid contacts found.' };
+  const nonShopify = contacts.filter(c => !['shopify','google_sheet','crm','lead','customer'].includes(String(c.source||'').toLowerCase()));
+  if (nonShopify.length && body.optInConfirmed !== true && String(body.optInConfirmed) !== 'true') {
+    return { ok:false, error:'CSV/random/single imported numbers ke liye opt-in confirm checkbox required hai. Sirf opt-in customers ko message bhejein.' };
+  }
+  if (messageType !== 'template' && nonShopify.length) {
+    return { ok:false, error:'Random/CSV/new contacts ke liye only approved Meta Template mode allowed hai. Text/Image direct mode 24-hour window ke bahar deliver nahi hota.' };
+  }
   return { ok:true, template:tpl };
 }
 
@@ -2028,6 +2196,13 @@ async function sendBroadcastTemplate(contact={}, campaign={}) {
   appendJson(whatsappInboxPath,{ id:crypto.randomUUID(), direction:'outbound', to:c.phone, customerName:c.name, type:'template', text:`Broadcast: ${template}${friendlyError?' | Failed: '+friendlyError:''}`, createdAt:nowIso(), status:result.ok?'sent':'failed', raw:{ campaignId:campaign.id, messageId: result.whatsappMessageId || result.json?.messages?.[0]?.id || '', result, friendlyError } });
   return { ...result, friendlyError, contact:c };
 }
+function waitMs(ms){ return new Promise(resolve=>setTimeout(resolve, Math.max(0, Number(ms)||0))); }
+function randomDelayMs(minSec=0, maxSec=0){
+  const min=Math.max(0, Number(minSec)||0);
+  const max=Math.max(min, Number(maxSec)||0);
+  if(!max) return 0;
+  return Math.round((min + Math.random()*(max-min))*1000);
+}
 async function processBroadcastCampaign(campaignId) {
   const campaigns=readJson(broadcastCampaignsPath, []);
   const idx=campaigns.findIndex(c=>String(c.id)===String(campaignId));
@@ -2045,6 +2220,8 @@ async function processBroadcastCampaign(campaignId) {
     const result=await sendFn(c, campaign).catch(e=>({ ok:false, error:e.message, contact:c }));
     const st = result.ok?'sent':(result.skipped?'skipped':'failed');
     results.push({ phone:c.phone, name:c.name, status:st, whatsappMessageId: result.whatsappMessageId || result.json?.messages?.[0]?.id || '', result, at:nowIso(), sentAt: result.ok ? nowIso() : '' });
+    const delay=randomDelayMs(campaign.randomDelayMinSec, campaign.randomDelayMaxSec);
+    if(delay && batch.indexOf(c) < batch.length-1) await waitMs(delay);
   }
   campaign.results=results;
   recalcBroadcastCampaignCounts(campaign);
@@ -2059,7 +2236,7 @@ function processDueBroadcasts(){
   const now=Date.now();
   campaigns.filter(c=>c.status==='scheduled' && c.scheduleAt && new Date(c.scheduleAt).getTime()<=now).slice(0,3).forEach(c=>processBroadcastCampaign(c.id).catch(e=>console.error('Broadcast scheduler error:',e.message)));
 }
-setInterval(processDueBroadcasts, 30000);
+setInterval(processDueBroadcasts, bandwidthSaverEnabled() ? 300000 : 30000);
 
 app.get('/api/broadcast/campaigns', (req,res)=>{
   const campaigns = refreshBroadcastDeliveryStatusesFromInbox();
@@ -2074,7 +2251,7 @@ app.post('/api/broadcast/campaigns', async (req,res)=>{
     const validation = validateBroadcastBeforeSend(body, unique);
     if(!validation.ok) return res.status(400).json({ ok:false, error:validation.error, validation });
     const finalImageUrl = String(body.imageUrl || '').trim() ? absoluteUrl(req, String(body.imageUrl || '').trim()) : '';
-    const campaign={ id:crypto.randomUUID(), name:String(body.name||'WhatsApp Broadcast').trim(), category:String(body.category||'All').trim(), templateName:String(body.templateName||'').trim(), templateLang:String(body.templateLang||validation.template?.language||'en').trim(), imageUrl:finalImageUrl, productLink:String(body.productLink||'').trim(), couponCode:String(body.couponCode||'').trim(), imageCaption:String(body.imageCaption||'').trim(), messageType:String(body.messageType||'template').trim(), websiteUrl:String(body.websiteUrl||body.website||'https://www.tinyshinygifts.com').trim(), variables:Array.isArray(body.variables)?body.variables:[], dailyLimit:Number(body.dailyLimit||500)||500, scheduleAt:body.scheduleAt||'', contacts:unique, results:[], status:body.scheduleAt && new Date(body.scheduleAt).getTime()>Date.now()?'scheduled':'queued', createdAt:nowIso(), updatedAt:nowIso() };
+    const campaign={ id:crypto.randomUUID(), name:String(body.name||'WhatsApp Broadcast').trim(), category:String(body.category||'All').trim(), templateName:String(body.templateName||'').trim(), templateLang:String(body.templateLang||validation.template?.language||'en').trim(), imageUrl:finalImageUrl, productLink:String(body.productLink||'').trim(), couponCode:String(body.couponCode||'').trim(), imageCaption:String(body.imageCaption||'').trim(), messageType:String(body.messageType||'template').trim(), websiteUrl:String(body.websiteUrl||body.website||'https://www.tinyshinygifts.com').trim(), variables:Array.isArray(body.variables)?body.variables:[], dailyLimit:Number(body.dailyLimit||500)||500, scheduleAt:body.scheduleAt||'', optInConfirmed:!!body.optInConfirmed, randomDelayMinSec:Math.max(0, Number(body.randomDelayMinSec||0)||0), randomDelayMaxSec:Math.max(0, Number(body.randomDelayMaxSec||0)||0), contacts:unique, results:[], status:body.scheduleAt && new Date(body.scheduleAt).getTime()>Date.now()?'scheduled':'queued', createdAt:nowIso(), updatedAt:nowIso() };
     const campaigns=readJson(broadcastCampaignsPath, []); campaigns.unshift(campaign); writeJson(broadcastCampaignsPath,campaigns.slice(0,500));
     if(campaign.status==='queued') await processBroadcastCampaign(campaign.id);
     const saved=readJson(broadcastCampaignsPath, []).find(c=>c.id===campaign.id) || campaign;
@@ -2082,6 +2259,257 @@ app.post('/api/broadcast/campaigns', async (req,res)=>{
   }catch(e){ res.status(500).json({ ok:false, error:e.message }); }
 });
 app.post('/api/broadcast/optout', (req,res)=>{ const item=addOptout(req.body?.phone || '', 'admin', req.body?.reason || 'Manual opt-out'); res.json({ ok:!!item, item, optouts:readOptouts() }); });
+
+
+function metaAdsConfig() {
+  const env = readEnvFile();
+  const token = String(process.env.META_ACCESS_TOKEN || env.META_ACCESS_TOKEN || '').trim();
+  let adAccountId = String(process.env.META_AD_ACCOUNT_ID || env.META_AD_ACCOUNT_ID || '').trim();
+  adAccountId = adAccountId.replace(/^act_/, '').replace(/\D/g, '');
+  return { token, adAccountId };
+}
+
+async function openAiGenerateMetaAdCopy(body = {}) {
+  const env = readEnvFile();
+  const apiKey = String(process.env.OPENAI_API_KEY || env.OPENAI_API_KEY || '').trim();
+  const model = String(process.env.OPENAI_MODEL || env.OPENAI_MODEL || 'gpt-4.1-mini').trim();
+  if (!apiKey || apiKey.includes('...') || apiKey.includes('*')) return { ok:false, skipped:true, reason:'OPENAI_API_KEY missing.' };
+  const prompt = {
+    productTitle: cleanText(body.productTitle || body.title || ''),
+    price: cleanText(body.price || ''),
+    offer: cleanText(body.offer || ''),
+    link: cleanText(body.link || body.url || ''),
+    goal: cleanText(body.goal || 'Sales'),
+    audience: cleanText(body.audience || ''),
+    budget: cleanText(body.budget || ''),
+    brand: 'Tiny Shiny Gifts',
+    language: 'Hinglish + simple English for Indian Facebook/Instagram ads'
+  };
+  const instructions = `You are a Meta Ads copywriter for an Indian Shopify brand. Return ONLY valid JSON with keys primaryTexts (array of 4), headlines (array of 5), descriptions (array of 3), ctas (array), audienceIdeas (array of 4), campaignAngles (array of 4), campaignPlan (object with goal,budgetSuggestion,adSet,creative,manualApprovalRequired). Keep copy compliant, no false claims, no sensitive targeting language.`;
+  const response = await fetch('https://api.openai.com/v1/chat/completions', {
+    method:'POST',
+    headers:{ 'Content-Type':'application/json', Authorization:`Bearer ${apiKey}` },
+    body: JSON.stringify({
+      model,
+      temperature: 0.7,
+      response_format: { type:'json_object' },
+      messages: [
+        { role:'system', content: instructions },
+        { role:'user', content: JSON.stringify(prompt) }
+      ]
+    })
+  });
+  const json = await response.json().catch(()=>({}));
+  if (!response.ok) return { ok:false, status:response.status, error: json.error?.message || 'OpenAI API failed', raw: json };
+  const content = json.choices?.[0]?.message?.content || '{}';
+  try { return { ok:true, generated: JSON.parse(content), model, usage: json.usage || {} }; }
+  catch(e) { return { ok:false, error:'OpenAI returned invalid JSON', raw: content }; }
+}
+function metaObjectiveFromGoal(goal='') {
+  const g=String(goal||'').toLowerCase();
+  if(g.includes('sales') || g.includes('conversion')) return 'OUTCOME_SALES';
+  if(g.includes('lead') || g.includes('whatsapp')) return 'OUTCOME_LEADS';
+  return 'OUTCOME_TRAFFIC';
+}
+function metaOptimizationFromGoal(goal='') {
+  const g=String(goal||'').toLowerCase();
+  if(g.includes('sales') || g.includes('conversion')) return 'OFFSITE_CONVERSIONS';
+  if(g.includes('lead') || g.includes('whatsapp')) return 'LEAD_GENERATION';
+  return 'LINK_CLICKS';
+}
+function metaCallToAction(goal='') {
+  const g=String(goal||'').toLowerCase();
+  if(g.includes('whatsapp')) return 'WHATSAPP_MESSAGE';
+  if(g.includes('lead')) return 'SIGN_UP';
+  return 'SHOP_NOW';
+}
+async function metaGraphPost(path, params, token) {
+  const body = new URLSearchParams();
+  for (const [k,v] of Object.entries(params||{})) {
+    if (v === undefined || v === null || v === '') continue;
+    body.append(k, typeof v === 'object' ? JSON.stringify(v) : String(v));
+  }
+  const r = await fetch(`https://graph.facebook.com/v20.0/${path}`, {
+    method:'POST',
+    headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/x-www-form-urlencoded' },
+    body: body.toString()
+  });
+  const json = await r.json().catch(()=>({}));
+  return { ok:r.ok, status:r.status, json };
+}
+async function createPausedMetaCampaignFromDraft(body = {}) {
+  const env = readEnvFile();
+  const { token, adAccountId } = metaAdsConfig();
+  const pageId = String(process.env.META_FACEBOOK_PAGE_ID || env.META_FACEBOOK_PAGE_ID || '').replace(/\D/g,'');
+  const pixelId = String(process.env.META_PIXEL_ID || env.META_PIXEL_ID || '').replace(/\D/g,'');
+  if (!token || token.includes('...') || token.includes('*')) throw new Error('META_ACCESS_TOKEN missing/full token required.');
+  if (!adAccountId) throw new Error('META_AD_ACCOUNT_ID missing.');
+  if (!pageId) throw new Error('META_FACEBOOK_PAGE_ID missing. Creative create ke liye Facebook Page ID required hai.');
+  if (String(body.confirm || '') !== 'CREATE_META_AD') throw new Error('Manual confirmation required. confirm must be CREATE_META_AD.');
+  const nameBase = cleanText(body.productTitle || body.name || 'Tiny Shiny Ad').slice(0,80);
+  const goal = cleanText(body.goal || 'Website Traffic');
+  const objective = metaObjectiveFromGoal(goal);
+  const optimization_goal = metaOptimizationFromGoal(goal);
+  const dailyBudget = Math.max(50, Number(body.budget || 500) || 500);
+  const link = cleanText(body.link || body.productLink || body.url || process.env.WEBSITE_URL || env.WEBSITE_URL || 'https://tinyshinygifts.com');
+  const message = cleanText(body.primaryText || body.message || (metaAdCopyGenerator(body).primaryTexts||[])[0] || '');
+  const headline = cleanText(body.headline || body.productTitle || 'Tiny Shiny Gifts').slice(0,80);
+  const campaign = await metaGraphPost(`act_${adAccountId}/campaigns`, {
+    name: `${nameBase} - Chatbot AI Campaign`,
+    objective,
+    status: 'PAUSED',
+    special_ad_categories: []
+  }, token);
+  if (!campaign.ok) return { ok:false, step:'campaign', campaign };
+  const promotedObject = objective === 'OUTCOME_SALES' && pixelId ? { pixel_id: pixelId, custom_event_type: 'PURCHASE' } : undefined;
+  const adset = await metaGraphPost(`act_${adAccountId}/adsets`, {
+    name: `${nameBase} - Ad Set`,
+    campaign_id: campaign.json.id,
+    daily_budget: Math.round(dailyBudget * 100),
+    billing_event: 'IMPRESSIONS',
+    optimization_goal,
+    bid_strategy: 'LOWEST_COST_WITHOUT_CAP',
+    targeting: { geo_locations: { countries: ['IN'] }, publisher_platforms: ['facebook','instagram'] },
+    promoted_object: promotedObject,
+    status: 'PAUSED'
+  }, token);
+  if (!adset.ok) return { ok:false, step:'adset', campaign: campaign.json, adset };
+  const creative = await metaGraphPost(`act_${adAccountId}/adcreatives`, {
+    name: `${nameBase} - Creative`,
+    object_story_spec: {
+      page_id: pageId,
+      link_data: {
+        link,
+        message,
+        name: headline,
+        description: cleanText(body.description || 'Shop premium gifts and decor from Tiny Shiny Gifts.'),
+        call_to_action: { type: metaCallToAction(goal), value: { link } }
+      }
+    }
+  }, token);
+  if (!creative.ok) return { ok:false, step:'creative', campaign: campaign.json, adset: adset.json, creative };
+  const ad = await metaGraphPost(`act_${adAccountId}/ads`, {
+    name: `${nameBase} - Ad`,
+    adset_id: adset.json.id,
+    creative: { creative_id: creative.json.id },
+    status: 'PAUSED'
+  }, token);
+  return { ok: ad.ok, step: ad.ok ? 'done' : 'ad', campaign: campaign.json, adset: adset.json, creative: creative.json, ad };
+}
+function metaAdCopyGenerator(body = {}) {
+  const productTitle = cleanText(body.productTitle || body.title || 'Tiny Shiny Gifts product');
+  const price = cleanText(body.price || '');
+  const link = cleanText(body.link || body.url || '');
+  const goal = cleanText(body.goal || 'Sales');
+  const audience = cleanText(body.audience || 'gift buyers, home decor lovers, pooja decor customers');
+  const offer = cleanText(body.offer || body.coupon || '');
+  const tone = cleanText(body.tone || 'premium festive');
+  const benefit = cleanText(body.benefit || 'perfect for gifting and home decor');
+  const cta = goal.toLowerCase().includes('whatsapp') ? 'WhatsApp Now' : goal.toLowerCase().includes('traffic') ? 'Learn More' : 'Shop Now';
+  const primary = `Bring home ${productTitle}${price ? ' at '+price : ''}. ${benefit}. ${offer ? 'Special offer: '+offer+'. ' : ''}Order now from Tiny Shiny Gifts.${link ? '\n'+link : ''}`;
+  const alt = [
+    `Looking for a beautiful gift? ${productTitle} is a perfect choice for ${audience}.`,
+    `${productTitle} - premium look, gifting ready, and ideal for Indian homes.`,
+    `${offer ? offer+' | ' : ''}Make every occasion special with Tiny Shiny Gifts.`
+  ];
+  return {
+    primaryTexts: [primary, ...alt],
+    headlines: [
+      productTitle.slice(0, 40),
+      `${offer || 'Premium Gift'} - Tiny Shiny`,
+      `Beautiful Gift for Every Occasion`
+    ],
+    descriptions: [
+      `Shop premium gifting and decor from Tiny Shiny Gifts.`,
+      price ? `Price ${price}. Limited stock.` : `Limited stock available.`
+    ],
+    ctas: [cta, 'Send WhatsApp Message', 'Shop Now'],
+    audienceIdeas: [
+      audience,
+      'India, age 21-45, interests: gifting, home decor, festivals, pooja items',
+      'Retarget website visitors, Instagram engagers, add-to-cart customers'
+    ],
+    campaignPlan: {
+      goal,
+      budgetSuggestion: '₹300-₹500/day testing, scale winning ad after 2-3 days',
+      adSet: 'Broad + interest test, separate retargeting ad set',
+      creative: tone,
+      manualApprovalRequired: true
+    }
+  };
+}
+async function fetchMetaAdsInsights() {
+  const { token, adAccountId } = metaAdsConfig();
+  if (!token || token.includes('...') || token.includes('*')) return { ok:false, error:'META_ACCESS_TOKEN missing/full token required.' };
+  if (!adAccountId) return { ok:false, error:'META_AD_ACCOUNT_ID missing. Add ad account ID without act_ or with act_ in API settings.' };
+  const fields = 'campaign_name,spend,impressions,clicks,ctr,cpc,cpm,reach,actions,purchase_roas';
+  const url = `https://graph.facebook.com/v20.0/act_${adAccountId}/insights?level=campaign&date_preset=last_7d&fields=${encodeURIComponent(fields)}&limit=50`;
+  logExternalApiCall('meta_ads', { path:'insights', adAccountId });
+  const response = await fetch(url, { headers:{ Authorization:`Bearer ${token}` } });
+  const json = await response.json().catch(()=>({}));
+  return { ok:response.ok, status:response.status, data:json.data||[], meta:json };
+}
+app.post('/api/meta-ads/generate-copy', async (req,res)=>{
+  try {
+    const ai = await openAiGenerateMetaAdCopy(req.body || {}).catch(e => ({ ok:false, error:e.message }));
+    if (ai.ok) return res.json({ ok:true, source:'openai', generated: ai.generated, model: ai.model, usage: ai.usage });
+    res.json({ ok:true, source:'fallback', generated: metaAdCopyGenerator(req.body || {}), openai: ai });
+  } catch(e){ res.status(400).json({ ok:false, error:e.message }); }
+});
+app.get('/api/meta-ads/report', async (req,res)=>{
+  try {
+    const bw = bandwidthSaverSettings();
+    const report = bw.enabled || req.query.cache !== '0' ? await cachedApiJson('meta_ads_report_last7d_v1', bw.metaAdsCacheTtlSec, fetchMetaAdsInsights) : await fetchMetaAdsInsights();
+    res.status(report.ok ? 200 : 400).json({ ...report, bandwidthSaver: bw.enabled });
+  } catch(e) { res.status(400).json({ ok:false, error:e.message }); }
+});
+app.post('/api/meta-ads/campaign-draft', (req,res)=>{
+  try {
+    const copy = metaAdCopyGenerator(req.body || {});
+    const draft = {
+      id: crypto.randomUUID(),
+      createdAt: nowIso(),
+      productTitle: cleanText(req.body?.productTitle || ''),
+      productLink: cleanText(req.body?.link || req.body?.url || ''),
+      goal: cleanText(req.body?.goal || 'Sales'),
+      budget: cleanText(req.body?.budget || '500'),
+      status: 'draft_manual_approval_required',
+      copy,
+      note: 'This is a safe draft only. Real Meta campaign create/publish needs manual approval and ads_management permission.'
+    };
+    appendJson(advancedCampaignsPath, { type:'meta_ads_draft', ...draft });
+    res.json({ ok:true, draft });
+  } catch(e){ res.status(400).json({ ok:false, error:e.message }); }
+});
+app.post('/api/meta-ads/create-paused-campaign', async (req,res)=>{
+  try {
+    const result = await createPausedMetaCampaignFromDraft(req.body || {});
+    appendJson(advancedCampaignsPath, { type:'meta_ads_real_create', createdAt:nowIso(), request:{ productTitle:req.body?.productTitle, goal:req.body?.goal, budget:req.body?.budget }, result });
+    res.status(result.ok ? 200 : 400).json(result);
+  } catch(e) { res.status(400).json({ ok:false, error:e.message }); }
+});
+
+
+
+app.get('/api/bandwidth-settings', (req,res)=>{
+  const bw = bandwidthSaverSettings();
+  res.json({ ok:true, settings:bw, apiLog:readJson(externalApiLogPath, []).slice(0,80), cacheKeys:Object.keys(readJson(apiCachePath, {})) });
+});
+app.post('/api/bandwidth-settings', (req,res)=>{
+  const body=req.body||{};
+  const settings=readJson(settingsPath, {});
+  settings.bandwidthSaverEnabled = !!body.bandwidthSaverEnabled;
+  settings.shopifyCacheTtlSec = Math.max(60, Number(body.shopifyCacheTtlSec||21600)||21600);
+  settings.metaAdsCacheTtlSec = Math.max(60, Number(body.metaAdsCacheTtlSec||1800)||1800);
+  settings.googleSheetsAutoSaveWhenSaver = !!body.googleSheetsAutoSaveWhenSaver;
+  settings.adminRefreshSec = Math.max(0, Number(body.adminRefreshSec||600)||600);
+  writeJson(settingsPath, settings);
+  res.json({ ok:true, settings:bandwidthSaverSettings(), message:'Bandwidth Saver settings saved.' });
+});
+app.post('/api/bandwidth-settings/clear-cache', (req,res)=>{
+  writeJson(apiCachePath, {});
+  res.json({ ok:true, message:'API cache cleared.' });
+});
 
 
 function defaultCatalogCategories(){
@@ -3015,10 +3443,15 @@ function simplifyShopifyProduct(p = {}) {
 }
 app.get('/api/shopify/products', async (req, res) => {
   try {
-    const r = await shopifyFetch('products.json?limit=250&fields=id,title,handle,status,product_type,vendor,created_at,updated_at,image,images,variants');
-    if (!r.ok) return res.status(400).json({ ok:false, error:r.message || 'Shopify products fetch failed', detail:r.json || r });
-    const products = (r.json.products || []).map(simplifyShopifyProduct).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
-    res.json({ ok:true, products });
+    const bw = bandwidthSaverSettings();
+    const load = async () => {
+      const r = await shopifyFetch('products.json?limit=250&fields=id,title,handle,status,product_type,vendor,created_at,updated_at,image,images,variants');
+      if (!r.ok) return { ok:false, error:r.message || 'Shopify products fetch failed', detail:r.json || r };
+      const products = (r.json.products || []).map(simplifyShopifyProduct).sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+      return { ok:true, products };
+    };
+    const data = bw.enabled || req.query.cache !== '0' ? await cachedApiJson('shopify_products_v1', bw.shopifyCacheTtlSec, load) : await load();
+    res.status(data.ok ? 200 : 400).json({ ...data, bandwidthSaver: bw.enabled });
   } catch(e) { res.status(500).json({ ok:false, error:e.message }); }
 });
 app.post('/api/shopify/products/bulk-promo', async (req, res) => {
@@ -3041,41 +3474,41 @@ app.post('/api/shopify/products/bulk-promo', async (req, res) => {
 
 app.get('/api/shopify/customers', async (req, res) => {
   try {
-    const r = await shopifyFetch('customers.json?limit=250&fields=id,first_name,last_name,email,phone,default_address,addresses,orders_count,total_spent,last_order_id,last_order_name,updated_at,state');
-    if (!r.ok) return res.status(400).json({ ok: false, error: r.message || 'Shopify customers fetch failed', detail: r.json || r });
-
-    const customers = (r.json.customers || []).map(simplifyShopifyCustomer);
-
-    // Enrich customer list with actual latest Shopify order status.
-    // Do not use customer.state because it can be "disabled" and is not an order status.
-    const orderResp = await shopifyFetch('orders.json?status=any&limit=250&fields=id,name,order_number,created_at,customer,financial_status,fulfillment_status,total_price,currency,cancelled_at,fulfillments');
-    if (orderResp.ok) {
-      const latestByCustomer = new Map();
-      for (const o of (orderResp.json.orders || [])) {
-        const cid = o.customer && o.customer.id ? String(o.customer.id) : '';
-        if (!cid) continue;
-        const prev = latestByCustomer.get(cid);
-        if (!prev || new Date(o.created_at || 0) > new Date(prev.created_at || 0)) latestByCustomer.set(cid, o);
-      }
-      for (const c of customers) {
-        const o = latestByCustomer.get(String(c.id));
-        if (!o) continue;
-        const payment = o.financial_status ? String(o.financial_status).replace(/_/g, ' ') : '-';
-        const fulfill = o.cancelled_at ? 'cancelled' : (o.fulfillment_status ? String(o.fulfillment_status).replace(/_/g, ' ') : 'unfulfilled');
-        c.lastOrderName = o.name || c.lastOrderName;
-        c.lastOrderDate = o.created_at ? String(o.created_at).slice(0,10) : c.lastOrderDate;
-        c.orderStatus = `${payment} / ${fulfill}`;
-        c.lastOrderAmount = `${o.currency || 'INR'} ${o.total_price || ''}`.trim();
-        const tracking = (o.fulfillments || []).flatMap(f => (f.tracking_numbers || []).map((n, i) => ({ number: n, url: (f.tracking_urls || [])[i] || '', company: f.tracking_company || '', status: f.shipment_status || f.status || '' })));
-        if (tracking.length) {
-          c.trackingNumber = tracking[0].number || '';
-          c.trackingUrl = tracking[0].url || '';
-          c.orderStatus += ` / ${tracking[0].status || 'tracking added'}`;
+    const bw = bandwidthSaverSettings();
+    const load = async () => {
+      const r = await shopifyFetch('customers.json?limit=250&fields=id,first_name,last_name,email,phone,default_address,addresses,orders_count,total_spent,last_order_id,last_order_name,updated_at,state');
+      if (!r.ok) return { ok: false, error: r.message || 'Shopify customers fetch failed', detail: r.json || r };
+      const customers = (r.json.customers || []).map(simplifyShopifyCustomer);
+      const orderResp = await shopifyFetch('orders.json?status=any&limit=250&fields=id,name,order_number,created_at,customer,financial_status,fulfillment_status,total_price,currency,cancelled_at,fulfillments');
+      if (orderResp.ok) {
+        const latestByCustomer = new Map();
+        for (const o of (orderResp.json.orders || [])) {
+          const cid = o.customer && o.customer.id ? String(o.customer.id) : '';
+          if (!cid) continue;
+          const prev = latestByCustomer.get(cid);
+          if (!prev || new Date(o.created_at || 0) > new Date(prev.created_at || 0)) latestByCustomer.set(cid, o);
+        }
+        for (const c of customers) {
+          const o = latestByCustomer.get(String(c.id));
+          if (!o) continue;
+          const payment = o.financial_status ? String(o.financial_status).replace(/_/g, ' ') : '-';
+          const fulfill = o.cancelled_at ? 'cancelled' : (o.fulfillment_status ? String(o.fulfillment_status).replace(/_/g, ' ') : 'unfulfilled');
+          c.lastOrderName = o.name || c.lastOrderName;
+          c.lastOrderDate = o.created_at ? String(o.created_at).slice(0,10) : c.lastOrderDate;
+          c.orderStatus = `${payment} / ${fulfill}`;
+          c.lastOrderAmount = `${o.currency || 'INR'} ${o.total_price || ''}`.trim();
+          const tracking = (o.fulfillments || []).flatMap(f => (f.tracking_numbers || []).map((n, i) => ({ number: n, url: (f.tracking_urls || [])[i] || '', company: f.tracking_company || '', status: f.shipment_status || f.status || '' })));
+          if (tracking.length) {
+            c.trackingNumber = tracking[0].number || '';
+            c.trackingUrl = tracking[0].url || '';
+            c.orderStatus += ` / ${tracking[0].status || 'tracking added'}`;
+          }
         }
       }
-    }
-
-    res.json({ ok: true, customers });
+      return { ok: true, customers };
+    };
+    const data = bw.enabled || req.query.cache !== '0' ? await cachedApiJson('shopify_customers_v1', bw.shopifyCacheTtlSec, load) : await load();
+    res.status(data.ok ? 200 : 400).json({ ...data, bandwidthSaver: bw.enabled });
   } catch (e) { res.status(500).json({ ok: false, error: e.message }); }
 });
 app.post('/api/shopify/customers/bulk-message', async (req, res) => {
