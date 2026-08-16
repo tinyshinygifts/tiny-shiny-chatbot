@@ -1,0 +1,59 @@
+name: Build GHDM Order APK
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/ghdm-order-apk.yml'
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout GHDM build branch
+        uses: actions/checkout@v4
+        with:
+          ref: ghdm-order-app
+
+      - name: Reconstruct Android project
+        run: |
+          mkdir -p ghdm-order-app
+          cat ghdm-order-payload/part_*.txt | base64 -d > /tmp/ghdm-order-project.zip
+          unzip -q /tmp/ghdm-order-project.zip -d ghdm-order-app
+          test -f ghdm-order-app/app/build.gradle
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install Android SDK 35
+        run: |
+          yes | sdkmanager --licenses >/dev/null || true
+          sdkmanager "platforms;android-35" "build-tools;35.0.0"
+
+      - name: Set up Gradle 8.9
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Build APK
+        working-directory: ghdm-order-app
+        run: gradle :app:assembleDebug --stacktrace --no-daemon
+
+      - name: Rename APK
+        run: cp ghdm-order-app/app/build/outputs/apk/debug/app-debug.apk GHDM-Order-App.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: GHDM-Order-APK
+          path: GHDM-Order-App.apk
+          if-no-files-found: error
