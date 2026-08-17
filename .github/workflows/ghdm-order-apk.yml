@@ -1,4 +1,4 @@
-name: Build GHDM Order APK
+name: Build GWMS Order APK
 
 on:
   workflow_dispatch:
@@ -13,7 +13,7 @@ jobs:
     permissions:
       contents: read
     steps:
-      - name: Checkout GHDM build branch
+      - name: Checkout GWMS build branch
         uses: actions/checkout@v4
         with:
           ref: ghdm-order-app
@@ -25,12 +25,12 @@ jobs:
           unzip -q /tmp/ghdm-order-project.zip -d ghdm-order-app
           test -f ghdm-order-app/app/build.gradle
 
-      - name: Apply GHDM Order v1.1 changes
+      - name: Apply GWMS v3.0 changes
         run: |
-          cp ghdm-order-v12/MainActivity.java ghdm-order-app/app/src/main/java/com/ggautoworld/ghdmorder/MainActivity.java
-          cp ghdm-order-v12/SimpleXlsxWriter.java ghdm-order-app/app/src/main/java/com/ggautoworld/ghdmorder/SimpleXlsxWriter.java
-          sed -i "s/versionCode 1/versionCode 2/" ghdm-order-app/app/build.gradle
-          sed -i "s/versionName '1.0'/versionName '1.1'/" ghdm-order-app/app/build.gradle
+          base64 -d gwms-v3-patch.b64 > /tmp/gwms-v3-patch.zip
+          unzip -oq /tmp/gwms-v3-patch.zip -d ghdm-order-app
+          test -f ghdm-order-app/app/src/main/java/com/ggautoworld/ghdmorder/MainActivity.java
+          grep -q "versionName '3.0'" ghdm-order-app/app/build.gradle
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -56,11 +56,11 @@ jobs:
         run: gradle :app:assembleDebug --stacktrace --no-daemon
 
       - name: Rename APK
-        run: cp ghdm-order-app/app/build/outputs/apk/debug/app-debug.apk GHDM-Order-App-v1.1.apk
+        run: cp ghdm-order-app/app/build/outputs/apk/debug/app-debug.apk GWMS-Order-App-v3.0.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GHDM-Order-APK-v1.1
-          path: GHDM-Order-App-v1.1.apk
+          name: GWMS-Order-APK-v3.0
+          path: GWMS-Order-App-v3.0.apk
           if-no-files-found: error
