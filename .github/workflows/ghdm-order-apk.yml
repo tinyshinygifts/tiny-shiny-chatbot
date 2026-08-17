@@ -1,4 +1,4 @@
-# GWMS v4.1 rebuild after restoring v4 patch chunk
+# GWMS v4.1 direct build from stable v3 base
 name: Build GWMS Order APK
 
 on:
@@ -31,15 +31,11 @@ jobs:
           cat gwms-v3-patch-parts/*.txt | base64 -d > /tmp/gwms-v3-patch.zip
           unzip -oq /tmp/gwms-v3-patch.zip -d ghdm-order-app
 
-      - name: Apply GWMS v4 changes
-        run: |
-          cat gwms-v4-patch-parts/*.txt | base64 -d > /tmp/gwms-v4-patch.zip
-          unzip -oq /tmp/gwms-v4-patch.zip -d ghdm-order-app
-
-      - name: Apply GWMS v4.1 changes
+      - name: Apply GWMS v4.1 order changes
         run: |
           cat gwms-v41-patch-parts/*.txt | base64 -d > /tmp/gwms-v41-patch.zip
           unzip -oq /tmp/gwms-v41-patch.zip -d ghdm-order-app
+          cp gwms-v41/SimpleXlsxWriter.java ghdm-order-app/app/src/main/java/com/ggautoworld/ghdmorder/SimpleXlsxWriter.java
           grep -q "versionName '4.1'" ghdm-order-app/app/build.gradle
 
       - name: Set up Java 17
