@@ -1,4 +1,4 @@
-name: Build GWMS Tally Connector # rebuild 4
+name: Build GWMS Tally Connector # rebuild 5
 
 on:
   workflow_dispatch:
@@ -77,8 +77,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release view gwms-tally-connector-v1.1 2>$null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create gwms-tally-connector-v1.1 --target main --title "GWMS Tally Connector v1.1" --notes "Hidden background connector with Tally company detection, Private Network Access support, Windows Startup, and GWMS desktop shortcut."
-          }
+          gh release create gwms-tally-connector-v1.1 --target main --title "GWMS Tally Connector v1.1" --notes "Hidden background connector with Tally company detection, Private Network Access support, Windows Startup, and GWMS desktop shortcut."
           gh release upload gwms-tally-connector-v1.1 "gwms-tally-connector\GWMS-Tally-Connector-Setup-v1.1.exe" --clobber
