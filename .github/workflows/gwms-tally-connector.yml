@@ -1,4 +1,4 @@
-name: Build GWMS Tally Connector # rebuild 5
+name: Build GWMS Tally Connector v1.2
 
 on:
   workflow_dispatch:
@@ -63,13 +63,13 @@ jobs:
         working-directory: gwms-tally-connector
         run: |
           & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
-          if (-not (Test-Path "GWMS-Tally-Connector-Setup-v1.1.exe")) { throw "Installer build failed" }
+          if (-not (Test-Path "GWMS-Tally-Connector-Setup-v1.2.exe")) { throw "Installer build failed" }
 
       - name: Upload installer artifact
         uses: actions/upload-artifact@v4
         with:
-          name: GWMS-Tally-Connector-Setup-v1.1
-          path: gwms-tally-connector/GWMS-Tally-Connector-Setup-v1.1.exe
+          name: GWMS-Tally-Connector-Setup-v1.2
+          path: gwms-tally-connector/GWMS-Tally-Connector-Setup-v1.2.exe
           if-no-files-found: error
 
       - name: Publish connector release
@@ -77,5 +77,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create gwms-tally-connector-v1.1 --target main --title "GWMS Tally Connector v1.1" --notes "Hidden background connector with Tally company detection, Private Network Access support, Windows Startup, and GWMS desktop shortcut."
-          gh release upload gwms-tally-connector-v1.1 "gwms-tally-connector\GWMS-Tally-Connector-Setup-v1.1.exe" --clobber
+          gh release create gwms-tally-connector-v1.2 --target main --title "GWMS Tally Connector v1.2" --notes "Connector v1.2 fixes preview CORS/PNA, replaces older running connector processes, keeps Windows Startup, company detection, and GWMS desktop shortcut."
+          gh release upload gwms-tally-connector-v1.2 "gwms-tally-connector\GWMS-Tally-Connector-Setup-v1.2.exe" --clobber
