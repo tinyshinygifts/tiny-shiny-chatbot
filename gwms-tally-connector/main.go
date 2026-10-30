@@ -22,6 +22,7 @@ const listenAddr = "127.0.0.1:17321"
 var allowedOrigins = map[string]bool{
     "https://gwms-warehouse.vercel.app": true,
     "https://gwms-warehouse-tinyecom-5108.vercel.app": true,
+    "https://gng.tinyshinygifts.com": true,
 }
 
 func cors(w http.ResponseWriter, r *http.Request) bool {
