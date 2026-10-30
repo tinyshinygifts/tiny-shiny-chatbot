@@ -1,0 +1,84 @@
+name: Build GWMS Tally Connector
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/gwms-tally-connector.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout connector source
+        uses: actions/checkout@v4
+        with:
+          ref: gwms-order-v42
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23.x'
+
+      - name: Generate GWMS icon
+        shell: powershell
+        run: |
+          Add-Type -AssemblyName System.Drawing
+          $bmp = New-Object System.Drawing.Bitmap 256,256
+          $g = [System.Drawing.Graphics]::FromImage($bmp)
+          $g.SmoothingMode = [System.Drawing.Drawing2D.SmoothingMode]::AntiAlias
+          $g.Clear([System.Drawing.Color]::FromArgb(7,16,26))
+          $border = New-Object System.Drawing.Pen([System.Drawing.Color]::FromArgb(21,150,255),12)
+          $g.DrawEllipse($border,12,12,232,232)
+          $font = New-Object System.Drawing.Font("Arial",44,[System.Drawing.FontStyle]::Bold)
+          $brush = New-Object System.Drawing.SolidBrush([System.Drawing.Color]::White)
+          $fmt = New-Object System.Drawing.StringFormat
+          $fmt.Alignment = [System.Drawing.StringAlignment]::Center
+          $fmt.LineAlignment = [System.Drawing.StringAlignment]::Center
+          $g.DrawString("GWMS",$font,$brush,(New-Object System.Drawing.RectangleF 0,0,256,256),$fmt)
+          $hIcon = $bmp.GetHicon()
+          $icon = [System.Drawing.Icon]::FromHandle($hIcon)
+          $fs = [System.IO.File]::Create("gwms-tally-connector\gwms.ico")
+          $icon.Save($fs)
+          $fs.Close()
+          $g.Dispose()
+          $bmp.Dispose()
+
+      - name: Build hidden background connector
+        shell: powershell
+        run: |
+          go build -trimpath -ldflags="-H=windowsgui -s -w" -o gwms-tally-connector\GWMS-Tally-Connector.exe gwms-tally-connector\main.go
+          if (-not (Test-Path "gwms-tally-connector\GWMS-Tally-Connector.exe")) { throw "Connector build failed" }
+
+      - name: Install NSIS
+        shell: powershell
+        run: choco install nsis -y --no-progress
+
+      - name: Build installer
+        shell: powershell
+        working-directory: gwms-tally-connector
+        run: |
+          & "C:\Program Files (x86)\NSIS\makensis.exe" installer.nsi
+          if (-not (Test-Path "GWMS-Tally-Connector-Setup-v1.1.exe")) { throw "Installer build failed" }
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GWMS-Tally-Connector-Setup-v1.1
+          path: gwms-tally-connector/GWMS-Tally-Connector-Setup-v1.1.exe
+          if-no-files-found: error
+
+      - name: Publish connector release
+        shell: powershell
+        env:
+          GH_TOKEN: \${{ github.token }}
+        run: |
+          gh release view gwms-tally-connector-v1.1 --repo "\${{ github.repository }}" 2>$null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create gwms-tally-connector-v1.1 --repo "\${{ github.repository }}" --target main --title "GWMS Tally Connector v1.1" --notes "Hidden background connector with Tally company detection, Private Network Access support, Windows Startup, and GWMS desktop shortcut."
+          }
+          gh release upload gwms-tally-connector-v1.1 "gwms-tally-connector\GWMS-Tally-Connector-Setup-v1.1.exe" --repo "\${{ github.repository }}" --clobber
