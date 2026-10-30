@@ -13,19 +13,23 @@ import (
     "time"
 )
 
-const version = "1.1.0"
+const version = "1.2.0"
 const listenAddr = "127.0.0.1:17321"
 
-var allowedOrigins = map[string]bool{
-    "https://gwms-warehouse.vercel.app": true,
-    "https://gwms-warehouse-tinyecom-5108.vercel.app": true,
-    "https://gng.tinyshinygifts.com": true,
+func originAllowed(origin string) bool {
+    if origin == "" { return true }
+    if origin == "https://gng.tinyshinygifts.com" { return true }
+    if origin == "https://gwms-warehouse.vercel.app" { return true }
+    if origin == "https://gwms-warehouse-tinyecom-5108.vercel.app" { return true }
+    if origin == "https://gwms-new-tinyecom-5108.vercel.app" { return true }
+    if strings.HasPrefix(origin, "https://gwms-warehouse-") && strings.HasSuffix(origin, "-tinyecom-5108.vercel.app") { return true }
+    return false
 }
 
 func cors(w http.ResponseWriter, r *http.Request) bool {
     origin := r.Header.Get("Origin")
     if origin != "" {
-        if !allowedOrigins[origin] {
+        if !originAllowed(origin) {
             http.Error(w, "Origin not allowed", http.StatusForbidden)
             return false
         }
