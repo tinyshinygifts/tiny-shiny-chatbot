@@ -1,4 +1,4 @@
-# GWMS v4.2 mobile cloud build
+# GWMS v4.2 mobile cloud build - icon fix
 name: Build GWMS Order APK
 
 on:
