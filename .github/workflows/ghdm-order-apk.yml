@@ -1,4 +1,4 @@
-# GWMS v4.1 direct build from stable v3 base
+# GWMS v4.2 mobile cloud build
 name: Build GWMS Order APK
 
 on:
@@ -17,7 +17,7 @@ jobs:
       - name: Checkout GWMS build branch
         uses: actions/checkout@v4
         with:
-          ref: gwms-order-v41
+          ref: gwms-order-v42
 
       - name: Reconstruct Android project
         run: |
@@ -35,8 +35,12 @@ jobs:
         run: |
           cat gwms-v41-patch-parts/*.txt | base64 -d > /tmp/gwms-v41-patch.zip
           unzip -oq /tmp/gwms-v41-patch.zip -d ghdm-order-app
-          cp gwms-v41/SimpleXlsxWriter.java ghdm-order-app/app/src/main/java/com/ggautoworld/ghdmorder/SimpleXlsxWriter.java
-          grep -q "versionName '4.1'" ghdm-order-app/app/build.gradle
+
+      - name: Apply GWMS v4.2 mobile cloud wrapper
+        run: |
+          cat gwms-v42-patch-parts/*.txt | base64 -d > /tmp/gwms-v42-patch.zip
+          unzip -oq /tmp/gwms-v42-patch.zip -d ghdm-order-app
+          grep -q "versionName '4.2'" ghdm-order-app/app/build.gradle
 
       - name: Set up Java 17
         uses: actions/setup-java@v4
@@ -62,11 +66,11 @@ jobs:
         run: gradle :app:assembleDebug --stacktrace --no-daemon
 
       - name: Rename APK
-        run: cp ghdm-order-app/app/build/outputs/apk/debug/app-debug.apk GWMS-Order-App-v4.1.apk
+        run: cp ghdm-order-app/app/build/outputs/apk/debug/app-debug.apk GWMS-Order-App-v4.2.apk
 
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
-          name: GWMS-Order-APK-v4.1
-          path: GWMS-Order-App-v4.1.apk
+          name: GWMS-Order-APK-v4.2
+          path: GWMS-Order-App-v4.2.apk
           if-no-files-found: error
