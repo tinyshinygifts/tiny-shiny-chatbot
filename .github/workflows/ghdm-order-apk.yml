@@ -12,7 +12,7 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: read
+      contents: write
     steps:
       - name: Checkout GWMS build branch
         uses: actions/checkout@v4
@@ -70,9 +70,28 @@ jobs:
       - name: Rename APK
         run: cp ghdm-order-app/app/build/outputs/apk/debug/app-debug.apk GWMS-Order-App-v4.3.apk
 
+      - name: Build Tally Connector EXE
+        run: |
+          GOOS=windows GOARCH=amd64 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o GWMS-Tally-Connector-v1.0.exe gwms-tally-connector/main.go
+          test -s GWMS-Tally-Connector-v1.0.exe
+
       - name: Upload APK
         uses: actions/upload-artifact@v4
         with:
           name: GWMS-Order-APK-v4.3
           path: GWMS-Order-App-v4.3.apk
           if-no-files-found: error
+
+      - name: Upload Tally Connector artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: GWMS-Tally-Connector-v1.0
+          path: GWMS-Tally-Connector-v1.0.exe
+          if-no-files-found: error
+
+      - name: Publish GWMS v4.3 downloads
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view gwms-v4.3 >/dev/null 2>&1 || gh release create gwms-v4.3 --repo "${{ github.repository }}" --target main --title "GWMS v4.3" --notes "GWMS v4.3 mobile app and Tally connector downloads."
+          gh release upload gwms-v4.3 GWMS-Order-App-v4.3.apk GWMS-Tally-Connector-v1.0.exe --repo "${{ github.repository }}" --clobber
