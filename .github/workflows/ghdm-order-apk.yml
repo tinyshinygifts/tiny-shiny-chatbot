@@ -36,10 +36,11 @@ jobs:
           cat gwms-v41-patch-parts/*.txt | base64 -d > /tmp/gwms-v41-patch.zip
           unzip -oq /tmp/gwms-v41-patch.zip -d ghdm-order-app
 
-      - name: Apply GWMS v4.2 mobile cloud wrapper
+      - name: Apply GWMS v4.2 direct source
         run: |
-          cat gwms-v42-patch-parts/*.txt | base64 -d > /tmp/gwms-v42-patch.zip
-          unzip -oq /tmp/gwms-v42-patch.zip -d ghdm-order-app
+          cp gwms-v42/MainActivity.java ghdm-order-app/app/src/main/java/com/ggautoworld/ghdmorder/MainActivity.java
+          cp gwms-v42/AndroidManifest.xml ghdm-order-app/app/src/main/AndroidManifest.xml
+          cp gwms-v42/build.gradle ghdm-order-app/app/build.gradle
           grep -q "versionName '4.2'" ghdm-order-app/app/build.gradle
 
       - name: Set up Java 17
