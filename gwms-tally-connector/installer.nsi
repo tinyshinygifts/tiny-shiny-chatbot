@@ -23,15 +23,15 @@ Section "GWMS Tally Connector" SEC01
   WriteUninstaller "$INSTDIR\Uninstall.exe"
 
   ; Run connector automatically whenever Windows starts.
-  CreateShortCut "$SMSTARTUP\GWMS Tally Connector.lnk" "$INSTDIR\GWMS-Tally-Connector.exe" "" "$INSTDIR\gwms.ico" 0 SW_HIDE
+  CreateShortCut "$SMSTARTUP\GWMS Tally Connector.lnk" "$INSTDIR\GWMS-Tally-Connector.exe" "" "$INSTDIR\gwms.ico" 0
 
   ; Desktop shortcut to the live GWMS website with GWMS icon.
   WriteINIStr "$DESKTOP\GWMS.url" "InternetShortcut" "URL" "https://gng.tinyshinygifts.com/"
   WriteINIStr "$DESKTOP\GWMS.url" "InternetShortcut" "IconFile" "$INSTDIR\gwms.ico"
   WriteINIStr "$DESKTOP\GWMS.url" "InternetShortcut" "IconIndex" "0"
 
-  ; Start connector immediately after installation, hidden in background.
-  ExecShell "open" "$INSTDIR\GWMS-Tally-Connector.exe" "" SW_HIDE
+  ; Start connector immediately after installation.
+  Exec "$INSTDIR\GWMS-Tally-Connector.exe"
 SectionEnd
 
 Section "Uninstall"
