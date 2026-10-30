@@ -1,7 +1,7 @@
 !include "MUI2.nsh"
 
 Name "GWMS Tally Connector"
-OutFile "GWMS-Tally-Connector-Setup-v1.1.exe"
+OutFile "GWMS-Tally-Connector-Setup-v1.2.exe"
 InstallDir "$LOCALAPPDATA\GWMS Tally Connector"
 RequestExecutionLevel user
 Unicode True
@@ -16,6 +16,10 @@ UninstallIcon "gwms.ico"
 !insertmacro MUI_LANGUAGE "English"
 
 Section "GWMS Tally Connector" SEC01
+  ; Stop any older connector that may still own port 17321.
+  nsExec::ExecToLog 'taskkill /F /IM GWMS-Tally-Connector.exe'
+  Sleep 700
+
   SetOutPath "$INSTDIR"
   File "GWMS-Tally-Connector.exe"
   File "gwms.ico"
@@ -35,6 +39,8 @@ Section "GWMS Tally Connector" SEC01
 SectionEnd
 
 Section "Uninstall"
+  nsExec::ExecToLog 'taskkill /F /IM GWMS-Tally-Connector.exe'
+  Sleep 500
   Delete "$SMSTARTUP\GWMS Tally Connector.lnk"
   Delete "$DESKTOP\GWMS.url"
   Delete "$INSTDIR\GWMS-Tally-Connector.exe"
