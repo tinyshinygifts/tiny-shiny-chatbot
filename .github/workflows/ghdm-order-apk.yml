@@ -1,4 +1,4 @@
-# GWMS v4.3 mobile cloud build - icon fix
+# GWMS v4.3 mobile cloud build - custom domain tally origin
 name: Build GWMS Order APK
 
 on:
