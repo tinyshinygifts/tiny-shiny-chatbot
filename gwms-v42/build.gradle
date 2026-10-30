@@ -1,0 +1,12 @@
+plugins { id 'com.android.application' }
+android {
+    namespace 'com.ggautoworld.ghdmorder'
+    compileSdk 35
+    defaultConfig {
+        applicationId 'com.ggautoworld.ghdmorder'
+        minSdk 24
+        targetSdk 35
+        versionCode 42
+        versionName '4.2'
+    }
+}
